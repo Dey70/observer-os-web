@@ -27,9 +27,9 @@ export default function ProfilePage() {
   const {
     supported,
     permission,
-    isEnabled,
-    scheduleNotifications,
-    disableNotifications,
+    enabled,
+    enable,
+    disable,
     sendTestNotification,
   } = useNotifications();
 
@@ -43,7 +43,6 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [notifEnabled, setNotifEnabled] = useState(false);
   const [notifLoading, setNotifLoading] = useState(false);
 
   const load = useCallback(async () => {
@@ -52,7 +51,6 @@ export default function ProfilePage() {
     } = await sb.auth.getUser();
     if (!user) return;
     setEmail(user.email ?? "");
-
     const { data: raw } = await sb
       .from("profiles")
       .select("*")
@@ -80,9 +78,6 @@ export default function ProfilePage() {
   useEffect(() => {
     load();
   }, [load]);
-  useEffect(() => {
-    setNotifEnabled(isEnabled());
-  }, [permission]);
 
   async function handleSave() {
     setSaving(true);
@@ -93,7 +88,6 @@ export default function ProfilePage() {
       setSaving(false);
       return;
     }
-
     await (sb as any).from("profiles").upsert(
       {
         user_id: user.id,
@@ -107,7 +101,6 @@ export default function ProfilePage() {
       },
       { onConflict: "user_id" },
     );
-
     setSaving(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
@@ -115,13 +108,8 @@ export default function ProfilePage() {
 
   async function toggleNotifications() {
     setNotifLoading(true);
-    if (notifEnabled) {
-      disableNotifications();
-      setNotifEnabled(false);
-    } else {
-      const success = await scheduleNotifications();
-      setNotifEnabled(success);
-    }
+    if (enabled) disable();
+    else await enable();
     setNotifLoading(false);
   }
 
@@ -185,7 +173,6 @@ export default function ProfilePage() {
         >
           Identity
         </div>
-
         <div
           style={{
             display: "flex",
@@ -227,7 +214,6 @@ export default function ProfilePage() {
         >
           Training Preferences
         </div>
-
         <div
           style={{
             display: "flex",
@@ -284,7 +270,6 @@ export default function ProfilePage() {
         >
           Notes for the Coach
         </div>
-
         <Field label="Anything the coach should always know">
           <textarea
             value={notes}
@@ -331,7 +316,7 @@ export default function ProfilePage() {
         </div>
       </Card>
 
-      {/* Notifications Card */}
+      {/* Notifications */}
       <Card>
         <div
           style={{
@@ -381,9 +366,9 @@ export default function ProfilePage() {
                   width: 48,
                   height: 26,
                   borderRadius: 13,
-                  background: notifEnabled ? "var(--accent)" : "var(--border2)",
+                  background: enabled ? "var(--accent)" : "var(--border2)",
                   border: "none",
-                  cursor: "pointer",
+                  cursor: notifLoading ? "not-allowed" : "pointer",
                   position: "relative",
                   transition: "background 0.2s",
                   flexShrink: 0,
@@ -397,7 +382,7 @@ export default function ProfilePage() {
                     background: "#000",
                     position: "absolute",
                     top: 3,
-                    left: notifEnabled ? 25 : 3,
+                    left: enabled ? 25 : 3,
                     transition: "left 0.2s",
                   }}
                 />
@@ -408,12 +393,12 @@ export default function ProfilePage() {
               <div
                 style={{ fontSize: 12, color: "var(--red)", marginBottom: 12 }}
               >
-                Notifications blocked. Enable them in your browser settings →
-                Site Settings → Notifications.
+                Notifications blocked. Go to browser Settings → Site Settings →
+                Notifications → allow this site.
               </div>
             )}
 
-            {notifEnabled && (
+            {enabled && (
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 <button
                   onClick={() => sendTestNotification("checkin")}
@@ -424,7 +409,6 @@ export default function ProfilePage() {
                     color: "var(--text-muted)",
                     background: "none",
                     cursor: "pointer",
-                    letterSpacing: "0.04em",
                   }}
                 >
                   Test check-in reminder
@@ -438,7 +422,6 @@ export default function ProfilePage() {
                     color: "var(--text-muted)",
                     background: "none",
                     cursor: "pointer",
-                    letterSpacing: "0.04em",
                   }}
                 >
                   Test session reminder

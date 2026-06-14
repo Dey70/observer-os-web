@@ -6,77 +6,54 @@ export function useNotifications() {
   const [permission, setPermission] =
     useState<NotificationPermission>("default");
   const [supported, setSupported] = useState(false);
+  const [enabled, setEnabled] = useState(false);
 
   useEffect(() => {
-    if (
-      typeof window !== "undefined" &&
-      "Notification" in window &&
-      "serviceWorker" in navigator
-    ) {
+    if (typeof window === "undefined") return;
+    if ("Notification" in window && "serviceWorker" in navigator) {
       setSupported(true);
       setPermission(Notification.permission);
+      setEnabled(
+        Notification.permission === "granted" &&
+          localStorage.getItem("notifications_enabled") === "true",
+      );
     }
   }, []);
 
-  async function requestPermission() {
+  async function enable() {
     if (!supported) return false;
+    try {
+      await navigator.serviceWorker.register("/sw.js");
+    } catch {}
     const result = await Notification.requestPermission();
     setPermission(result);
-    return result === "granted";
-  }
-
-  async function registerServiceWorker() {
-    if (!supported) return null;
-    try {
-      const reg = await navigator.serviceWorker.register("/sw.js");
-      return reg;
-    } catch (err) {
-      console.error("SW registration failed:", err);
-      return null;
+    if (result === "granted") {
+      localStorage.setItem("notifications_enabled", "true");
+      setEnabled(true);
+      new Notification("Observer OS", {
+        body: "Reminders enabled. Use the test buttons to preview notifications.",
+        icon: "/favicon.ico",
+      });
+      return true;
     }
+    return false;
   }
 
-  async function scheduleNotifications() {
-    const granted = await requestPermission();
-    if (!granted) return false;
-
-    await registerServiceWorker();
-
-    // Store preference
-    localStorage.setItem("notifications_enabled", "true");
-
-    // Show immediate confirmation
-    new Notification("Observer OS", {
-      body: "Notifications enabled. You'll be reminded to check in at 8 AM and log sessions at 8 PM.",
-      icon: "/favicon.ico",
-    });
-
-    return true;
-  }
-
-  function disableNotifications() {
+  function disable() {
     localStorage.setItem("notifications_enabled", "false");
-  }
-
-  function isEnabled() {
-    if (typeof window === "undefined") return false;
-    return (
-      localStorage.getItem("notifications_enabled") === "true" &&
-      permission === "granted"
-    );
+    setEnabled(false);
   }
 
   async function sendTestNotification(type: "checkin" | "session") {
     if (!supported || permission !== "granted") return;
-    const reg = await navigator.serviceWorker.ready;
     if (type === "checkin") {
-      reg.showNotification("Observer OS", {
+      new Notification("Observer OS", {
         body: "☀ Morning check-in time. Log your sleep, mood, and energy.",
         icon: "/favicon.ico",
         tag: "checkin",
       });
     } else {
-      reg.showNotification("Observer OS", {
+      new Notification("Observer OS", {
         body: "⚡ Evening session log. What did you train today?",
         icon: "/favicon.ico",
         tag: "session",
@@ -87,9 +64,9 @@ export function useNotifications() {
   return {
     supported,
     permission,
-    isEnabled,
-    scheduleNotifications,
-    disableNotifications,
+    enabled,
+    enable,
+    disable,
     sendTestNotification,
   };
 }
