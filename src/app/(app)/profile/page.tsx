@@ -10,6 +10,7 @@ import {
   Input,
   Select,
 } from "@/components/ui";
+import { useNotifications } from "@/hooks/useNotifications";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +24,15 @@ const SPLITS = [
 
 export default function ProfilePage() {
   const sb = createClient();
+  const {
+    supported,
+    permission,
+    isEnabled,
+    scheduleNotifications,
+    disableNotifications,
+    sendTestNotification,
+  } = useNotifications();
+
   const [name, setName] = useState("");
   const [age, setAge] = useState("");
   const [split, setSplit] = useState("balanced");
@@ -33,6 +43,8 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [notifEnabled, setNotifEnabled] = useState(false);
+  const [notifLoading, setNotifLoading] = useState(false);
 
   const load = useCallback(async () => {
     const {
@@ -68,6 +80,9 @@ export default function ProfilePage() {
   useEffect(() => {
     load();
   }, [load]);
+  useEffect(() => {
+    setNotifEnabled(isEnabled());
+  }, [permission]);
 
   async function handleSave() {
     setSaving(true);
@@ -96,6 +111,18 @@ export default function ProfilePage() {
     setSaving(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
+  }
+
+  async function toggleNotifications() {
+    setNotifLoading(true);
+    if (notifEnabled) {
+      disableNotifications();
+      setNotifEnabled(false);
+    } else {
+      const success = await scheduleNotifications();
+      setNotifEnabled(success);
+    }
+    setNotifLoading(false);
   }
 
   if (loading)
@@ -262,7 +289,7 @@ export default function ProfilePage() {
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            placeholder="e.g. I have a 10K race in 6 weeks. I struggle with lower body soreness after leg days. My exam period starts in 3 weeks..."
+            placeholder="e.g. I have a 10K race in 6 weeks. I struggle with lower body soreness after leg days..."
             rows={4}
             style={{
               width: "100%",
@@ -304,6 +331,125 @@ export default function ProfilePage() {
         </div>
       </Card>
 
+      {/* Notifications Card */}
+      <Card>
+        <div
+          style={{
+            fontSize: 10,
+            color: "var(--text-muted)",
+            letterSpacing: "0.12em",
+            textTransform: "uppercase",
+            marginBottom: 16,
+          }}
+        >
+          Notifications
+        </div>
+
+        {!supported ? (
+          <div style={{ fontSize: 13, color: "var(--text-muted)" }}>
+            Your browser doesn't support push notifications. Try Chrome on
+            desktop or Android.
+          </div>
+        ) : (
+          <>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: 16,
+              }}
+            >
+              <div>
+                <div
+                  style={{
+                    fontSize: 13,
+                    color: "var(--text)",
+                    marginBottom: 4,
+                  }}
+                >
+                  Daily reminders
+                </div>
+                <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                  8:00 AM — check-in reminder · 8:00 PM — session log reminder
+                </div>
+              </div>
+              <button
+                onClick={toggleNotifications}
+                disabled={notifLoading}
+                style={{
+                  width: 48,
+                  height: 26,
+                  borderRadius: 13,
+                  background: notifEnabled ? "var(--accent)" : "var(--border2)",
+                  border: "none",
+                  cursor: "pointer",
+                  position: "relative",
+                  transition: "background 0.2s",
+                  flexShrink: 0,
+                }}
+              >
+                <div
+                  style={{
+                    width: 20,
+                    height: 20,
+                    borderRadius: "50%",
+                    background: "#000",
+                    position: "absolute",
+                    top: 3,
+                    left: notifEnabled ? 25 : 3,
+                    transition: "left 0.2s",
+                  }}
+                />
+              </button>
+            </div>
+
+            {permission === "denied" && (
+              <div
+                style={{ fontSize: 12, color: "var(--red)", marginBottom: 12 }}
+              >
+                Notifications blocked. Enable them in your browser settings →
+                Site Settings → Notifications.
+              </div>
+            )}
+
+            {notifEnabled && (
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button
+                  onClick={() => sendTestNotification("checkin")}
+                  style={{
+                    padding: "6px 12px",
+                    border: "1px solid var(--border2)",
+                    fontSize: 11,
+                    color: "var(--text-muted)",
+                    background: "none",
+                    cursor: "pointer",
+                    letterSpacing: "0.04em",
+                  }}
+                >
+                  Test check-in reminder
+                </button>
+                <button
+                  onClick={() => sendTestNotification("session")}
+                  style={{
+                    padding: "6px 12px",
+                    border: "1px solid var(--border2)",
+                    fontSize: 11,
+                    color: "var(--text-muted)",
+                    background: "none",
+                    cursor: "pointer",
+                    letterSpacing: "0.04em",
+                  }}
+                >
+                  Test session reminder
+                </button>
+              </div>
+            )}
+          </>
+        )}
+      </Card>
+
+      {/* How coach uses profile */}
       <Card style={{ borderColor: "var(--accent-dim)" }}>
         <div
           style={{
