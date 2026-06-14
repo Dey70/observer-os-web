@@ -90,7 +90,7 @@ export function useNotifications() {
     type = "observer-os",
   ) {
     try {
-      await fetch("/api/push/send", {
+      await fetch("/api/push-send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title, message, type }),
