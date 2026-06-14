@@ -1,6 +1,6 @@
 "use client";
 
-import { CSSProperties, ReactNode } from "react";
+import { CSSProperties, ReactNode, useState } from "react";
 
 export function Card({
   children,
@@ -335,53 +335,86 @@ export function BarChart({
   maxVal?: number;
 }) {
   const max = maxVal ?? Math.max(...data.map((d) => d.value), 1);
+  const [tooltip, setTooltip] = useState<{
+    label: string;
+    value: number;
+    index: number;
+  } | null>(null);
+
   return (
-    <div
-      style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 80 }}
-    >
-      {data.map((d, i) => (
+    <div style={{ position: "relative", paddingTop: 36 }}>
+      {tooltip && (
         <div
-          key={i}
           style={{
-            flex: 1,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            gap: 4,
-            height: "100%",
+            position: "absolute",
+            top: 0,
+            left: "50%",
+            transform: "translateX(-50%)",
+            background: "var(--surface2)",
+            border: "1px solid var(--border)",
+            padding: "4px 10px",
+            fontFamily: "var(--mono)",
+            fontSize: 11,
+            color: "var(--text)",
+            whiteSpace: "nowrap",
+            pointerEvents: "none",
+            zIndex: 10,
           }}
         >
+          {tooltip.label}: <strong>{tooltip.value}</strong>
+        </div>
+      )}
+      <div
+        style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 80 }}
+      >
+        {data.map((d, i) => (
           <div
+            key={i}
             style={{
               flex: 1,
               display: "flex",
-              alignItems: "flex-end",
-              width: "100%",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 4,
+              height: "100%",
             }}
           >
             <div
-              title={`${d.label}: ${d.value}`}
               style={{
+                flex: 1,
+                display: "flex",
+                alignItems: "flex-end",
                 width: "100%",
-                height: `${Math.max(2, (d.value / max) * 100)}%`,
-                background: color,
-                opacity: 0.75,
-                transition: "height 0.3s",
               }}
-            />
+            >
+              <div
+                onMouseEnter={() =>
+                  setTooltip({ label: d.label, value: d.value, index: i })
+                }
+                onMouseLeave={() => setTooltip(null)}
+                style={{
+                  width: "100%",
+                  height: `${Math.max(2, (d.value / max) * 100)}%`,
+                  background: tooltip?.index === i ? "var(--text)" : color,
+                  opacity: tooltip?.index === i ? 1 : 0.75,
+                  transition: "all 0.15s",
+                  cursor: "pointer",
+                }}
+              />
+            </div>
+            <div
+              style={{
+                fontFamily: "var(--mono)",
+                fontSize: 8,
+                color: "var(--text-dim)",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {d.label}
+            </div>
           </div>
-          <div
-            style={{
-              fontFamily: "var(--mono)",
-              fontSize: 8,
-              color: "var(--text-dim)",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {d.label}
-          </div>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }
