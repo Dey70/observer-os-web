@@ -10,6 +10,7 @@ const NAV = [
   { path: "/dashboard", icon: "📊", label: "Dashboard" },
   { path: "/goals", icon: "🎯", label: "Goals" },
   { path: "/coach", icon: "🤖", label: "Coach" },
+  { path: "/profile", icon: "👤", label: "Profile" },
 ];
 
 export default function AppShell({

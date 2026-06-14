@@ -54,8 +54,28 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Fetch user profile for coach context
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    const profileContext = profile
+      ? `
+
+## Athlete Profile
+- Name: ${profile.name ?? "Unknown"}
+- Age: ${profile.age ?? "Unknown"}
+- Preferred training split: ${profile.split ?? "balanced"}
+- Weekly session goal: ${profile.weekly_goal ?? 4} sessions
+- Target weight: ${profile.target_weight ? profile.target_weight + " kg" : "Not set"}
+- Coach notes: ${profile.notes ?? "None"}
+`
+      : "";
+
     const groqMessages: Array<Record<string, unknown>> = [
-      { role: "system", content: SYSTEM_PROMPT },
+      { role: "system", content: SYSTEM_PROMPT + profileContext },
       ...messages.map((m: any) => ({
         role: m.role,
         content: m.content,

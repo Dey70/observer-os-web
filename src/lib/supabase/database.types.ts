@@ -143,6 +143,39 @@ export interface Database {
           generated_at?: string;
         };
       };
+      profiles: {
+        Row: {
+          id: number;
+          user_id: string;
+          name: string | null;
+          age: number | null;
+          weight_unit: string;
+          split: string;
+          weekly_goal: number;
+          target_weight: number | null;
+          notes: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          name?: string | null;
+          age?: number | null;
+          weight_unit?: string;
+          split?: string;
+          weekly_goal?: number;
+          target_weight?: number | null;
+          notes?: string | null;
+        };
+        Update: {
+          name?: string | null;
+          age?: number | null;
+          weight_unit?: string;
+          split?: string;
+          weekly_goal?: number;
+          target_weight?: number | null;
+          notes?: string | null;
+        };
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
