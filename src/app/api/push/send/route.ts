@@ -8,6 +8,12 @@ webpush.setVapidDetails(
   process.env.VAPID_PRIVATE_KEY!,
 );
 
+type PushSub = {
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+};
+
 export async function POST(req: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();
@@ -22,8 +28,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { title, message, type } = body;
 
-    // Get user's push subscriptions
-    const { data: subs } = await supabase
+    const { data: subs } = await (supabase as any)
       .from("push_subscriptions")
       .select("*")
       .eq("user_id", user.id);
@@ -42,7 +47,7 @@ export async function POST(req: NextRequest) {
     });
 
     const results = await Promise.allSettled(
-      subs.map((sub) =>
+      (subs as PushSub[]).map((sub) =>
         webpush.sendNotification(
           {
             endpoint: sub.endpoint,
