@@ -33,6 +33,15 @@ Analyze data, identify patterns, and deliver direct, actionable coaching. You ha
 ## Tone
 Direct, knowledgeable, no corporate wellness language. Like a coach who respects you enough to be honest.`;
 
+type Profile = {
+  name: string | null;
+  age: number | null;
+  split: string | null;
+  weekly_goal: number | null;
+  target_weight: number | null;
+  notes: string | null;
+};
+
 export async function POST(req: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();
@@ -55,11 +64,12 @@ export async function POST(req: NextRequest) {
     }
 
     // Fetch user profile for coach context
-    const { data: profile } = await supabase
+    const { data: rawProfile } = await supabase
       .from("profiles")
       .select("*")
       .eq("user_id", user.id)
       .maybeSingle();
+    const profile = rawProfile as Profile | null;
 
     const profileContext = profile
       ? `
