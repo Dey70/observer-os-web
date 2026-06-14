@@ -41,11 +41,19 @@ export default function ProfilePage() {
     if (!user) return;
     setEmail(user.email ?? "");
 
-    const { data } = await sb
+    const { data: raw } = await sb
       .from("profiles")
       .select("*")
       .eq("user_id", user.id)
       .maybeSingle();
+    const data = raw as {
+      name: string | null;
+      age: number | null;
+      split: string;
+      weekly_goal: number;
+      target_weight: number | null;
+      notes: string | null;
+    } | null;
     if (data) {
       setName(data.name ?? "");
       setAge(data.age?.toString() ?? "");
