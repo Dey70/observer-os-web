@@ -77,6 +77,50 @@ export function calcDashboardStats(
   };
 }
 
+export function calcCheckinStreak(logs: DailyLog[]): number {
+  if (!logs.length) return 0;
+  const sorted = [...logs].sort((a, b) => b.date.localeCompare(a.date));
+  const todayStr = new Date().toISOString().split("T")[0];
+  const yesterdayStr = new Date(Date.now() - 86400000)
+    .toISOString()
+    .split("T")[0];
+
+  if (sorted[0].date !== todayStr && sorted[0].date !== yesterdayStr) return 0;
+
+  let streak = 1;
+  for (let i = 1; i < sorted.length; i++) {
+    const curr = new Date(sorted[i].date);
+    const prev = new Date(sorted[i - 1].date);
+    const diff = (prev.getTime() - curr.getTime()) / 86400000;
+    if (diff === 1) streak++;
+    else break;
+  }
+  return streak;
+}
+
+export function calcSessionStreak(sessions: Session[]): number {
+  if (!sessions.length) return 0;
+  const uniqueDays = [...new Set(sessions.map((s) => s.date))].sort((a, b) =>
+    b.localeCompare(a),
+  );
+  const todayStr = new Date().toISOString().split("T")[0];
+  const yesterdayStr = new Date(Date.now() - 86400000)
+    .toISOString()
+    .split("T")[0];
+
+  if (uniqueDays[0] !== todayStr && uniqueDays[0] !== yesterdayStr) return 0;
+
+  let streak = 1;
+  for (let i = 1; i < uniqueDays.length; i++) {
+    const curr = new Date(uniqueDays[i]);
+    const prev = new Date(uniqueDays[i - 1]);
+    const diff = (prev.getTime() - curr.getTime()) / 86400000;
+    if (diff === 1) streak++;
+    else break;
+  }
+  return streak;
+}
+
 export function formatDuration(minutes: number): string {
   if (!minutes) return "—";
   const h = Math.floor(minutes / 60);

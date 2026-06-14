@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import {
   calcDashboardStats,
+  calcCheckinStreak,
+  calcSessionStreak,
   formatDuration,
   getLast14Days,
   rpeToLabel,
@@ -29,6 +31,8 @@ export default function DashboardPage() {
   const [logs, setLogs] = useState<DailyLog[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [weights, setWeights] = useState<WeightLog[]>([]);
+  const [checkinStreak, setCheckinStreak] = useState(0);
+  const [sessionStreak, setSessionStreak] = useState(0);
   const [loading, setLoading] = useState(true);
   const [weightInput, setWeightInput] = useState("");
   const [savingWeight, setSavingWeight] = useState(false);
@@ -69,6 +73,8 @@ export default function DashboardPage() {
     setSessions(sessData);
     setWeights(wData);
     setStats(calcDashboardStats(logsData, sessData, wData));
+    setCheckinStreak(calcCheckinStreak(logsData));
+    setSessionStreak(calcSessionStreak(sessData));
     setLoading(false);
   }, []);
 
@@ -124,6 +130,11 @@ export default function DashboardPage() {
     ? Math.max(...weights.map((w) => w.weight)) + 1
     : 100;
 
+  function streakLabel(n: number) {
+    if (n === 0) return "—";
+    return n >= 3 ? `🔥 ${n}` : `${n}`;
+  }
+
   if (loading)
     return (
       <div>
@@ -144,12 +155,13 @@ export default function DashboardPage() {
     <div>
       <PageHeader title="DASHBOARD" subtitle="Last 14 days" />
 
+      {/* Main stats */}
       <div
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(4, 1fr)",
           gap: 12,
-          marginBottom: 16,
+          marginBottom: 12,
         }}
       >
         <StatCard value={stats?.avgSleep ?? "—"} label="Avg Sleep (hrs)" />
@@ -170,10 +182,11 @@ export default function DashboardPage() {
         />
       </div>
 
+      {/* Second row */}
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(3, 1fr)",
+          gridTemplateColumns: "repeat(4, 1fr)",
           gap: 12,
           marginBottom: 16,
         }}
@@ -188,9 +201,14 @@ export default function DashboardPage() {
           label="Run / Lift / Study"
         />
         <StatCard
-          value={stats?.currentWeight ? `${stats.currentWeight} kg` : "—"}
-          label="Current Weight"
-          color="var(--purple)"
+          value={streakLabel(checkinStreak)}
+          label="Check-in Streak"
+          color="var(--red)"
+        />
+        <StatCard
+          value={streakLabel(sessionStreak)}
+          label="Session Streak"
+          color="var(--red)"
         />
       </div>
 
