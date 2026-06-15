@@ -134,20 +134,25 @@ export default function LogPage() {
       const rpe = effortToRpe[effort];
       const load = durationMinutes * rpe;
 
-      const sessionData: any = {
+      const sessionData = {
         user_id: user.id,
-        session_type: tab,
+        type: tab,
         date,
-        duration_minutes: durationMinutes,
-        effort,
+        duration: durationMinutes,
         rpe,
         notes: notes.trim() || null,
-        ...(tab === "run" && { distance_km: distance, terrain }),
-        ...(tab === "lift" && { lift_type: liftType }),
-        ...(tab === "study" && { subject, focus_score: focusScore }),
       };
 
-      await supabase.from("sessions").insert(sessionData as any);
+      const { error: insertError } = await (supabase as any)
+        .from("sessions")
+        .insert(sessionData);
+
+      if (insertError) {
+        console.error("Insert error:", insertError);
+        alert(`Failed to log session: ${insertError.message}`);
+        setLoading(false);
+        return;
+      }
 
       const logged: LoggedSession = {
         type: tab,
