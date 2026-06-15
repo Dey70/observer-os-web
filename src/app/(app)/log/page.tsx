@@ -3,6 +3,7 @@
 export const dynamic = "force-dynamic";
 
 import { useState } from "react";
+import { detectPRs, type PR } from "@/lib/prDetection";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import {
@@ -14,6 +15,7 @@ import {
   Clock,
   Zap,
   TrendingUp,
+  Trophy,
 } from "lucide-react";
 
 type Tab = "run" | "lift" | "study";
@@ -106,10 +108,12 @@ export default function LogPage() {
   );
   const [nudge, setNudge] = useState<string | null>(null);
   const [nudgeLoading, setNudgeLoading] = useState(false);
+  const [newPRs, setNewPRs] = useState<PR[]>([]);
 
   function resetForm() {
     setLoggedSession(null);
     setNudge(null);
+    setNewPRs([]);
     setNotes("");
     setHours(0);
     setMinutes(30);
@@ -163,6 +167,23 @@ export default function LogPage() {
         date,
         load,
       };
+
+      // Detect PRs in background
+      const {
+        data: { user: u2 },
+      } = await supabase.auth.getUser();
+      if (u2) {
+        detectPRs(supabase, u2.id, {
+          type: tab,
+          duration: durationMinutes,
+          rpe,
+          date,
+          notes,
+        })
+          .then(setNewPRs)
+          .catch(() => {});
+      }
+
       setLoggedSession(logged);
       setLoading(false);
 
@@ -440,6 +461,127 @@ export default function LogPage() {
             </span>
           </div>
         </div>
+
+        {/* PR Banner */}
+        {newPRs.length > 0 && (
+          <div
+            style={{
+              background:
+                "linear-gradient(135deg, rgba(255,184,0,0.1) 0%, rgba(255,184,0,0.05) 100%)",
+              border: "1px solid rgba(255,184,0,0.35)",
+              borderRadius: 16,
+              padding: "16px 18px",
+              marginBottom: 16,
+              animation: "scoreIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                marginBottom: 12,
+              }}
+            >
+              <div
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 10,
+                  background: "rgba(255,184,0,0.15)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <Trophy size={16} color="#FFB800" strokeWidth={2} />
+              </div>
+              <div>
+                <div
+                  style={{
+                    fontFamily: "var(--mono)",
+                    fontSize: 12,
+                    fontWeight: 700,
+                    color: "#FFB800",
+                    letterSpacing: "0.1em",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  {newPRs.length === 1
+                    ? "New Personal Record!"
+                    : `${newPRs.length} New Personal Records!`}
+                </div>
+                <div
+                  style={{
+                    fontSize: 10,
+                    color: "rgba(255,255,255,0.4)",
+                    fontFamily: "var(--mono)",
+                    marginTop: 1,
+                  }}
+                >
+                  You just hit a new best
+                </div>
+              </div>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {newPRs.map((pr) => (
+                <div
+                  key={pr.metric}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "8px 12px",
+                    background: "rgba(255,184,0,0.06)",
+                    border: "1px solid rgba(255,184,0,0.15)",
+                    borderRadius: 8,
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: 12,
+                      color: "rgba(255,255,255,0.7)",
+                      fontFamily: "var(--mono)",
+                    }}
+                  >
+                    {pr.label}
+                  </span>
+                  <div
+                    style={{ display: "flex", alignItems: "center", gap: 8 }}
+                  >
+                    {pr.previous !== null && (
+                      <span
+                        style={{
+                          fontSize: 10,
+                          color: "rgba(255,255,255,0.3)",
+                          fontFamily: "var(--mono)",
+                          textDecoration: "line-through",
+                        }}
+                      >
+                        {pr.metric.includes("load")
+                          ? pr.previous
+                          : `${Math.floor(pr.previous / 60)}h ${pr.previous % 60}m`}
+                      </span>
+                    )}
+                    <span
+                      style={{
+                        fontSize: 13,
+                        fontWeight: 700,
+                        color: "#FFB800",
+                        fontFamily: "var(--mono)",
+                      }}
+                    >
+                      {pr.metric.includes("load")
+                        ? pr.value
+                        : `${Math.floor(pr.value / 60)}h ${pr.value % 60}m`}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* AI Coach nudge */}
         {(nudgeLoading || nudge) && (

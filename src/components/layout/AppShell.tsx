@@ -17,6 +17,7 @@ import {
   Zap,
   CalendarDays,
   HeartPulse,
+  Trophy,
 } from "lucide-react";
 
 const navItems = [
@@ -26,6 +27,7 @@ const navItems = [
   { href: "/history", label: "History", icon: Clock },
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
   { href: "/metrics", label: "Metrics", icon: HeartPulse },
+  { href: "/records", label: "Records", icon: Trophy },
   { href: "/load", label: "Load", icon: BarChart2 },
   { href: "/goals", label: "Goals", icon: Target },
   { href: "/coach", label: "Coach", icon: Bot },
