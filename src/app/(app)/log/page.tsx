@@ -5,7 +5,16 @@ export const dynamic = "force-dynamic";
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
-import { PersonStanding, Dumbbell, BookOpen, CheckCircle } from "lucide-react";
+import {
+  PersonStanding,
+  Dumbbell,
+  BookOpen,
+  CheckCircle,
+  RotateCcw,
+  Clock,
+  Zap,
+  TrendingUp,
+} from "lucide-react";
 
 type Tab = "run" | "lift" | "study";
 type Effort = "easy" | "medium" | "hard" | "very_hard";
@@ -22,6 +31,25 @@ const effortOptions: { key: Effort; label: string }[] = [
   { key: "hard", label: "Hard" },
   { key: "very_hard", label: "Very Hard" },
 ];
+
+const effortToRpe: Record<Effort, number> = {
+  easy: 3,
+  medium: 5,
+  hard: 7,
+  very_hard: 9,
+};
+
+const TYPE_COLOR: Record<Tab, string> = {
+  run: "#00E676",
+  lift: "#A78BFA",
+  study: "#FFB800",
+};
+
+const TYPE_LABEL: Record<Tab, string> = {
+  run: "Run",
+  lift: "Lift",
+  study: "Study",
+};
 
 const terrainOptions = ["Road", "Trail", "Track", "Treadmill", "Mixed"];
 const liftTypes = [
@@ -42,6 +70,16 @@ const studySubjects = [
   "Other",
 ];
 
+type LoggedSession = {
+  type: Tab;
+  duration: number; // minutes
+  effort: Effort;
+  rpe: number;
+  notes: string;
+  date: string;
+  load: number;
+};
+
 export default function LogPage() {
   const router = useRouter();
   const supabase = createClient();
@@ -55,13 +93,34 @@ export default function LogPage() {
   const [effort, setEffort] = useState<Effort>("medium");
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
 
   const [distance, setDistance] = useState(5.0);
   const [terrain, setTerrain] = useState("Road");
   const [liftType, setLiftType] = useState("Push");
   const [subject, setSubject] = useState("Programming");
   const [focusScore, setFocusScore] = useState(7);
+
+  // Success state
+  const [loggedSession, setLoggedSession] = useState<LoggedSession | null>(
+    null,
+  );
+  const [nudge, setNudge] = useState<string | null>(null);
+  const [nudgeLoading, setNudgeLoading] = useState(false);
+
+  function resetForm() {
+    setLoggedSession(null);
+    setNudge(null);
+    setNotes("");
+    setHours(0);
+    setMinutes(30);
+    setEffort("medium");
+    setDistance(5.0);
+    setTerrain("Road");
+    setLiftType("Push");
+    setSubject("Programming");
+    setFocusScore(7);
+    setDate(new Date().toISOString().split("T")[0]);
+  }
 
   const handleSubmit = async () => {
     setLoading(true);
@@ -70,26 +129,64 @@ export default function LogPage() {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) return;
+
       const durationMinutes = hours * 60 + minutes;
+      const rpe = effortToRpe[effort];
+      const load = durationMinutes * rpe;
+
       const sessionData: any = {
         user_id: user.id,
-        session_type: tab,
+        type: tab,
         date,
-        duration_minutes: durationMinutes,
-        effort,
-        notes,
+        duration: durationMinutes,
+        rpe,
+        notes: notes.trim() || null,
         ...(tab === "run" && { distance_km: distance, terrain }),
         ...(tab === "lift" && { lift_type: liftType }),
         ...(tab === "study" && { subject, focus_score: focusScore }),
       };
+
       await supabase.from("sessions").insert(sessionData as any);
-      setSuccess(true);
-      setTimeout(() => {
-        router.push("/history");
-      }, 1200);
+
+      const logged: LoggedSession = {
+        type: tab,
+        duration: durationMinutes,
+        effort,
+        rpe,
+        notes,
+        date,
+        load,
+      };
+      setLoggedSession(logged);
+      setLoading(false);
+
+      // Fetch AI nudge in background
+      setNudgeLoading(true);
+      try {
+        const res = await fetch("/api/nudge", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            checkin: {
+              session_type: tab,
+              duration: durationMinutes,
+              rpe,
+              effort,
+              notes,
+              sleep_quality: 7,
+              soreness: 3,
+              fatigue: 3,
+              mood: 7,
+              energy: 7,
+            },
+          }),
+        });
+        const data = await res.json();
+        setNudge(data.nudge ?? null);
+      } catch {}
+      setNudgeLoading(false);
     } catch (err) {
       console.error(err);
-    } finally {
       setLoading(false);
     }
   };
@@ -117,6 +214,370 @@ export default function LogPage() {
     display: "block",
   };
 
+  // ── SUCCESS SCREEN ──
+  if (loggedSession) {
+    const Icon =
+      tabs.find((t) => t.key === loggedSession.type)?.icon ?? CheckCircle;
+    const color = TYPE_COLOR[loggedSession.type];
+    const hrs = Math.floor(loggedSession.duration / 60);
+    const mins = loggedSession.duration % 60;
+    const durationLabel = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
+
+    return (
+      <div
+        style={{
+          maxWidth: 520,
+          animation: "pageEnter 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) both",
+        }}
+      >
+        {/* Success header */}
+        <div style={{ textAlign: "center", marginBottom: 32, paddingTop: 16 }}>
+          {/* Animated checkmark ring */}
+          <div
+            style={{
+              width: 80,
+              height: 80,
+              borderRadius: "50%",
+              background: `${color}15`,
+              border: `2px solid ${color}40`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              margin: "0 auto 20px",
+              boxShadow: `0 0 40px ${color}25`,
+              animation: "scoreIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both",
+            }}
+          >
+            <Icon size={36} color={color} strokeWidth={1.75} />
+          </div>
+          <div
+            style={{
+              fontFamily: "var(--mono)",
+              fontSize: 22,
+              fontWeight: 700,
+              color,
+              letterSpacing: "0.05em",
+              marginBottom: 6,
+            }}
+          >
+            SESSION LOGGED
+          </div>
+          <div
+            style={{
+              fontSize: 13,
+              color: "rgba(255,255,255,0.4)",
+              fontFamily: "var(--mono)",
+            }}
+          >
+            {loggedSession.date}
+          </div>
+        </div>
+
+        {/* Stats card */}
+        <div
+          style={{
+            background: "rgba(255,255,255,0.04)",
+            border: `1px solid ${color}25`,
+            borderRadius: 20,
+            padding: 24,
+            marginBottom: 16,
+            position: "relative",
+            overflow: "hidden",
+          }}
+        >
+          {/* Top color bar */}
+          <div
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              height: 3,
+              background: color,
+              borderRadius: "20px 20px 0 0",
+            }}
+          />
+
+          {/* Type badge */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              marginBottom: 24,
+            }}
+          >
+            <span
+              style={{
+                padding: "4px 12px",
+                borderRadius: 99,
+                background: `${color}15`,
+                border: `1px solid ${color}35`,
+                fontFamily: "var(--mono)",
+                fontSize: 11,
+                fontWeight: 700,
+                color,
+                letterSpacing: "0.1em",
+                textTransform: "uppercase",
+              }}
+            >
+              {TYPE_LABEL[loggedSession.type]}
+            </span>
+            {loggedSession.notes && (
+              <span
+                style={{
+                  fontSize: 13,
+                  color: "rgba(255,255,255,0.5)",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {loggedSession.notes}
+              </span>
+            )}
+          </div>
+
+          {/* 3 stat boxes */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr 1fr",
+              gap: 12,
+              marginBottom: 20,
+            }}
+          >
+            {[
+              {
+                icon: Clock,
+                label: "Duration",
+                value: durationLabel,
+                color: "rgba(255,255,255,0.8)",
+              },
+              {
+                icon: Zap,
+                label: "RPE",
+                value: `${loggedSession.rpe}/10`,
+                color,
+              },
+              {
+                icon: TrendingUp,
+                label: "Load",
+                value: loggedSession.load.toString(),
+                color: "var(--yellow)",
+              },
+            ].map(({ icon: StatIcon, label, value, color: c }) => (
+              <div
+                key={label}
+                style={{
+                  background: "rgba(255,255,255,0.04)",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                  borderRadius: 12,
+                  padding: "14px 12px",
+                  textAlign: "center",
+                }}
+              >
+                <StatIcon
+                  size={14}
+                  color="rgba(255,255,255,0.3)"
+                  strokeWidth={1.75}
+                  style={{ marginBottom: 6 }}
+                />
+                <div
+                  style={{
+                    fontFamily: "var(--mono)",
+                    fontSize: 18,
+                    fontWeight: 700,
+                    color: c,
+                    lineHeight: 1,
+                    marginBottom: 4,
+                  }}
+                >
+                  {value}
+                </div>
+                <div
+                  style={{
+                    fontSize: 9,
+                    color: "rgba(255,255,255,0.3)",
+                    letterSpacing: "1.5px",
+                    textTransform: "uppercase",
+                    fontFamily: "var(--mono)",
+                  }}
+                >
+                  {label}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Effort badge */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span
+              style={{
+                fontSize: 10,
+                color: "rgba(255,255,255,0.3)",
+                fontFamily: "var(--mono)",
+                textTransform: "uppercase",
+                letterSpacing: "1px",
+              }}
+            >
+              Effort:
+            </span>
+            <span
+              style={{
+                fontSize: 12,
+                color: "rgba(255,255,255,0.6)",
+                fontFamily: "var(--mono)",
+              }}
+            >
+              {effortOptions.find((e) => e.key === loggedSession.effort)?.label}
+            </span>
+          </div>
+        </div>
+
+        {/* AI Coach nudge */}
+        {(nudgeLoading || nudge) && (
+          <div
+            style={{
+              background: "rgba(232,255,71,0.04)",
+              border: "1px solid rgba(232,255,71,0.15)",
+              borderRadius: 14,
+              padding: "14px 16px",
+              marginBottom: 16,
+              animation: "fadeIn 0.3s ease-out both",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                marginBottom: 8,
+              }}
+            >
+              <div
+                style={{
+                  width: 18,
+                  height: 18,
+                  borderRadius: 5,
+                  background: "rgba(232,255,71,0.12)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <svg
+                  width="10"
+                  height="10"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="#E8FF47"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M12 16v-4M12 8h.01" />
+                </svg>
+              </div>
+              <div
+                style={{
+                  fontSize: 9,
+                  fontWeight: 700,
+                  color: "var(--accent)",
+                  letterSpacing: "2px",
+                  textTransform: "uppercase",
+                  fontFamily: "var(--mono)",
+                }}
+              >
+                Coach Insight
+              </div>
+            </div>
+            {nudgeLoading ? (
+              <div style={{ display: "flex", gap: 4 }}>
+                {[0, 1, 2].map((i) => (
+                  <div
+                    key={i}
+                    style={{
+                      width: 5,
+                      height: 5,
+                      background: "var(--accent)",
+                      borderRadius: "50%",
+                      animation: `bounce 1s ${i * 150}ms infinite`,
+                    }}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div
+                style={{
+                  fontFamily: "var(--sans)",
+                  fontSize: 13,
+                  color: "rgba(255,255,255,0.6)",
+                  lineHeight: 1.7,
+                  fontWeight: 300,
+                }}
+              >
+                {nudge}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Action buttons */}
+        <div style={{ display: "flex", gap: 10 }}>
+          <button
+            onClick={resetForm}
+            style={{
+              flex: 1,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+              padding: "13px",
+              background: "rgba(255,255,255,0.05)",
+              border: "1px solid rgba(255,255,255,0.1)",
+              borderRadius: 10,
+              color: "rgba(255,255,255,0.7)",
+              fontFamily: "var(--mono)",
+              fontSize: 12,
+              fontWeight: 600,
+              letterSpacing: "0.08em",
+              cursor: "pointer",
+              transition: "all 0.15s",
+            }}
+          >
+            <RotateCcw size={14} strokeWidth={2} />
+            LOG ANOTHER
+          </button>
+          <button
+            onClick={() => router.push("/history")}
+            style={{
+              flex: 1,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "13px",
+              background: "var(--accent)",
+              border: "none",
+              borderRadius: 10,
+              color: "#000",
+              fontFamily: "var(--mono)",
+              fontSize: 12,
+              fontWeight: 700,
+              letterSpacing: "0.08em",
+              cursor: "pointer",
+              transition: "all 0.15s",
+            }}
+          >
+            VIEW HISTORY
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── LOG FORM ──
   return (
     <div style={{ maxWidth: 600 }}>
       <div style={{ marginBottom: "24px" }}>
@@ -144,7 +605,6 @@ export default function LogPage() {
         </p>
       </div>
 
-      {/* Card — overflow hidden to clip children */}
       <div
         style={{
           backgroundColor: "rgba(255,255,255,0.03)",
@@ -156,7 +616,7 @@ export default function LogPage() {
           width: "100%",
         }}
       >
-        {/* Tab switcher */}
+        {/* Tabs */}
         <div
           style={{
             display: "flex",
@@ -212,7 +672,7 @@ export default function LogPage() {
           })}
         </div>
 
-        {/* Date — full width, contained */}
+        {/* Date */}
         <div style={{ marginBottom: "16px", width: "100%" }}>
           <label style={labelStyle}>DATE</label>
           <input
@@ -429,38 +889,29 @@ export default function LogPage() {
         {/* Submit */}
         <button
           onClick={handleSubmit}
-          disabled={loading || success}
+          disabled={loading}
           style={{
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             gap: "8px",
             padding: "14px",
-            backgroundColor: success ? "rgba(232,255,71,0.15)" : "#E8FF47",
-            border: success ? "1px solid #E8FF47" : "none",
+            backgroundColor: "#E8FF47",
+            border: "none",
             borderRadius: "10px",
-            color: success ? "#E8FF47" : "#060608",
+            color: "#060608",
             fontFamily: "JetBrains Mono, monospace",
             fontSize: "13px",
             fontWeight: 700,
             letterSpacing: "0.08em",
-            cursor: loading || success ? "default" : "pointer",
+            cursor: loading ? "not-allowed" : "pointer",
             opacity: loading ? 0.7 : 1,
             transition: "all 0.2s ease",
             width: "100%",
             boxSizing: "border-box",
           }}
         >
-          {success ? (
-            <>
-              <CheckCircle size={15} strokeWidth={2.5} />
-              LOGGED
-            </>
-          ) : loading ? (
-            "LOGGING..."
-          ) : (
-            "LOG SESSION"
-          )}
+          {loading ? "LOGGING..." : "LOG SESSION"}
         </button>
       </div>
     </div>
