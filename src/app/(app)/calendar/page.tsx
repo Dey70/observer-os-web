@@ -32,11 +32,12 @@ const MONTHS = [
   "December",
 ];
 
-const TYPE_COLOR: Record<string, string> = {
-  run: "#00E676",
-  lift: "#A78BFA",
-  study: "#FFB800",
+const TYPE_STYLE: Record<string, { color: string; bg: string }> = {
+  run: { color: "var(--green)", bg: "var(--green-dim)" },
+  lift: { color: "var(--purple)", bg: "var(--purple-dim)" },
+  study: { color: "var(--yellow)", bg: "var(--yellow-dim)" },
 };
+
 const TYPE_ICON: Record<string, React.ElementType> = {
   run: Activity,
   lift: Dumbbell,
@@ -140,14 +141,14 @@ export default function CalendarPage() {
           alignItems: "center",
           justifyContent: "space-between",
           marginBottom: 14,
-          background: "rgba(255,255,255,0.04)",
-          border: "1px solid rgba(255,255,255,0.08)",
+          background: "var(--surface2)",
+          border: "1px solid var(--border)",
           borderRadius: 12,
           padding: "10px 14px",
         }}
       >
         <button onClick={prevMonth} style={navBtnStyle}>
-          <ChevronLeft size={16} color="rgba(255,255,255,0.6)" />
+          <ChevronLeft size={16} color="var(--text-muted)" />
         </button>
         <div
           style={{
@@ -155,12 +156,13 @@ export default function CalendarPage() {
             fontSize: 14,
             fontWeight: 700,
             letterSpacing: "0.06em",
+            color: "var(--text)",
           }}
         >
           {MONTHS[month]} {year}
         </div>
         <button onClick={nextMonth} style={navBtnStyle}>
-          <ChevronRight size={16} color="rgba(255,255,255,0.6)" />
+          <ChevronRight size={16} color="var(--text-muted)" />
         </button>
       </div>
 
@@ -180,7 +182,7 @@ export default function CalendarPage() {
               textAlign: "center",
               fontSize: 9,
               fontFamily: "var(--mono)",
-              color: "rgba(255,255,255,0.3)",
+              color: "var(--text-dim)",
               letterSpacing: "0.1em",
               padding: "3px 0",
             }}
@@ -230,15 +232,15 @@ export default function CalendarPage() {
                   aspectRatio: "1",
                   borderRadius: 8,
                   border: isSelected
-                    ? "1.5px solid #E8FF47"
+                    ? "1.5px solid var(--accent)"
                     : isToday
-                      ? "1.5px solid rgba(232,255,71,0.4)"
-                      : "1px solid rgba(255,255,255,0.06)",
+                      ? "1.5px solid var(--accent-glow)"
+                      : "1px solid var(--border2)",
                   background: isSelected
-                    ? "rgba(232,255,71,0.08)"
+                    ? "var(--accent-dim)"
                     : isToday
-                      ? "rgba(232,255,71,0.04)"
-                      : "rgba(255,255,255,0.03)",
+                      ? "var(--surface)"
+                      : "var(--surface2)",
                   cursor: "pointer",
                   display: "flex",
                   flexDirection: "column",
@@ -255,11 +257,10 @@ export default function CalendarPage() {
                     fontFamily: "var(--mono)",
                     fontSize: 11,
                     fontWeight: isToday ? 700 : 400,
-                    color: isToday
-                      ? "#E8FF47"
-                      : isSelected
-                        ? "#E8FF47"
-                        : "rgba(255,255,255,0.6)",
+                    color:
+                      isToday || isSelected
+                        ? "var(--accent)"
+                        : "var(--text-muted)",
                     lineHeight: 1,
                   }}
                 >
@@ -283,7 +284,7 @@ export default function CalendarPage() {
                           width: 4,
                           height: 4,
                           borderRadius: "50%",
-                          background: "#E8FF47",
+                          background: "var(--accent)",
                           flexShrink: 0,
                         }}
                       />
@@ -295,7 +296,7 @@ export default function CalendarPage() {
                           width: 4,
                           height: 4,
                           borderRadius: "50%",
-                          background: TYPE_COLOR[t],
+                          background: TYPE_STYLE[t].color,
                           flexShrink: 0,
                         }}
                       />
@@ -316,16 +317,16 @@ export default function CalendarPage() {
           marginTop: 14,
           flexWrap: "wrap",
           padding: "10px 14px",
-          background: "rgba(255,255,255,0.02)",
-          border: "1px solid rgba(255,255,255,0.06)",
+          background: "var(--surface)",
+          border: "1px solid var(--border2)",
           borderRadius: 10,
         }}
       >
         {[
-          { color: "#E8FF47", label: "Check-in" },
-          { color: "#00E676", label: "Run" },
-          { color: "#A78BFA", label: "Lift" },
-          { color: "#FFB800", label: "Study" },
+          { color: "var(--accent)", label: "Check-in" },
+          { color: "var(--green)", label: "Run" },
+          { color: "var(--purple)", label: "Lift" },
+          { color: "var(--yellow)", label: "Study" },
         ].map(({ color, label }) => (
           <div
             key={label}
@@ -342,7 +343,7 @@ export default function CalendarPage() {
             <span
               style={{
                 fontSize: 10,
-                color: "rgba(255,255,255,0.4)",
+                color: "var(--text-muted)",
                 fontFamily: "var(--mono)",
               }}
             >
@@ -367,8 +368,8 @@ export default function CalendarPage() {
         <div
           style={{
             marginTop: 16,
-            background: "rgba(255,255,255,0.02)",
-            border: "1px solid rgba(255,255,255,0.06)",
+            background: "var(--surface)",
+            border: "1px solid var(--border2)",
             borderRadius: 14,
             padding: 20,
             textAlign: "center",
@@ -377,7 +378,7 @@ export default function CalendarPage() {
           <div
             style={{
               fontSize: 11,
-              color: "rgba(255,255,255,0.25)",
+              color: "var(--text-dim)",
               fontFamily: "var(--mono)",
             }}
           >
@@ -409,8 +410,8 @@ function DayPanel({ date, data }: { date: string; data: DayData }) {
   return (
     <div
       style={{
-        background: "rgba(255,255,255,0.04)",
-        border: "1px solid rgba(255,255,255,0.1)",
+        background: "var(--surface)",
+        border: "1px solid var(--border)",
         borderRadius: 14,
         overflow: "hidden",
         animation: "fadeIn 0.2s ease-out",
@@ -419,8 +420,8 @@ function DayPanel({ date, data }: { date: string; data: DayData }) {
       <div
         style={{
           padding: "14px 16px",
-          borderBottom: "1px solid rgba(255,255,255,0.07)",
-          background: "rgba(255,255,255,0.02)",
+          borderBottom: "1px solid var(--border2)",
+          background: "var(--surface2)",
         }}
       >
         <div
@@ -428,7 +429,7 @@ function DayPanel({ date, data }: { date: string; data: DayData }) {
             fontSize: 11,
             fontFamily: "var(--mono)",
             fontWeight: 700,
-            color: "#E8FF47",
+            color: "var(--accent)",
           }}
         >
           {displayDate}
@@ -449,7 +450,7 @@ function DayPanel({ date, data }: { date: string; data: DayData }) {
             <div
               style={{
                 fontSize: 9,
-                color: "rgba(255,255,255,0.3)",
+                color: "var(--text-dim)",
                 letterSpacing: "2px",
                 textTransform: "uppercase",
                 fontFamily: "var(--mono)",
@@ -460,8 +461,8 @@ function DayPanel({ date, data }: { date: string; data: DayData }) {
             </div>
             <div
               style={{
-                background: `${readiness.color}10`,
-                border: `1px solid ${readiness.color}30`,
+                background: "var(--surface2)", // Utilizing surface structure instead of hex opacity
+                border: "1px solid var(--border)",
                 borderRadius: 10,
                 padding: "12px 14px",
               }}
@@ -479,7 +480,7 @@ function DayPanel({ date, data }: { date: string; data: DayData }) {
                     fontFamily: "var(--mono)",
                     fontSize: 22,
                     fontWeight: 700,
-                    color: readiness.color,
+                    color: readiness.color, // Keeping this if calcReadiness provides dynamic colors
                   }}
                 >
                   {readiness.score.toFixed(1)}
@@ -517,7 +518,7 @@ function DayPanel({ date, data }: { date: string; data: DayData }) {
                     <div
                       style={{
                         fontSize: 8,
-                        color: "rgba(255,255,255,0.3)",
+                        color: "var(--text-dim)",
                         fontFamily: "var(--mono)",
                         textTransform: "uppercase",
                       }}
@@ -528,7 +529,7 @@ function DayPanel({ date, data }: { date: string; data: DayData }) {
                       style={{
                         fontSize: 11,
                         fontFamily: "var(--mono)",
-                        color: "rgba(255,255,255,0.7)",
+                        color: "var(--text)",
                         marginTop: 1,
                       }}
                     >
@@ -542,9 +543,9 @@ function DayPanel({ date, data }: { date: string; data: DayData }) {
                   style={{
                     marginTop: 10,
                     fontSize: 11,
-                    color: "rgba(255,255,255,0.4)",
+                    color: "var(--text-muted)",
                     fontStyle: "italic",
-                    borderTop: "1px solid rgba(255,255,255,0.06)",
+                    borderTop: "1px solid var(--border2)",
                     paddingTop: 8,
                   }}
                 >
@@ -560,16 +561,16 @@ function DayPanel({ date, data }: { date: string; data: DayData }) {
               alignItems: "center",
               gap: 8,
               padding: "10px 12px",
-              background: "rgba(255,255,255,0.02)",
-              border: "1px dashed rgba(255,255,255,0.07)",
+              background: "var(--surface)",
+              border: "1px dashed var(--border2)",
               borderRadius: 8,
             }}
           >
-            <Moon size={13} color="rgba(255,255,255,0.2)" />
+            <Moon size={13} color="var(--text-dim)" />
             <span
               style={{
                 fontSize: 11,
-                color: "rgba(255,255,255,0.25)",
+                color: "var(--text-dim)",
                 fontFamily: "var(--mono)",
               }}
             >
@@ -583,7 +584,7 @@ function DayPanel({ date, data }: { date: string; data: DayData }) {
           <div
             style={{
               fontSize: 9,
-              color: "rgba(255,255,255,0.3)",
+              color: "var(--text-dim)",
               letterSpacing: "2px",
               textTransform: "uppercase",
               fontFamily: "var(--mono)",
@@ -596,7 +597,7 @@ function DayPanel({ date, data }: { date: string; data: DayData }) {
             <div
               style={{
                 fontSize: 11,
-                color: "rgba(255,255,255,0.25)",
+                color: "var(--text-dim)",
                 fontFamily: "var(--mono)",
               }}
             >
@@ -606,14 +607,14 @@ function DayPanel({ date, data }: { date: string; data: DayData }) {
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {sessions.map((s) => {
                 const Icon = TYPE_ICON[s.type];
-                const color = TYPE_COLOR[s.type];
+                const themeColor = TYPE_STYLE[s.type] || TYPE_STYLE.run;
                 return (
                   <div
                     key={s.id}
                     style={{
                       padding: "10px 12px",
-                      background: `${color}08`,
-                      border: `1px solid ${color}25`,
+                      background: themeColor.bg,
+                      border: `1px solid var(--border2)`,
                       borderRadius: 10,
                     }}
                   >
@@ -632,12 +633,16 @@ function DayPanel({ date, data }: { date: string; data: DayData }) {
                           gap: 6,
                         }}
                       >
-                        <Icon size={12} color={color} strokeWidth={2} />
+                        <Icon
+                          size={12}
+                          color={themeColor.color}
+                          strokeWidth={2}
+                        />
                         <span
                           style={{
                             fontFamily: "var(--mono)",
                             fontSize: 10,
-                            color,
+                            color: themeColor.color,
                             textTransform: "uppercase",
                             fontWeight: 700,
                           }}
@@ -650,7 +655,7 @@ function DayPanel({ date, data }: { date: string; data: DayData }) {
                           fontFamily: "var(--mono)",
                           fontSize: 13,
                           fontWeight: 700,
-                          color: "rgba(255,255,255,0.8)",
+                          color: "var(--text)",
                         }}
                       >
                         {formatDuration(s.duration)}
@@ -660,7 +665,7 @@ function DayPanel({ date, data }: { date: string; data: DayData }) {
                       <div
                         style={{
                           fontSize: 12,
-                          color: "rgba(255,255,255,0.55)",
+                          color: "var(--text-muted)",
                           marginBottom: 3,
                         }}
                       >
@@ -671,7 +676,7 @@ function DayPanel({ date, data }: { date: string; data: DayData }) {
                       style={{
                         fontSize: 10,
                         fontFamily: "var(--mono)",
-                        color: "rgba(255,255,255,0.3)",
+                        color: "var(--text-dim)",
                       }}
                     >
                       RPE {s.rpe}/10 · {rpeToLabel(s.rpe)}
@@ -696,8 +701,8 @@ function EmptyDayPanel({ date }: { date: string }) {
   return (
     <div
       style={{
-        background: "rgba(255,255,255,0.03)",
-        border: "1px solid rgba(255,255,255,0.07)",
+        background: "var(--surface)",
+        border: "1px solid var(--border2)",
         borderRadius: 14,
         padding: 20,
         animation: "fadeIn 0.2s ease-out",
@@ -708,7 +713,7 @@ function EmptyDayPanel({ date }: { date: string }) {
           fontSize: 11,
           fontFamily: "var(--mono)",
           fontWeight: 700,
-          color: "#E8FF47",
+          color: "var(--accent)",
           marginBottom: 10,
         }}
       >
@@ -717,7 +722,7 @@ function EmptyDayPanel({ date }: { date: string }) {
       <div
         style={{
           fontSize: 12,
-          color: "rgba(255,255,255,0.25)",
+          color: "var(--text-dim)",
           fontFamily: "var(--mono)",
         }}
       >
@@ -733,8 +738,8 @@ const navBtnStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  background: "rgba(255,255,255,0.05)",
-  border: "1px solid rgba(255,255,255,0.08)",
+  background: "var(--surface2)",
+  border: "1px solid var(--border)",
   borderRadius: 8,
   cursor: "pointer",
 };
