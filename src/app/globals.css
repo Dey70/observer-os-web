@@ -100,6 +100,22 @@ body::before {
 ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 99px; }
 [data-theme="light"] ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); }
 
+/* Force dark dropdown options everywhere */
+select {
+  color-scheme: dark;
+}
+option {
+  background: #1a1a1a;
+  color: #f0f0f0;
+}
+[data-theme="light"] select {
+  color-scheme: light;
+}
+[data-theme="light"] option {
+  background: #ffffff;
+  color: #0a0a0a;
+}
+
 /* Range slider */
 input[type=range] {
   -webkit-appearance: none; appearance: none;
