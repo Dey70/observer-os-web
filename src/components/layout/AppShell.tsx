@@ -674,7 +674,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           position: "relative",
         }}
       >
-        {children}
+        <div
+          key={pathname}
+          style={{
+            animation:
+              "pageEnter 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94) both",
+          }}
+        >
+          {children}
+        </div>
       </main>
     </div>
   );

@@ -153,6 +153,7 @@ input[type=range]::-moz-range-thumb {
 
 /* Animations */
 @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes pageEnter { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes fadeInFast { from { opacity: 0; } to { opacity: 1; } }
 @keyframes slideUp { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -221,6 +222,9 @@ input[type=range][data-color="purple"]::-moz-range-thumb { background: #A78BFA; 
   /* Calendar side panel stacks below on mobile */
   .calendar-layout { flex-direction: column !important; }
   .calendar-panel { width: 100% !important; position: static !important; }
+
+  /* Coach */
+  .coach-layout { height: calc(100vh - 140px) !important; }
 
   /* Stat score font size */
   .readiness-score { font-size: 64px !important; letter-spacing: -3px !important; }
