@@ -153,7 +153,6 @@ export default function CoachPage() {
 
   return (
     <>
-      {/* CSS handles both desktop and mobile heights cleanly */}
       <style>{`
         .coach-root {
           display: flex;
@@ -162,16 +161,69 @@ export default function CoachPage() {
           height: calc(100vh - 80px);
           overflow: hidden;
         }
+        .coach-prompts {
+          flex-shrink: 0;
+          overflow-x: auto;
+          margin-bottom: 10px;
+          padding-bottom: 2px;
+        }
         @media (max-width: 768px) {
           .coach-root {
             height: calc(100dvh - 110px);
+          }
+          .coach-header {
+            margin-bottom: 8px !important;
+          }
+          .coach-header-title {
+            font-size: 14px !important;
+          }
+          .coach-header-subtitle {
+            font-size: 10px !important;
+          }
+          .coach-prompts {
+            margin-bottom: 8px !important;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+          }
+          .coach-prompts::-webkit-scrollbar {
+            display: none;
+          }
+          .coach-prompt-btn {
+            padding: 7px 11px !important;
+            font-size: 11px !important;
+            min-height: 36px;
+          }
+          .coach-messages {
+            padding: 10px !important;
+            border-radius: 10px !important;
+            gap: 10px !important;
+          }
+          .coach-msg {
+            max-width: 90% !important;
+          }
+          .coach-msg-bubble {
+            padding: 9px 12px !important;
+            font-size: 14px !important;
+          }
+          .coach-input-wrap {
+            margin-top: 8px !important;
+          }
+          .coach-input-wrap textarea {
+            font-size: 16px !important;
+            padding: 10px 12px !important;
+            rows: 1;
+            height: 44px;
+          }
+          .coach-input-wrap button {
+            padding: 0 16px !important;
+            font-size: 18px !important;
           }
         }
       `}</style>
 
       <div className="coach-root">
         {/* Header */}
-        <div style={{ flexShrink: 0, marginBottom: 10 }}>
+        <div className="coach-header" style={{ flexShrink: 0, marginBottom: 10 }}>
           <div
             style={{
               display: "flex",
@@ -183,6 +235,7 @@ export default function CoachPage() {
             }}
           >
             <div
+              className="coach-header-title"
               style={{
                 fontFamily: "var(--mono)",
                 fontSize: 18,
@@ -193,24 +246,18 @@ export default function CoachPage() {
             </div>
             {isSunday && <Badge color="var(--accent)">📊 Weekly Review</Badge>}
           </div>
-          <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+          <div className="coach-header-subtitle" style={{ fontSize: 11, color: "var(--text-muted)" }}>
             Groq · llama-3.3-70b · Tool-calling enabled
           </div>
         </div>
 
         {/* Quick prompts — horizontal scroll */}
-        <div
-          style={{
-            flexShrink: 0,
-            overflowX: "auto",
-            marginBottom: 10,
-            paddingBottom: 2,
-          }}
-        >
+        <div className="coach-prompts">
           <div style={{ display: "flex", gap: 6, width: "max-content" }}>
             {QUICK_PROMPTS.map((qp) => (
               <button
                 key={qp.label}
+                className="coach-prompt-btn"
                 onClick={() => sendMessage(qp.msg)}
                 disabled={loading}
                 style={{
@@ -233,6 +280,7 @@ export default function CoachPage() {
 
         {/* Messages — flex 1, minHeight 0 is critical */}
         <div
+          className="coach-messages"
           style={{
             flex: 1,
             minHeight: 0,
@@ -250,6 +298,7 @@ export default function CoachPage() {
           {messages.map((msg, i) => (
             <div
               key={i}
+              className="coach-msg"
               style={{
                 maxWidth: "85%",
                 alignSelf: msg.role === "user" ? "flex-end" : "flex-start",
@@ -257,6 +306,7 @@ export default function CoachPage() {
               }}
             >
               <div
+                className="coach-msg-bubble"
                 style={{
                   padding: "10px 14px",
                   fontSize: 13,
@@ -314,6 +364,7 @@ export default function CoachPage() {
 
         {/* Input — always pinned at bottom */}
         <div
+          className="coach-input-wrap"
           style={{
             flexShrink: 0,
             display: "flex",
@@ -330,7 +381,7 @@ export default function CoachPage() {
             onKeyDown={handleKeyDown}
             disabled={loading}
             rows={2}
-            placeholder="Ask the coach... (Enter to send, Shift+Enter for newline)"
+            placeholder="Ask the coach..."
             style={{
               flex: 1,
               padding: "12px 14px",

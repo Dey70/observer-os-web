@@ -222,9 +222,6 @@ input[type=range][data-color="purple"]::-moz-range-thumb { background: #A78BFA; 
   .calendar-layout { flex-direction: column !important; }
   .calendar-panel { width: 100% !important; position: static !important; }
 
-  /* Coach */
-  .coach-layout { height: calc(100vh - 140px) !important; }
-
   /* Stat score font size */
   .readiness-score { font-size: 64px !important; letter-spacing: -3px !important; }
 }
