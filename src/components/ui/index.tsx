@@ -19,21 +19,24 @@ export function Card({
     <div
       className={glass ? "glass" : ""}
       style={{
-        background: glass ? undefined : "var(--surface)",
-        border: glass ? undefined : `1px solid ${accent ?? "var(--border)"}`,
-        borderRadius: "var(--radius-lg)",
-        padding: 20,
+        background: glass ? undefined : "rgba(255,255,255,0.04)",
+        border: glass
+          ? undefined
+          : `1px solid ${accent ?? "rgba(255,255,255,0.1)"}`,
+        borderRadius: "var(--radius-xl)",
+        padding: 24,
         marginBottom: 16,
         position: "relative",
         overflow: "hidden",
-        transition: hover ? "transform 0.15s, border-color 0.15s" : undefined,
+        backdropFilter: glass ? undefined : "blur(20px)",
+        transition: hover ? "transform 0.15s" : undefined,
         ...style,
       }}
       onMouseOver={
         hover
           ? (e) => {
               (e.currentTarget as HTMLDivElement).style.transform =
-                "translateY(-1px)";
+                "translateY(-2px)";
             }
           : undefined
       }
@@ -72,10 +75,10 @@ export function PageHeader({
       <div>
         <div
           style={{
-            fontSize: 20,
-            fontWeight: 700,
+            fontSize: 22,
+            fontWeight: 800,
             color: "var(--text)",
-            letterSpacing: "0.3px",
+            letterSpacing: "-0.3px",
           }}
         >
           {title}
@@ -127,14 +130,23 @@ export function StatCard({
   return (
     <div
       style={{
-        background: "rgba(255,255,255,0.02)",
-        border: "1px solid var(--border)",
+        background: "rgba(255,255,255,0.04)",
+        border: "1px solid rgba(255,255,255,0.1)",
         borderRadius: "var(--radius-md)",
         padding: 16,
         position: "relative",
         overflow: "hidden",
-        transition: "border-color 0.2s",
+        backdropFilter: "blur(20px)",
+        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.07)",
+        transition: "transform 0.15s, border-color 0.15s",
       }}
+      onMouseOver={(e) =>
+        ((e.currentTarget as HTMLDivElement).style.transform =
+          "translateY(-2px)")
+      }
+      onMouseOut={(e) =>
+        ((e.currentTarget as HTMLDivElement).style.transform = "translateY(0)")
+      }
     >
       <div
         style={{
@@ -143,7 +155,7 @@ export function StatCard({
           left: 0,
           right: 0,
           height: 2,
-          background: color ?? "var(--border)",
+          background: color ?? "var(--accent)",
           borderRadius: "12px 12px 0 0",
         }}
       />
@@ -211,8 +223,8 @@ export function Input({
       style={{
         width: "100%",
         padding: "10px 14px",
-        background: "rgba(255,255,255,0.03)",
-        border: "1px solid var(--border)",
+        background: "rgba(255,255,255,0.05)",
+        border: "1px solid rgba(255,255,255,0.1)",
         borderRadius: "var(--radius-sm)",
         color: "var(--text)",
         outline: "none",
@@ -236,8 +248,8 @@ export function Select({
       style={{
         width: "100%",
         padding: "10px 14px",
-        background: "rgba(255,255,255,0.03)",
-        border: "1px solid var(--border)",
+        background: "rgba(255,255,255,0.05)",
+        border: "1px solid rgba(255,255,255,0.1)",
         borderRadius: "var(--radius-sm)",
         color: "var(--text)",
         outline: "none",
@@ -267,17 +279,18 @@ export function Button({
       background: "var(--accent)",
       color: "#000",
       fontWeight: 700,
-      boxShadow: "0 0 20px rgba(232,255,71,0.15)",
+      boxShadow:
+        "0 4px 20px rgba(232,255,71,0.25), 0 0 40px rgba(232,255,71,0.1)",
     },
     secondary: {
-      background: "rgba(255,255,255,0.03)",
-      color: "var(--text-muted)",
-      border: "1px solid var(--border)",
+      background: "rgba(255,255,255,0.06)",
+      color: "rgba(255,255,255,0.7)",
+      border: "1px solid rgba(255,255,255,0.1)",
     },
     danger: {
-      background: "rgba(255,68,68,0.08)",
+      background: "rgba(255,68,68,0.1)",
       color: "var(--red)",
-      border: "1px solid rgba(255,68,68,0.2)",
+      border: "1px solid rgba(255,68,68,0.25)",
     },
   };
   return (
@@ -285,7 +298,7 @@ export function Button({
       {...props}
       disabled={disabled}
       style={{
-        padding: "11px 22px",
+        padding: "12px 24px",
         fontSize: 11,
         letterSpacing: "1.5px",
         textTransform: "uppercase",
@@ -318,12 +331,12 @@ export function Chip({
     <button
       onClick={onClick}
       style={{
-        padding: "5px 12px",
-        border: `1px solid ${active ? "var(--accent)" : "var(--border)"}`,
+        padding: "6px 14px",
+        border: `1px solid ${active ? "var(--accent)" : "rgba(255,255,255,0.1)"}`,
         borderRadius: "var(--radius-sm)",
         fontSize: 11,
-        color: active ? "var(--accent)" : "var(--text-muted)",
-        background: active ? "var(--accent-dim)" : "rgba(255,255,255,0.02)",
+        color: active ? "var(--accent)" : "rgba(255,255,255,0.5)",
+        background: active ? "rgba(232,255,71,0.08)" : "rgba(255,255,255,0.03)",
         cursor: "pointer",
         letterSpacing: "0.5px",
         transition: "all 0.15s",
@@ -338,19 +351,23 @@ const effortColors = {
   easy: {
     border: "var(--green)",
     color: "var(--green)",
-    bg: "var(--green-dim)",
+    bg: "rgba(0,230,118,0.08)",
   },
   medium: {
     border: "var(--yellow)",
     color: "var(--yellow)",
-    bg: "var(--yellow-dim)",
+    bg: "rgba(255,184,0,0.08)",
   },
   hard: {
     border: "var(--accent)",
     color: "var(--accent)",
-    bg: "var(--accent-dim)",
+    bg: "rgba(232,255,71,0.08)",
   },
-  vhard: { border: "var(--red)", color: "var(--red)", bg: "var(--red-dim)" },
+  vhard: {
+    border: "var(--red)",
+    color: "var(--red)",
+    bg: "rgba(255,68,68,0.08)",
+  },
 };
 
 export function EffortButton({
@@ -369,13 +386,13 @@ export function EffortButton({
     <button
       onClick={onClick}
       style={{
-        padding: "8px 16px",
-        border: `1px solid ${selected ? c.border : "var(--border)"}`,
+        padding: "9px 18px",
+        border: `1px solid ${selected ? c.border : "rgba(255,255,255,0.1)"}`,
         borderRadius: "var(--radius-sm)",
         fontSize: 11,
         fontFamily: "var(--mono)",
-        color: selected ? c.color : "var(--text-muted)",
-        background: selected ? c.bg : "rgba(255,255,255,0.02)",
+        color: selected ? c.color : "rgba(255,255,255,0.45)",
+        background: selected ? c.bg : "rgba(255,255,255,0.03)",
         cursor: "pointer",
         transition: "all 0.15s",
         letterSpacing: "0.5px",
@@ -411,10 +428,11 @@ export function BarChart({
             top: 0,
             left: "50%",
             transform: "translateX(-50%)",
-            background: "var(--surface2)",
-            border: "1px solid var(--border)",
+            background: "rgba(255,255,255,0.08)",
+            backdropFilter: "blur(20px)",
+            border: "1px solid rgba(255,255,255,0.12)",
             borderRadius: "var(--radius-sm)",
-            padding: "4px 10px",
+            padding: "4px 12px",
             fontFamily: "var(--mono)",
             fontSize: 11,
             color: "var(--text)",
@@ -458,9 +476,10 @@ export function BarChart({
                 style={{
                   width: "100%",
                   height: `${Math.max(2, (d.value / max) * 100)}%`,
-                  background: tooltip?.index === i ? "var(--text)" : color,
-                  borderRadius: "3px 3px 0 0",
-                  opacity: tooltip?.index === i ? 1 : 0.7,
+                  background:
+                    tooltip?.index === i ? "rgba(255,255,255,0.8)" : color,
+                  borderRadius: "4px 4px 0 0",
+                  opacity: tooltip?.index === i ? 1 : 0.75,
                   transition: "all 0.15s",
                   cursor: "pointer",
                 }}
@@ -470,7 +489,7 @@ export function BarChart({
               style={{
                 fontFamily: "var(--mono)",
                 fontSize: 8,
-                color: "var(--text-dim)",
+                color: "rgba(255,255,255,0.25)",
                 whiteSpace: "nowrap",
               }}
             >
@@ -489,7 +508,7 @@ export function Spinner({ size = 14 }: { size?: number }) {
       style={{
         width: size,
         height: size,
-        border: `2px solid var(--border)`,
+        border: `2px solid rgba(255,255,255,0.1)`,
         borderTopColor: "var(--accent)",
         borderRadius: "50%",
         animation: "spin 0.6s linear infinite",
@@ -503,10 +522,10 @@ export function SkeletonCard({ rows = 3 }: { rows?: number }) {
   return (
     <div
       style={{
-        background: "var(--surface)",
-        border: "1px solid var(--border)",
-        borderRadius: "var(--radius-lg)",
-        padding: 20,
+        background: "rgba(255,255,255,0.04)",
+        border: "1px solid rgba(255,255,255,0.1)",
+        borderRadius: "var(--radius-xl)",
+        padding: 24,
         marginBottom: 16,
       }}
     >
@@ -517,7 +536,7 @@ export function SkeletonCard({ rows = 3 }: { rows?: number }) {
           style={{
             height: i === 0 ? 24 : 12,
             width: i === 0 ? "40%" : `${60 + Math.random() * 30}%`,
-            marginBottom: i === rows - 1 ? 0 : 12,
+            marginBottom: i === rows - 1 ? 0 : 14,
           }}
         />
       ))}
@@ -539,8 +558,8 @@ export function SkeletonGrid({ cols = 4 }: { cols?: number }) {
         <div
           key={i}
           style={{
-            background: "var(--surface)",
-            border: "1px solid var(--border)",
+            background: "rgba(255,255,255,0.04)",
+            border: "1px solid rgba(255,255,255,0.1)",
             borderRadius: "var(--radius-md)",
             padding: 16,
           }}
@@ -562,9 +581,9 @@ export function EmptyState({ message }: { message: string }) {
       style={{
         padding: "48px 20px",
         textAlign: "center",
-        color: "var(--text-dim)",
+        color: "rgba(255,255,255,0.25)",
         fontSize: 13,
-        border: "1px dashed var(--border)",
+        border: "1px dashed rgba(255,255,255,0.08)",
         borderRadius: "var(--radius-md)",
         fontFamily: "var(--mono)",
       }}
@@ -587,10 +606,10 @@ export function Badge({
         display: "inline-flex",
         alignItems: "center",
         gap: 5,
-        padding: "4px 10px",
-        borderRadius: 6,
-        border: `1px solid ${color}20`,
-        background: `${color}10`,
+        padding: "5px 12px",
+        borderRadius: 99,
+        border: `1px solid ${color}30`,
+        background: `${color}12`,
         fontFamily: "var(--mono)",
         fontSize: 10,
         color,
@@ -619,7 +638,7 @@ export function TypingDots() {
           style={{
             width: 5,
             height: 5,
-            background: "var(--text-muted)",
+            background: "rgba(255,255,255,0.4)",
             borderRadius: "50%",
             animation: `bounce 1s ${delay}ms infinite`,
           }}
@@ -633,10 +652,12 @@ export function NudgeCard({ children }: { children: ReactNode }) {
   return (
     <div
       style={{
-        background: "rgba(232,255,71,0.03)",
-        border: "1px solid rgba(232,255,71,0.1)",
+        background: "rgba(232,255,71,0.04)",
+        border: "1px solid rgba(232,255,71,0.15)",
         borderRadius: "var(--radius-md)",
-        padding: "14px 16px",
+        padding: "16px 18px",
+        backdropFilter: "blur(20px)",
+        boxShadow: "inset 0 1px 0 rgba(232,255,71,0.08)",
       }}
     >
       <div
@@ -644,15 +665,15 @@ export function NudgeCard({ children }: { children: ReactNode }) {
           display: "flex",
           alignItems: "center",
           gap: 8,
-          marginBottom: 8,
+          marginBottom: 10,
         }}
       >
         <div
           style={{
-            width: 18,
-            height: 18,
-            borderRadius: 5,
-            background: "rgba(232,255,71,0.1)",
+            width: 20,
+            height: 20,
+            borderRadius: 6,
+            background: "rgba(232,255,71,0.12)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -660,11 +681,11 @@ export function NudgeCard({ children }: { children: ReactNode }) {
           }}
         >
           <svg
-            width="10"
-            height="10"
+            width="11"
+            height="11"
             viewBox="0 0 24 24"
             fill="none"
-            stroke="var(--accent)"
+            stroke="#E8FF47"
             strokeWidth="2.5"
             strokeLinecap="round"
           >
@@ -689,7 +710,7 @@ export function NudgeCard({ children }: { children: ReactNode }) {
         style={{
           fontFamily: "var(--soft)",
           fontSize: 13,
-          color: "var(--text-muted)",
+          color: "rgba(255,255,255,0.6)",
           lineHeight: 1.7,
           fontWeight: 300,
         }}

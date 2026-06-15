@@ -6,149 +6,14 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 const NAV = [
-  {
-    path: "/checkin",
-    label: "Check-in",
-    icon: (
-      <svg
-        width="15"
-        height="15"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      >
-        <circle cx="12" cy="12" r="4" />
-        <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
-      </svg>
-    ),
-  },
-  {
-    path: "/log",
-    label: "Log Session",
-    icon: (
-      <svg
-        width="15"
-        height="15"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      >
-        <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
-      </svg>
-    ),
-  },
-  {
-    path: "/dashboard",
-    label: "Dashboard",
-    icon: (
-      <svg
-        width="15"
-        height="15"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      >
-        <rect x="3" y="3" width="7" height="7" rx="1" />
-        <rect x="14" y="3" width="7" height="7" rx="1" />
-        <rect x="3" y="14" width="7" height="7" rx="1" />
-        <rect x="14" y="14" width="7" height="7" rx="1" />
-      </svg>
-    ),
-  },
-  {
-    path: "/history",
-    label: "History",
-    icon: (
-      <svg
-        width="15"
-        height="15"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      >
-        <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-      </svg>
-    ),
-  },
-  {
-    path: "/load",
-    label: "Load",
-    icon: (
-      <svg
-        width="15"
-        height="15"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      >
-        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-      </svg>
-    ),
-  },
-  {
-    path: "/goals",
-    label: "Goals",
-    icon: (
-      <svg
-        width="15"
-        height="15"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      >
-        <circle cx="12" cy="12" r="10" />
-        <circle cx="12" cy="12" r="6" />
-        <circle cx="12" cy="12" r="2" />
-      </svg>
-    ),
-  },
-  {
-    path: "/coach",
-    label: "Coach",
-    icon: (
-      <svg
-        width="15"
-        height="15"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      >
-        <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
-      </svg>
-    ),
-  },
-  {
-    path: "/profile",
-    label: "Profile",
-    icon: (
-      <svg
-        width="15"
-        height="15"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      >
-        <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
-        <circle cx="12" cy="7" r="4" />
-      </svg>
-    ),
-  },
+  { path: "/checkin", label: "Check-in" },
+  { path: "/log", label: "Log Session" },
+  { path: "/dashboard", label: "Dashboard" },
+  { path: "/history", label: "History" },
+  { path: "/load", label: "Load" },
+  { path: "/goals", label: "Goals" },
+  { path: "/coach", label: "Coach" },
+  { path: "/profile", label: "Profile" },
 ];
 
 export default function AppShell({
@@ -193,25 +58,43 @@ export default function AppShell({
         position: "relative",
       }}
     >
+      {/* Extra orb — bottom left */}
+      <div
+        style={{
+          position: "fixed",
+          width: 300,
+          height: 300,
+          borderRadius: "50%",
+          background:
+            "radial-gradient(circle, rgba(0,230,118,0.04) 0%, transparent 65%)",
+          bottom: -80,
+          left: 80,
+          pointerEvents: "none",
+          zIndex: 0,
+          animation: "orbFloat 12s ease-in-out infinite reverse",
+        }}
+      />
+
       {/* SIDEBAR */}
       <nav
         id="sidebar"
         style={{
           width: 220,
           flexShrink: 0,
-          background: "rgba(8,8,8,0.98)",
-          borderRight: "1px solid var(--border)",
+          background: "rgba(6,6,8,0.92)",
+          borderRight: "1px solid rgba(255,255,255,0.06)",
           display: "flex",
           flexDirection: "column",
           position: "relative",
           zIndex: 10,
+          backdropFilter: "blur(20px)",
         }}
       >
         {/* Header */}
         <div
           style={{
             padding: "22px 18px 16px",
-            borderBottom: "1px solid var(--border)",
+            borderBottom: "1px solid rgba(255,255,255,0.05)",
           }}
         >
           <div
@@ -222,24 +105,24 @@ export default function AppShell({
               marginBottom: 10,
             }}
           >
-            {/* Logo mark */}
             <div
               style={{
-                width: 30,
-                height: 30,
-                borderRadius: 8,
+                width: 32,
+                height: 32,
+                borderRadius: 9,
                 background: "var(--accent)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 flexShrink: 0,
+                boxShadow: "0 0 16px rgba(232,255,71,0.3)",
               }}
             >
               <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
                 <path
                   d="M1 9 L3.5 9 L5 5 L7 13 L9 2 L11 13 L13 5 L14.5 9 L17 9"
                   stroke="#000"
-                  strokeWidth="2"
+                  strokeWidth="2.2"
                   strokeLinecap="round"
                   strokeLinejoin="round"
                 />
@@ -275,8 +158,8 @@ export default function AppShell({
             style={{
               fontFamily: "var(--mono)",
               fontSize: 10,
-              color: "var(--text-dim)",
-              marginBottom: 10,
+              color: "rgba(255,255,255,0.25)",
+              marginBottom: 12,
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
@@ -287,22 +170,22 @@ export default function AppShell({
 
           {/* Theme toggle */}
           <div
+            onClick={toggleTheme}
             style={{
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
-              padding: "6px 10px",
-              background: "rgba(255,255,255,0.02)",
-              border: "1px solid var(--border)",
+              padding: "7px 10px",
+              background: "rgba(255,255,255,0.03)",
+              border: "1px solid rgba(255,255,255,0.06)",
               borderRadius: 8,
               cursor: "pointer",
             }}
-            onClick={toggleTheme}
           >
             <span
               style={{
                 fontSize: 9,
-                color: "var(--text-muted)",
+                color: "rgba(255,255,255,0.3)",
                 letterSpacing: "1px",
                 textTransform: "uppercase",
               }}
@@ -316,7 +199,6 @@ export default function AppShell({
                 borderRadius: 99,
                 background: "var(--accent)",
                 position: "relative",
-                transition: "background 0.3s",
               }}
             >
               <div
@@ -335,7 +217,7 @@ export default function AppShell({
           </div>
         </div>
 
-        {/* Nav */}
+        {/* Nav items with dots */}
         <div style={{ flex: 1, padding: "10px 0", overflowY: "auto" }}>
           {NAV.map((item) => {
             const active = pathname === item.path;
@@ -346,29 +228,31 @@ export default function AppShell({
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: 10,
-                  padding: "9px 18px",
-                  fontSize: 12,
-                  color: active ? "var(--accent)" : "var(--text-muted)",
+                  gap: 12,
+                  padding: "10px 18px",
+                  fontSize: 12.5,
+                  color: active ? "#F0F0F0" : "rgba(255,255,255,0.3)",
                   textDecoration: "none",
-                  background: active ? "rgba(232,255,71,0.05)" : "none",
+                  background: active ? "rgba(232,255,71,0.06)" : "none",
                   transition: "all 0.15s",
-                  filter: active
-                    ? "drop-shadow(0 0 6px rgba(232,255,71,0.3))"
-                    : "none",
                 }}
               >
-                <span
+                {/* Dot indicator */}
+                <div
                   style={{
-                    color: active ? "var(--accent)" : "var(--text-muted)",
-                    display: "flex",
-                    alignItems: "center",
+                    width: 6,
+                    height: 6,
+                    borderRadius: "50%",
                     flexShrink: 0,
-                    transition: "color 0.15s",
+                    background: active
+                      ? "var(--accent)"
+                      : "rgba(255,255,255,0.1)",
+                    boxShadow: active
+                      ? "0 0 8px rgba(232,255,71,0.8), 0 0 16px rgba(232,255,71,0.4)"
+                      : "none",
+                    transition: "all 0.2s",
                   }}
-                >
-                  {item.icon}
-                </span>
+                />
                 {item.label}
               </Link>
             );
@@ -377,7 +261,10 @@ export default function AppShell({
 
         {/* Footer */}
         <div
-          style={{ padding: "14px 18px", borderTop: "1px solid var(--border)" }}
+          style={{
+            padding: "14px 18px",
+            borderTop: "1px solid rgba(255,255,255,0.05)",
+          }}
         >
           <button
             onClick={signOut}
@@ -386,7 +273,7 @@ export default function AppShell({
               alignItems: "center",
               gap: 8,
               fontSize: 10,
-              color: "var(--text-dim)",
+              color: "rgba(255,255,255,0.2)",
               background: "none",
               border: "none",
               cursor: "pointer",
@@ -396,15 +283,15 @@ export default function AppShell({
               transition: "color 0.15s",
             }}
             onMouseOver={(e) =>
-              (e.currentTarget.style.color = "var(--text-muted)")
+              (e.currentTarget.style.color = "rgba(255,255,255,0.45)")
             }
             onMouseOut={(e) =>
-              (e.currentTarget.style.color = "var(--text-dim)")
+              (e.currentTarget.style.color = "rgba(255,255,255,0.2)")
             }
           >
             <svg
-              width="13"
-              height="13"
+              width="12"
+              height="12"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -442,8 +329,8 @@ export default function AppShell({
           left: 0,
           right: 0,
           height: 60,
-          background: "rgba(8,8,8,0.98)",
-          borderTop: "1px solid var(--border)",
+          background: "rgba(6,6,8,0.95)",
+          borderTop: "1px solid rgba(255,255,255,0.06)",
           justifyContent: "space-around",
           alignItems: "center",
           zIndex: 100,
@@ -460,34 +347,34 @@ export default function AppShell({
                 display: "flex",
                 flexDirection: "column",
                 alignItems: "center",
-                gap: 4,
+                gap: 5,
                 flex: 1,
                 padding: "8px 0",
-                color: active ? "var(--accent)" : "var(--text-dim)",
+                color: active ? "var(--accent)" : "rgba(255,255,255,0.25)",
                 textDecoration: "none",
                 fontSize: 8,
                 letterSpacing: "0.5px",
                 textTransform: "uppercase",
                 transition: "color 0.15s",
                 borderTop: active
-                  ? "1px solid var(--accent)"
-                  : "1px solid transparent",
+                  ? "1.5px solid var(--accent)"
+                  : "1.5px solid transparent",
               }}
             >
-              <span style={{ color: "inherit" }}>{item.icon}</span>
+              <div
+                style={{
+                  width: 5,
+                  height: 5,
+                  borderRadius: "50%",
+                  background: active ? "var(--accent)" : "transparent",
+                  boxShadow: active ? "0 0 6px rgba(232,255,71,0.8)" : "none",
+                }}
+              />
               {item.label.split(" ")[0]}
             </Link>
           );
         })}
       </nav>
-
-      <style>{`
-        @media (max-width: 768px) {
-          #sidebar { display: none !important; }
-          #mobile-nav { display: flex !important; }
-          #main-content { padding: 20px 16px 80px !important; }
-        }
-      `}</style>
     </div>
   );
 }
