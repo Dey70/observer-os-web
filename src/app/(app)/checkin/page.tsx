@@ -216,8 +216,8 @@ export default function CheckinPage() {
           padding: 28,
           marginBottom: 16,
           overflow: "hidden",
-          background: "rgba(255,255,255,0.04)",
-          border: "1px solid rgba(255,255,255,0.18)",
+          background: "var(--surface)",
+          border: "1px solid var(--border)",
           backdropFilter: "blur(60px)",
           WebkitBackdropFilter: "blur(60px)",
           boxShadow:
@@ -542,8 +542,8 @@ export default function CheckinPage() {
       >
         <div
           style={{
-            background: "rgba(255,255,255,0.04)",
-            border: "1px solid rgba(255,255,255,0.12)",
+            background: "var(--surface)",
+            border: "1px solid var(--border)",
             borderRadius: 16,
             padding: 18,
             position: "relative",
@@ -586,8 +586,8 @@ export default function CheckinPage() {
         </div>
         <div
           style={{
-            background: "rgba(255,255,255,0.04)",
-            border: "1px solid rgba(255,255,255,0.12)",
+            background: "var(--surface)",
+            border: "1px solid var(--border)",
             borderRadius: 16,
             padding: 18,
             position: "relative",

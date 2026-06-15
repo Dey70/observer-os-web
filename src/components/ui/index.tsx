@@ -19,7 +19,7 @@ export function Card({
     <div
       className={glass ? "glass" : ""}
       style={{
-        background: glass ? undefined : "rgba(255,255,255,0.04)",
+        background: glass ? undefined : "var(--surface)",
         border: glass
           ? undefined
           : `1px solid ${accent ?? "rgba(255,255,255,0.1)"}`,
@@ -130,8 +130,8 @@ export function StatCard({
   return (
     <div
       style={{
-        background: "rgba(255,255,255,0.04)",
-        border: "1px solid rgba(255,255,255,0.1)",
+        background: "var(--surface)",
+        border: "1px solid var(--border)",
         borderRadius: "var(--radius-md)",
         padding: 16,
         position: "relative",
@@ -223,8 +223,8 @@ export function Input({
       style={{
         width: "100%",
         padding: "10px 14px",
-        background: "rgba(255,255,255,0.05)",
-        border: "1px solid rgba(255,255,255,0.1)",
+        background: "var(--surface2)",
+        border: "1px solid var(--border)",
         borderRadius: "var(--radius-sm)",
         color: "var(--text)",
         outline: "none",
@@ -248,8 +248,8 @@ export function Select({
       style={{
         width: "100%",
         padding: "10px 14px",
-        background: "rgba(255,255,255,0.05)",
-        border: "1px solid rgba(255,255,255,0.1)",
+        background: "var(--surface2)",
+        border: "1px solid var(--border)",
         borderRadius: "var(--radius-sm)",
         color: "var(--text)",
         outline: "none",
@@ -428,7 +428,7 @@ export function BarChart({
             top: 0,
             left: "50%",
             transform: "translateX(-50%)",
-            background: "rgba(255,255,255,0.08)",
+            background: "var(--surface2)",
             backdropFilter: "blur(20px)",
             border: "1px solid rgba(255,255,255,0.12)",
             borderRadius: "var(--radius-sm)",
@@ -489,7 +489,7 @@ export function BarChart({
               style={{
                 fontFamily: "var(--mono)",
                 fontSize: 8,
-                color: "rgba(255,255,255,0.25)",
+                color: "var(--text-dim)",
                 whiteSpace: "nowrap",
               }}
             >
@@ -522,8 +522,8 @@ export function SkeletonCard({ rows = 3 }: { rows?: number }) {
   return (
     <div
       style={{
-        background: "rgba(255,255,255,0.04)",
-        border: "1px solid rgba(255,255,255,0.1)",
+        background: "var(--surface)",
+        border: "1px solid var(--border)",
         borderRadius: "var(--radius-xl)",
         padding: 24,
         marginBottom: 16,
@@ -581,9 +581,9 @@ export function EmptyState({ message }: { message: string }) {
       style={{
         padding: "48px 20px",
         textAlign: "center",
-        color: "rgba(255,255,255,0.25)",
+        color: "var(--text-dim)",
         fontSize: 13,
-        border: "1px dashed rgba(255,255,255,0.08)",
+        border: "1px dashed var(--border2)",
         borderRadius: "var(--radius-md)",
         fontFamily: "var(--mono)",
       }}
@@ -652,8 +652,8 @@ export function NudgeCard({ children }: { children: ReactNode }) {
   return (
     <div
       style={{
-        background: "rgba(232,255,71,0.04)",
-        border: "1px solid rgba(232,255,71,0.15)",
+        background: "var(--accent-dim)",
+        border: "1px solid var(--accent-glow)",
         borderRadius: "var(--radius-md)",
         padding: "16px 18px",
         backdropFilter: "blur(20px)",

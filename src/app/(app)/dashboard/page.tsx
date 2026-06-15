@@ -340,7 +340,7 @@ export default function DashboardPage() {
                   alignItems: "center",
                   justifyContent: "space-between",
                   padding: "12px 16px",
-                  background: "var(--surface2)",
+                  background: "var(--surface)",
                   border: "1px solid var(--border)",
                   gap: 8,
                 }}

@@ -30,14 +30,22 @@
 }
 
 [data-theme="light"] {
-  --bg: #F0F0EC;
-  --surface: rgba(255,255,255,0.8);
-  --surface2: rgba(255,255,255,0.6);
+  --bg: #F4F4F0;
+  --surface: rgba(255,255,255,0.95);
+  --surface2: rgba(255,255,255,0.8);
   --border: rgba(0,0,0,0.1);
-  --border2: rgba(0,0,0,0.06);
-  --accent: #1a1a1a;
-  --accent-dim: rgba(0,0,0,0.06);
-  --accent-glow: rgba(0,0,0,0.1);
+  --border2: rgba(0,0,0,0.07);
+  --accent: #5B8A00;
+  --accent-dim: rgba(91,138,0,0.1);
+  --accent-glow: rgba(91,138,0,0.2);
+  --red: #D63031;
+  --red-dim: rgba(214,48,49,0.1);
+  --yellow: #E67E22;
+  --yellow-dim: rgba(230,126,34,0.1);
+  --green: #00897B;
+  --green-dim: rgba(0,137,123,0.1);
+  --purple: #6C3483;
+  --purple-dim: rgba(108,52,131,0.1);
   --text: #0A0A0A;
   --text-muted: rgba(0,0,0,0.55);
   --text-dim: rgba(0,0,0,0.3);
@@ -57,6 +65,9 @@ body::after {
   pointer-events: none;
   z-index: 0;
   animation: orbFloat 10s ease-in-out infinite;
+}
+[data-theme="light"] body::after {
+  background: radial-gradient(circle, rgba(91,138,0,0.06) 0%, transparent 65%);
 }
 
 @keyframes orbFloat {
@@ -87,6 +98,7 @@ body::before {
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 99px; }
+[data-theme="light"] ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); }
 
 /* Range slider */
 input[type=range] {
@@ -100,6 +112,9 @@ input[type=range]::-webkit-slider-thumb {
   cursor: pointer; border: 2px solid var(--bg);
   box-shadow: 0 0 8px var(--accent-glow);
   transition: transform 0.1s;
+}
+[data-theme="light"] input[type=range] {
+  background: rgba(0,0,0,0.1);
 }
 input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.2); }
 input[type=range]::-moz-range-thumb {

@@ -79,7 +79,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       style={{
         display: "flex",
         minHeight: "100vh",
-        backgroundColor: "var(--bg, #060608)",
+        backgroundColor: "var(--bg)",
         color: "#fff",
       }}
     >
@@ -89,8 +89,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         style={{
           width: "260px",
           minHeight: "100vh",
-          backgroundColor: "rgba(255,255,255,0.02)",
-          borderRight: "1px solid rgba(255,255,255,0.06)",
+          backgroundColor: "var(--surface)",
+          borderRight: "1px solid var(--border)",
           display: "flex",
           flexDirection: "column",
           padding: "24px 16px",
@@ -298,13 +298,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             transition: "background-color 0.15s ease",
           }}
           onMouseEnter={(e) =>
-            (e.currentTarget.style.backgroundColor = "rgba(255,80,80,0.08)")
+            (e.currentTarget.style.backgroundColor = "rgba(255,80,80,0.1)")
           }
           onMouseLeave={(e) =>
             (e.currentTarget.style.backgroundColor = "transparent")
           }
         >
-          <LogOut size={15} strokeWidth={1.75} color="rgba(255,255,255,0.25)" />
+          <LogOut size={15} strokeWidth={1.75} color="var(--text-dim)" />
           <span
             style={{
               fontFamily: "JetBrains Mono, monospace",
@@ -348,8 +348,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             {/* Drawer */}
             <div
               style={{
-                background: "rgba(12,12,14,0.97)",
-                borderTop: "1px solid rgba(255,255,255,0.1)",
+                background: "var(--surface)",
+                borderTop: "1px solid var(--border)",
                 borderRadius: "20px 20px 0 0",
                 padding: "20px 16px 8px",
                 backdropFilter: "blur(40px)",
@@ -516,8 +516,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           style={{
             display: "flex",
             alignItems: "center",
-            background: "rgba(8,8,10,0.95)",
-            borderTop: "1px solid rgba(255,255,255,0.08)",
+            background: "var(--surface)",
+            borderTop: "1px solid var(--border)",
             backdropFilter: "blur(40px)",
             WebkitBackdropFilter: "blur(40px)",
             paddingBottom: "env(safe-area-inset-bottom, 0px)",
