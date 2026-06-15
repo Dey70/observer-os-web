@@ -187,7 +187,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               color: "var(--text-muted)",
             }}
           >
-            DARK MODE
+            {darkMode ? "DARK MODE" : "LIGHT MODE"}
           </span>
           <button
             onClick={() => setDarkMode(!darkMode)}
@@ -441,7 +441,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                       letterSpacing: "0.08em",
                     }}
                   >
-                    DARK MODE
+                    {darkMode ? "DARK MODE" : "LIGHT MODE"}
                   </span>
                   <div
                     style={{
