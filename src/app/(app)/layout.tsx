@@ -18,5 +18,5 @@ export default async function AppLayout({
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/auth");
-  return <AppShell userEmail={user.email ?? ""}>{children}</AppShell>;
+  return <AppShell>{children}</AppShell>;
 }
