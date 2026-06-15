@@ -159,12 +159,12 @@ export default function CoachPage() {
           display: flex;
           flex-direction: column;
           width: 100%;
-          height: calc(100vh - 120px);
+          height: calc(100vh - 80px);
           overflow: hidden;
         }
         @media (max-width: 768px) {
           .coach-root {
-            height: calc(100dvh - 160px);
+            height: calc(100dvh - 110px);
           }
         }
       `}</style>
