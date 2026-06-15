@@ -8,6 +8,7 @@ const NAV = [
   { path: "/checkin", icon: "☀", label: "Check-in" },
   { path: "/log", icon: "⚡", label: "Log Session" },
   { path: "/dashboard", icon: "📊", label: "Dashboard" },
+  { path: "/history", icon: "📋", label: "History" },
   { path: "/goals", icon: "🎯", label: "Goals" },
   { path: "/coach", icon: "🤖", label: "Coach" },
   { path: "/profile", icon: "👤", label: "Profile" },
