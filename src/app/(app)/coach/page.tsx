@@ -60,7 +60,6 @@ export default function CoachPage() {
   useEffect(() => {
     setMounted(true);
   }, []);
-
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
@@ -68,11 +67,13 @@ export default function CoachPage() {
   useEffect(() => {
     if (isSunday && !weeklyReviewSent.current) {
       weeklyReviewSent.current = true;
-      setTimeout(() => {
-        sendMessage(
-          "It's Sunday — run a full weekly review using my actual data. Be specific with numbers.",
-        );
-      }, 1200);
+      setTimeout(
+        () =>
+          sendMessage(
+            "It's Sunday — run a full weekly review using my actual data. Be specific with numbers.",
+          ),
+        1200,
+      );
     }
   }, []);
 
@@ -99,10 +100,7 @@ export default function CoachPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ messages: apiMessages }),
         });
-        if (!res.ok) {
-          const err = await res.json();
-          throw new Error(err.error ?? "API error");
-        }
+        if (!res.ok) throw new Error("API error");
         const data = await res.json();
         setMessages((prev) => [
           ...prev,
@@ -155,81 +153,19 @@ export default function CoachPage() {
   return (
     <>
       <style>{`
-        .coach-root {
-          display: flex;
-          flex-direction: column;
-          width: 100%;
-          height: calc(100vh - 80px);
-          overflow: hidden;
-        }
-        .coach-prompts {
-          flex-shrink: 0;
-          overflow-x: auto;
-          margin-bottom: 10px;
-          padding-bottom: 2px;
-        }
+        .coach-root { display: flex; flex-direction: column; width: 100%; height: calc(100vh - 80px); overflow: hidden; }
+        .coach-prompts { flex-shrink: 0; overflow-x: auto; margin-bottom: 10px; padding-bottom: 2px; }
         @media (max-width: 768px) {
-          .coach-root {
-            /* INCREASED OFFSET to prevent overlapping behind mobile nav bar */
-            height: calc(100dvh - 130px); 
-          }
-          .coach-header {
-            margin-bottom: 8px !important;
-          }
-          .coach-header-title {
-            font-size: 14px !important;
-          }
-          .coach-header-subtitle {
-            font-size: 10px !important;
-          }
-          .coach-prompts {
-            margin-bottom: 8px !important;
-            scrollbar-width: none;
-            -ms-overflow-style: none;
-          }
-          .coach-prompts::-webkit-scrollbar {
-            display: none;
-          }
-          .coach-prompt-btn {
-            padding: 7px 11px !important;
-            font-size: 11px !important;
-            min-height: 36px;
-          }
-          .coach-messages {
-            padding: 10px !important;
-            border-radius: 10px !important;
-            gap: 10px !important;
-          }
-          .coach-msg {
-            max-width: 90% !important;
-          }
-          .coach-msg-bubble {
-            padding: 9px 12px !important;
-            font-size: 14px !important;
-          }
-          .coach-input-wrap {
-            margin-top: 8px !important;
-          }
-          .coach-input-wrap textarea {
-            font-size: 16px !important; /* Prevents auto-zoom on iOS */
-            padding: 10px 12px !important;
-            rows: 1;
-            height: 44px;
-            box-sizing: border-box;
-          }
-          .coach-input-wrap button {
-            padding: 0 16px !important;
-            font-size: 18px !important;
-          }
+          .coach-root { height: calc(100dvh - 130px); }
+          .coach-prompt-btn { padding: 7px 11px !important; font-size: 11px !important; min-height: 36px; }
+          .coach-messages { padding: 10px !important; border-radius: 10px !important; gap: 10px !important; }
+          .coach-msg-bubble { padding: 9px 12px !important; font-size: 14px !important; }
+          .coach-input-wrap textarea { font-size: 16px !important; padding: 10px 12px !important; height: 44px; box-sizing: border-box; }
         }
       `}</style>
 
       <div className="coach-root">
-        {/* Header */}
-        <div
-          className="coach-header"
-          style={{ flexShrink: 0, marginBottom: 10 }}
-        >
+        <div style={{ flexShrink: 0, marginBottom: 10 }}>
           <div
             style={{
               display: "flex",
@@ -241,7 +177,6 @@ export default function CoachPage() {
             }}
           >
             <div
-              className="coach-header-title"
               style={{
                 fontFamily: "var(--mono)",
                 fontSize: 18,
@@ -253,15 +188,11 @@ export default function CoachPage() {
             </div>
             {isSunday && <Badge color="var(--accent)">📊 Weekly Review</Badge>}
           </div>
-          <div
-            className="coach-header-subtitle"
-            style={{ fontSize: 11, color: "var(--text-muted)" }}
-          >
-            Groq · llama-3.3-70b · Tool-calling enabled
+          <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+            Groq · llama-3.3-70b
           </div>
         </div>
 
-        {/* Quick prompts — horizontal scroll */}
         <div className="coach-prompts">
           <div style={{ display: "flex", gap: 6, width: "max-content" }}>
             {QUICK_PROMPTS.map((qp) => (
@@ -279,7 +210,6 @@ export default function CoachPage() {
                   cursor: loading ? "not-allowed" : "pointer",
                   whiteSpace: "nowrap",
                   borderRadius: 8,
-                  flexShrink: 0,
                   transition: "all 0.15s ease",
                 }}
               >
@@ -289,14 +219,12 @@ export default function CoachPage() {
           </div>
         </div>
 
-        {/* Messages */}
         <div
           className="coach-messages"
           style={{
             flex: 1,
-            minHeight: 0,
+            minWidth: 0,
             overflowY: "auto",
-            overflowX: "hidden",
             border: "1px solid var(--border)",
             background: "var(--surface)",
             padding: 16,
@@ -309,7 +237,6 @@ export default function CoachPage() {
           {messages.map((msg, i) => (
             <div
               key={i}
-              className="coach-msg"
               style={{
                 maxWidth: "85%",
                 alignSelf: msg.role === "user" ? "flex-end" : "flex-start",
@@ -329,7 +256,9 @@ export default function CoachPage() {
                   border: `1px solid ${msg.role === "user" ? "var(--accent)" : "var(--border2)"}`,
                   color: "var(--text)",
                   borderRadius: 10,
+                  overflowWrap: "break-word",
                   wordBreak: "break-word",
+                  maxWidth: "100%",
                 }}
                 dangerouslySetInnerHTML={{ __html: formatContent(msg.content) }}
               />
@@ -346,7 +275,6 @@ export default function CoachPage() {
               </div>
             </div>
           ))}
-
           {loading && (
             <div style={{ alignSelf: "flex-start", maxWidth: "85%" }}>
               <div
@@ -358,22 +286,11 @@ export default function CoachPage() {
               >
                 <TypingDots />
               </div>
-              <div
-                style={{
-                  fontFamily: "var(--mono)",
-                  fontSize: 9,
-                  color: "var(--text-dim)",
-                  marginTop: 3,
-                }}
-              >
-                thinking...
-              </div>
             </div>
           )}
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Input */}
         <div
           className="coach-input-wrap"
           style={{
@@ -420,7 +337,6 @@ export default function CoachPage() {
               fontSize: 20,
               border: "none",
               cursor: loading || !input.trim() ? "not-allowed" : "pointer",
-              flexShrink: 0,
             }}
           >
             ↑
