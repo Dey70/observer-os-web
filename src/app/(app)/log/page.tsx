@@ -63,14 +63,6 @@ const liftTypes = [
   "Lower",
   "Core",
 ];
-const studySubjects = [
-  "Math",
-  "Science",
-  "Languages",
-  "Programming",
-  "History",
-  "Other",
-];
 
 type LoggedSession = {
   type: Tab;
@@ -99,7 +91,7 @@ export default function LogPage() {
   const [distance, setDistance] = useState(5.0);
   const [terrain, setTerrain] = useState("Road");
   const [liftType, setLiftType] = useState("Push");
-  const [subject, setSubject] = useState("Programming");
+  const [subject, setSubject] = useState("");
   const [focusScore, setFocusScore] = useState(7);
 
   // Success state
@@ -121,7 +113,7 @@ export default function LogPage() {
     setDistance(5.0);
     setTerrain("Road");
     setLiftType("Push");
-    setSubject("Programming");
+    setSubject("");
     setFocusScore(7);
     setDate(new Date().toISOString().split("T")[0]);
   }
@@ -994,21 +986,13 @@ export default function LogPage() {
           >
             <div>
               <label style={labelStyle}>SUBJECT</label>
-              <select
+              <input
+                type="text"
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
-                style={{
-                  ...inputStyle,
-                  cursor: "pointer",
-                  colorScheme: "dark",
-                }}
-              >
-                {studySubjects.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
+                placeholder="e.g. Algorithms, Physics..."
+                style={inputStyle}
+              />
             </div>
             <div>
               <label style={labelStyle}>FOCUS SCORE</label>
