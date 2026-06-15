@@ -60,6 +60,7 @@ export default function CoachPage() {
   useEffect(() => {
     setMounted(true);
   }, []);
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
@@ -169,7 +170,8 @@ export default function CoachPage() {
         }
         @media (max-width: 768px) {
           .coach-root {
-            height: calc(100dvh - 110px);
+            /* INCREASED OFFSET to prevent overlapping behind mobile nav bar */
+            height: calc(100dvh - 130px); 
           }
           .coach-header {
             margin-bottom: 8px !important;
@@ -209,10 +211,11 @@ export default function CoachPage() {
             margin-top: 8px !important;
           }
           .coach-input-wrap textarea {
-            font-size: 16px !important;
+            font-size: 16px !important; /* Prevents auto-zoom on iOS */
             padding: 10px 12px !important;
             rows: 1;
             height: 44px;
+            box-sizing: border-box;
           }
           .coach-input-wrap button {
             padding: 0 16px !important;
@@ -223,7 +226,10 @@ export default function CoachPage() {
 
       <div className="coach-root">
         {/* Header */}
-        <div className="coach-header" style={{ flexShrink: 0, marginBottom: 10 }}>
+        <div
+          className="coach-header"
+          style={{ flexShrink: 0, marginBottom: 10 }}
+        >
           <div
             style={{
               display: "flex",
@@ -240,13 +246,17 @@ export default function CoachPage() {
                 fontFamily: "var(--mono)",
                 fontSize: 18,
                 fontWeight: 700,
+                color: "var(--text)",
               }}
             >
               AI COACH
             </div>
             {isSunday && <Badge color="var(--accent)">📊 Weekly Review</Badge>}
           </div>
-          <div className="coach-header-subtitle" style={{ fontSize: 11, color: "var(--text-muted)" }}>
+          <div
+            className="coach-header-subtitle"
+            style={{ fontSize: 11, color: "var(--text-muted)" }}
+          >
             Groq · llama-3.3-70b · Tool-calling enabled
           </div>
         </div>
@@ -262,14 +272,15 @@ export default function CoachPage() {
                 disabled={loading}
                 style={{
                   padding: "6px 14px",
-                  border: "1px solid var(--border2)",
+                  border: "1px solid var(--border)",
                   fontSize: 12,
                   color: loading ? "var(--text-dim)" : "var(--text-muted)",
-                  background: "rgba(255,255,255,0.03)",
+                  background: "var(--surface2)",
                   cursor: loading ? "not-allowed" : "pointer",
                   whiteSpace: "nowrap",
                   borderRadius: 8,
                   flexShrink: 0,
+                  transition: "all 0.15s ease",
                 }}
               >
                 {qp.label}
@@ -278,7 +289,7 @@ export default function CoachPage() {
           </div>
         </div>
 
-        {/* Messages — flex 1, minHeight 0 is critical */}
+        {/* Messages */}
         <div
           className="coach-messages"
           style={{
@@ -315,7 +326,7 @@ export default function CoachPage() {
                     msg.role === "user"
                       ? "var(--accent-dim)"
                       : "var(--surface2)",
-                  border: `1px solid ${msg.role === "user" ? "var(--accent)" : "var(--border)"}`,
+                  border: `1px solid ${msg.role === "user" ? "var(--accent)" : "var(--border2)"}`,
                   color: "var(--text)",
                   borderRadius: 10,
                   wordBreak: "break-word",
@@ -362,7 +373,7 @@ export default function CoachPage() {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Input — always pinned at bottom */}
+        {/* Input */}
         <div
           className="coach-input-wrap"
           style={{
@@ -371,7 +382,7 @@ export default function CoachPage() {
             marginTop: 10,
             borderRadius: 10,
             overflow: "hidden",
-            border: "1px solid var(--border2)",
+            border: "1px solid var(--border)",
           }}
         >
           <textarea
@@ -394,6 +405,7 @@ export default function CoachPage() {
               fontFamily: "var(--sans)",
               lineHeight: 1.5,
               minWidth: 0,
+              boxSizing: "border-box",
             }}
           />
           <button
@@ -402,8 +414,8 @@ export default function CoachPage() {
             style={{
               padding: "0 20px",
               background:
-                loading || !input.trim() ? "var(--border2)" : "var(--accent)",
-              color: "#000",
+                loading || !input.trim() ? "var(--surface2)" : "var(--accent)",
+              color: loading || !input.trim() ? "var(--text-dim)" : "var(--bg)",
               fontWeight: 700,
               fontSize: 20,
               border: "none",
