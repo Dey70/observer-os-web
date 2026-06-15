@@ -41,22 +41,10 @@ const effortToRpe: Record<Effort, number> = {
   very_hard: 9,
 };
 
-const TYPE_COLOR: Record<Tab, { main: string; bg: string; border: string }> = {
-  run: {
-    main: "var(--color-run)",
-    bg: "var(--color-run-bg)",
-    border: "var(--color-run-border)",
-  },
-  lift: {
-    main: "var(--color-lift)",
-    bg: "var(--color-lift-bg)",
-    border: "var(--color-lift-border)",
-  },
-  study: {
-    main: "var(--color-study)",
-    bg: "var(--color-study-bg)",
-    border: "var(--color-study-border)",
-  },
+const TYPE_COLOR: Record<Tab, { main: string; dim: string }> = {
+  run: { main: "var(--green)", dim: "var(--green-dim)" },
+  lift: { main: "var(--purple)", dim: "var(--purple-dim)" },
+  study: { main: "var(--yellow)", dim: "var(--yellow-dim)" },
 };
 
 const TYPE_LABEL: Record<Tab, string> = {
@@ -225,15 +213,16 @@ export default function LogPage() {
   const inputStyle: React.CSSProperties = {
     width: "100%",
     padding: "12px 14px",
-    backgroundColor: "var(--bg-input)",
-    border: "1px solid var(--border-subtle)",
+    backgroundColor: "var(--surface2)",
+    border: "1px solid var(--border2)", // Softer border!
     borderRadius: "10px",
-    color: "var(--text-primary)",
+    color: "var(--text)",
     fontFamily: "var(--mono)",
     fontSize: "14px",
     outline: "none",
     boxSizing: "border-box",
     minWidth: 0,
+    transition: "border-color 0.2s ease",
   };
 
   const labelStyle: React.CSSProperties = {
@@ -257,7 +246,7 @@ export default function LogPage() {
   if (loggedSession) {
     const Icon =
       tabs.find((t) => t.key === loggedSession.type)?.icon ?? CheckCircle;
-    const themeColors = TYPE_COLOR[loggedSession.type];
+    const themeColor = TYPE_COLOR[loggedSession.type];
     const hrs = Math.floor(loggedSession.duration / 60);
     const mins = loggedSession.duration % 60;
     const durationLabel = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
@@ -269,32 +258,30 @@ export default function LogPage() {
           animation: "pageEnter 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) both",
         }}
       >
-        {/* Success header */}
         <div style={{ textAlign: "center", marginBottom: 32, paddingTop: 16 }}>
-          {/* Animated checkmark ring */}
           <div
             style={{
               width: 80,
               height: 80,
               borderRadius: "50%",
-              background: themeColors.bg,
-              border: `2px solid ${themeColors.border}`,
+              background: themeColor.dim,
+              border: `2px solid ${themeColor.main}40`,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               margin: "0 auto 20px",
-              boxShadow: `0 0 40px ${themeColors.bg}`,
+              boxShadow: `0 0 40px ${themeColor.dim}`,
               animation: "scoreIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both",
             }}
           >
-            <Icon size={36} color={themeColors.main} strokeWidth={1.75} />
+            <Icon size={36} color={themeColor.main} strokeWidth={1.75} />
           </div>
           <div
             style={{
               fontFamily: "var(--mono)",
               fontSize: 22,
               fontWeight: 700,
-              color: themeColors.main,
+              color: themeColor.main,
               letterSpacing: "0.05em",
               marginBottom: 6,
             }}
@@ -312,11 +299,10 @@ export default function LogPage() {
           </div>
         </div>
 
-        {/* Stats card */}
         <div
           style={{
-            background: "var(--bg-card)",
-            border: `1px solid var(--border-subtle)`,
+            background: "var(--surface)",
+            border: `1px solid var(--border2)`,
             borderRadius: 20,
             padding: 24,
             marginBottom: 16,
@@ -324,7 +310,6 @@ export default function LogPage() {
             overflow: "hidden",
           }}
         >
-          {/* Top color bar */}
           <div
             style={{
               position: "absolute",
@@ -332,12 +317,11 @@ export default function LogPage() {
               left: 0,
               right: 0,
               height: 3,
-              background: themeColors.main,
+              background: themeColor.main,
               borderRadius: "20px 20px 0 0",
             }}
           />
 
-          {/* Type badge */}
           <div
             style={{
               display: "flex",
@@ -350,12 +334,12 @@ export default function LogPage() {
               style={{
                 padding: "4px 12px",
                 borderRadius: 99,
-                background: themeColors.bg,
-                border: `1px solid ${themeColors.border}`,
+                background: themeColor.dim,
+                border: `1px solid ${themeColor.main}30`,
                 fontFamily: "var(--mono)",
                 fontSize: 11,
                 fontWeight: 700,
-                color: themeColors.main,
+                color: themeColor.main,
                 letterSpacing: "0.1em",
                 textTransform: "uppercase",
               }}
@@ -366,7 +350,7 @@ export default function LogPage() {
               <span
                 style={{
                   fontSize: 13,
-                  color: "var(--text-secondary)",
+                  color: "var(--text-dim)",
                   overflow: "hidden",
                   textOverflow: "ellipsis",
                   whiteSpace: "nowrap",
@@ -377,7 +361,6 @@ export default function LogPage() {
             )}
           </div>
 
-          {/* 3 stat boxes */}
           <div
             style={{
               display: "grid",
@@ -391,26 +374,26 @@ export default function LogPage() {
                 icon: Clock,
                 label: "Duration",
                 value: durationLabel,
-                color: "var(--text-primary)",
+                color: "var(--text)",
               },
               {
                 icon: Zap,
                 label: "RPE",
                 value: `${loggedSession.rpe}/10`,
-                color: themeColors.main,
+                color: themeColor.main,
               },
               {
                 icon: TrendingUp,
                 label: "Load",
                 value: loggedSession.load.toString(),
-                color: "var(--color-study)",
+                color: "var(--yellow)",
               },
             ].map(({ icon: StatIcon, label, value, color: c }) => (
               <div
                 key={label}
                 style={{
-                  background: "var(--bg-input)",
-                  border: "1px solid var(--border-subtle)",
+                  background: "var(--surface2)",
+                  border: "1px solid var(--border2)",
                   borderRadius: 12,
                   padding: "14px 12px",
                   textAlign: "center",
@@ -418,7 +401,7 @@ export default function LogPage() {
               >
                 <StatIcon
                   size={14}
-                  color="var(--text-muted)"
+                  color="var(--text-dim)"
                   strokeWidth={1.75}
                   style={{ marginBottom: 6 }}
                 />
@@ -449,7 +432,6 @@ export default function LogPage() {
             ))}
           </div>
 
-          {/* Effort badge */}
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <span
               style={{
@@ -465,7 +447,7 @@ export default function LogPage() {
             <span
               style={{
                 fontSize: 12,
-                color: "var(--text-secondary)",
+                color: "var(--text)",
                 fontFamily: "var(--mono)",
               }}
             >
@@ -474,12 +456,11 @@ export default function LogPage() {
           </div>
         </div>
 
-        {/* PR Banner */}
         {newPRs.length > 0 && (
           <div
             style={{
-              background: "var(--color-study-bg)",
-              border: "1px solid var(--color-study-border)",
+              background: "var(--yellow-dim)",
+              border: "1px solid var(--border)",
               borderRadius: 16,
               padding: "16px 18px",
               marginBottom: 16,
@@ -499,14 +480,14 @@ export default function LogPage() {
                   width: 32,
                   height: 32,
                   borderRadius: 10,
-                  background: "var(--color-study-bg)",
+                  background: "var(--yellow-dim)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                   flexShrink: 0,
                 }}
               >
-                <Trophy size={16} color="var(--color-study)" strokeWidth={2} />
+                <Trophy size={16} color="var(--yellow)" strokeWidth={2} />
               </div>
               <div>
                 <div
@@ -514,7 +495,7 @@ export default function LogPage() {
                     fontFamily: "var(--mono)",
                     fontSize: 12,
                     fontWeight: 700,
-                    color: "var(--color-study)",
+                    color: "var(--yellow)",
                     letterSpacing: "0.1em",
                     textTransform: "uppercase",
                   }}
@@ -526,7 +507,7 @@ export default function LogPage() {
                 <div
                   style={{
                     fontSize: 10,
-                    color: "var(--text-secondary)",
+                    color: "var(--text-muted)",
                     fontFamily: "var(--mono)",
                     marginTop: 1,
                   }}
@@ -544,15 +525,15 @@ export default function LogPage() {
                     alignItems: "center",
                     justifyContent: "space-between",
                     padding: "8px 12px",
-                    background: "var(--bg-card)",
-                    border: "1px solid var(--border-subtle)",
+                    background: "var(--surface)",
+                    border: "1px solid var(--border2)",
                     borderRadius: 8,
                   }}
                 >
                   <span
                     style={{
                       fontSize: 12,
-                      color: "var(--text-secondary)",
+                      color: "var(--text)",
                       fontFamily: "var(--mono)",
                     }}
                   >
@@ -579,7 +560,7 @@ export default function LogPage() {
                       style={{
                         fontSize: 13,
                         fontWeight: 700,
-                        color: "var(--color-study)",
+                        color: "var(--yellow)",
                         fontFamily: "var(--mono)",
                       }}
                     >
@@ -592,12 +573,11 @@ export default function LogPage() {
           </div>
         )}
 
-        {/* AI Coach nudge */}
         {(nudgeLoading || nudge) && (
           <div
             style={{
-              background: "var(--accent-transparent)",
-              border: "1px solid var(--accent-border)",
+              background: "var(--accent-dim)",
+              border: "1px solid var(--accent-glow)",
               borderRadius: 14,
               padding: "14px 16px",
               marginBottom: 16,
@@ -617,7 +597,7 @@ export default function LogPage() {
                   width: 18,
                   height: 18,
                   borderRadius: 5,
-                  background: "var(--accent-transparent)",
+                  background: "var(--accent-dim)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -670,7 +650,7 @@ export default function LogPage() {
                 style={{
                   fontFamily: "var(--sans)",
                   fontSize: 13,
-                  color: "var(--text-secondary)",
+                  color: "var(--text)",
                   lineHeight: 1.7,
                   fontWeight: 300,
                 }}
@@ -681,7 +661,6 @@ export default function LogPage() {
           </div>
         )}
 
-        {/* Action buttons */}
         <div style={{ display: "flex", gap: 10 }}>
           <button
             onClick={resetForm}
@@ -692,10 +671,10 @@ export default function LogPage() {
               justifyContent: "center",
               gap: 8,
               padding: "13px",
-              background: "var(--bg-input)",
-              border: "1px solid var(--border-subtle)",
+              background: "var(--surface2)",
+              border: "1px solid var(--border)",
               borderRadius: 10,
-              color: "var(--text-secondary)",
+              color: "var(--text-muted)",
               fontFamily: "var(--mono)",
               fontSize: 12,
               fontWeight: 600,
@@ -718,7 +697,7 @@ export default function LogPage() {
               background: "var(--accent)",
               border: "none",
               borderRadius: 10,
-              color: "var(--bg-main)",
+              color: "var(--bg)",
               fontFamily: "var(--mono)",
               fontSize: 12,
               fontWeight: 700,
@@ -744,7 +723,7 @@ export default function LogPage() {
             fontSize: "24px",
             fontWeight: 700,
             letterSpacing: "0.06em",
-            color: "var(--text-primary)",
+            color: "var(--text)",
             margin: 0,
           }}
         >
@@ -764,8 +743,8 @@ export default function LogPage() {
 
       <div
         style={{
-          backgroundColor: "var(--bg-card)",
-          border: "1px solid var(--border-subtle)",
+          backgroundColor: "var(--surface)",
+          border: "1px solid var(--border2)", // Softer container border
           borderRadius: "20px",
           padding: "24px 20px",
           overflow: "hidden",
@@ -778,7 +757,7 @@ export default function LogPage() {
           style={{
             display: "flex",
             gap: "4px",
-            backgroundColor: "var(--bg-input)",
+            backgroundColor: "var(--surface2)",
             borderRadius: "12px",
             padding: "4px",
             marginBottom: "28px",
@@ -801,7 +780,7 @@ export default function LogPage() {
                   border: "none",
                   cursor: "pointer",
                   backgroundColor: isActive
-                    ? "var(--accent-transparent)"
+                    ? "var(--accent-dim)"
                     : "transparent",
                   fontFamily: "var(--mono)",
                   fontSize: "11px",
@@ -815,10 +794,10 @@ export default function LogPage() {
                 <Icon
                   size={13}
                   strokeWidth={isActive ? 2.5 : 1.75}
-                  color={isActive ? "var(--accent)" : "var(--text-muted)"}
+                  color={isActive ? "var(--accent)" : "var(--text-dim)"}
                   style={{
                     filter: isActive
-                      ? "drop-shadow(0 0 4px var(--accent-transparent))"
+                      ? "drop-shadow(0 0 4px var(--accent-glow))"
                       : "none",
                     flexShrink: 0,
                   }}
@@ -838,7 +817,7 @@ export default function LogPage() {
             onChange={(e) => setDate(e.target.value)}
             style={{
               ...inputStyle,
-              colorScheme: "light dark",
+              colorScheme: "var(--color-scheme)",
               display: "block",
               minHeight: "48px",
               lineHeight: "1.5",
@@ -898,13 +877,10 @@ export default function LogPage() {
                 style={{
                   padding: "10px 8px",
                   borderRadius: "9px",
-                  border: `1px solid ${effort === key ? "var(--accent)" : "var(--border-subtle)"}`,
+                  border: `1px solid ${effort === key ? "var(--accent)" : "transparent"}`, // Replaced hard border with transparent
                   backgroundColor:
-                    effort === key
-                      ? "var(--accent-transparent)"
-                      : "transparent",
-                  color:
-                    effort === key ? "var(--accent)" : "var(--text-secondary)",
+                    effort === key ? "var(--accent-dim)" : "var(--surface2)", // Rely on surface contrast
+                  color: effort === key ? "var(--accent)" : "var(--text-muted)",
                   fontFamily: "var(--sans)",
                   fontSize: "13px",
                   fontWeight: effort === key ? 600 : 400,
@@ -947,7 +923,7 @@ export default function LogPage() {
                 style={{
                   ...inputStyle,
                   cursor: "pointer",
-                  colorScheme: "light dark",
+                  colorScheme: "var(--color-scheme)",
                 }}
               >
                 {terrainOptions.map((t) => (
@@ -978,15 +954,11 @@ export default function LogPage() {
                   style={{
                     padding: "8px 14px",
                     borderRadius: "9px",
-                    border: `1px solid ${liftType === t ? "var(--accent)" : "var(--border-subtle)"}`,
+                    border: `1px solid ${liftType === t ? "var(--accent)" : "transparent"}`, // Replaced hard border
                     backgroundColor:
-                      liftType === t
-                        ? "var(--accent-transparent)"
-                        : "transparent",
+                      liftType === t ? "var(--accent-dim)" : "var(--surface2)",
                     color:
-                      liftType === t
-                        ? "var(--accent)"
-                        : "var(--text-secondary)",
+                      liftType === t ? "var(--accent)" : "var(--text-muted)",
                     fontFamily: "var(--sans)",
                     fontSize: "13px",
                     fontWeight: liftType === t ? 600 : 400,
@@ -1016,7 +988,7 @@ export default function LogPage() {
                 type="text"
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
-                placeholder="e.g. Algorithms, Physics..."
+                placeholder="e.g. Algorithms..."
                 style={inputStyle}
               />
             </div>
@@ -1063,7 +1035,7 @@ export default function LogPage() {
             backgroundColor: "var(--accent)",
             border: "none",
             borderRadius: "10px",
-            color: "var(--bg-main)",
+            color: "var(--bg)",
             fontFamily: "var(--mono)",
             fontSize: "13px",
             fontWeight: 700,
@@ -1073,6 +1045,7 @@ export default function LogPage() {
             transition: "all 0.2s ease",
             width: "100%",
             boxSizing: "border-box",
+            boxShadow: "0 4px 20px var(--accent-glow)",
           }}
         >
           {loading ? "LOGGING..." : "LOG SESSION"}
