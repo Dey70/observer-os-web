@@ -104,8 +104,22 @@ export function StatCard({
         background: "var(--surface)",
         border: "1px solid var(--border)",
         padding: 16,
+        borderTop: `2px solid ${color ?? "var(--border)"}`,
+        position: "relative",
+        overflow: "hidden",
       }}
     >
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          height: 40,
+          background: color ? `${color}08` : "transparent",
+          pointerEvents: "none",
+        }}
+      />
       <div
         className="animate-count-up"
         style={{
@@ -114,6 +128,7 @@ export function StatCard({
           fontWeight: 700,
           color: color ?? "var(--text)",
           lineHeight: 1,
+          position: "relative",
         }}
       >
         {value}
@@ -125,6 +140,7 @@ export function StatCard({
           letterSpacing: "0.1em",
           textTransform: "uppercase",
           marginTop: 6,
+          position: "relative",
         }}
       >
         {label}

@@ -51,168 +51,214 @@ export default function AuthPage() {
         minHeight: "100vh",
         padding: "24px",
         background: "var(--bg)",
+        backgroundImage:
+          "radial-gradient(ellipse at 50% 0%, rgba(232,255,71,0.04) 0%, transparent 60%)",
       }}
     >
-      <div
-        style={{
-          width: "100%",
-          maxWidth: 380,
-          border: "1px solid var(--border)",
-          background: "var(--surface)",
-          padding: "40px 32px",
-        }}
-      >
-        <div
-          style={{
-            fontFamily: "var(--mono)",
-            fontSize: 11,
-            fontWeight: 700,
-            letterSpacing: "0.2em",
-            color: "var(--accent)",
-            textTransform: "uppercase",
-            marginBottom: 4,
-          }}
-        >
-          Observer OS
-        </div>
-        <div
-          style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 32 }}
-        >
-          Personal AI performance coach
-        </div>
-
-        <div
-          style={{
-            display: "flex",
-            borderBottom: "1px solid var(--border)",
-            marginBottom: 28,
-          }}
-        >
-          {(["signin", "signup"] as const).map((t) => (
-            <button
-              key={t}
-              onClick={() => {
-                setTab(t);
-                setMessage(null);
-              }}
-              style={{
-                flex: 1,
-                padding: "10px",
-                textAlign: "center",
-                fontSize: 13,
-                color: tab === t ? "var(--accent)" : "var(--text-muted)",
-                background: "none",
-                border: "none",
-                borderBottom: `2px solid ${tab === t ? "var(--accent)" : "transparent"}`,
-                marginBottom: -1,
-                cursor: "pointer",
-              }}
-            >
-              {t === "signin" ? "Sign In" : "Sign Up"}
-            </button>
-          ))}
-        </div>
-
-        <form onSubmit={tab === "signin" ? handleSignIn : handleSignUp}>
-          <div style={{ marginBottom: 16 }}>
-            <label
-              style={{
-                display: "block",
-                fontSize: 10,
-                color: "var(--text-muted)",
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
-                marginBottom: 6,
-              }}
-            >
-              Email
-            </label>
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
-              style={{
-                width: "100%",
-                padding: "10px 12px",
-                background: "var(--bg)",
-                border: "1px solid var(--border2)",
-                color: "var(--text)",
-                outline: "none",
-                fontFamily: "var(--mono)",
-                fontSize: 13,
-              }}
-            />
-          </div>
-          <div style={{ marginBottom: 16 }}>
-            <label
-              style={{
-                display: "block",
-                fontSize: 10,
-                color: "var(--text-muted)",
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
-                marginBottom: 6,
-              }}
-            >
-              Password
-            </label>
-            <input
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              style={{
-                width: "100%",
-                padding: "10px 12px",
-                background: "var(--bg)",
-                border: "1px solid var(--border2)",
-                color: "var(--text)",
-                outline: "none",
-                fontFamily: "var(--mono)",
-                fontSize: 13,
-              }}
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
+      <div style={{ width: "100%", maxWidth: 380 }}>
+        {/* Logo area */}
+        <div style={{ textAlign: "center", marginBottom: 40 }}>
+          <div
             style={{
-              width: "100%",
-              padding: 12,
-              background: loading ? "#555" : "var(--accent)",
-              color: "#000",
-              fontWeight: 600,
+              fontFamily: "var(--mono)",
               fontSize: 13,
-              letterSpacing: "0.04em",
-              border: "none",
-              cursor: loading ? "not-allowed" : "pointer",
-              marginTop: 8,
+              fontWeight: 700,
+              letterSpacing: "0.3em",
+              color: "var(--accent)",
+              textTransform: "uppercase",
+              textShadow: "0 0 30px rgba(232,255,71,0.4)",
+              marginBottom: 8,
             }}
           >
-            {loading
-              ? "Please wait..."
-              : tab === "signin"
-                ? "Sign In"
-                : "Create Account"}
-          </button>
-        </form>
-
-        {message && (
+            Observer OS
+          </div>
           <div
             style={{
               fontSize: 12,
-              marginTop: 14,
-              textAlign: "center",
-              color: message.error ? "var(--red)" : "var(--green)",
+              color: "var(--text-muted)",
+              letterSpacing: "0.05em",
             }}
           >
-            {message.text}
+            Personal AI performance coach
           </div>
-        )}
+        </div>
+
+        {/* Card */}
+        <div
+          style={{
+            border: "1px solid var(--border)",
+            background: "var(--surface)",
+            padding: "32px 28px",
+            boxShadow: "0 0 40px rgba(0,0,0,0.4)",
+          }}
+        >
+          {/* Tabs */}
+          <div
+            style={{
+              display: "flex",
+              borderBottom: "1px solid var(--border)",
+              marginBottom: 28,
+            }}
+          >
+            {(["signin", "signup"] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => {
+                  setTab(t);
+                  setMessage(null);
+                }}
+                style={{
+                  flex: 1,
+                  padding: "10px",
+                  textAlign: "center",
+                  fontSize: 12,
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  color: tab === t ? "var(--accent)" : "var(--text-muted)",
+                  background: "none",
+                  border: "none",
+                  borderBottom: `2px solid ${tab === t ? "var(--accent)" : "transparent"}`,
+                  marginBottom: -1,
+                  cursor: "pointer",
+                  transition: "all 0.15s",
+                  fontFamily: "var(--mono)",
+                }}
+              >
+                {t === "signin" ? "Sign In" : "Sign Up"}
+              </button>
+            ))}
+          </div>
+
+          <form onSubmit={tab === "signin" ? handleSignIn : handleSignUp}>
+            {/* Email */}
+            <div style={{ marginBottom: 16 }}>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: 10,
+                  color: "var(--text-muted)",
+                  letterSpacing: "0.1em",
+                  textTransform: "uppercase",
+                  marginBottom: 6,
+                  fontFamily: "var(--mono)",
+                }}
+              >
+                Email
+              </label>
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                style={{
+                  width: "100%",
+                  padding: "10px 14px",
+                  background: "var(--bg)",
+                  border: "1px solid var(--border2)",
+                  color: "var(--text)",
+                  outline: "none",
+                  fontFamily: "var(--mono)",
+                  fontSize: 13,
+                  transition: "border-color 0.15s",
+                }}
+                onFocus={(e) => (e.target.style.borderColor = "var(--accent)")}
+                onBlur={(e) => (e.target.style.borderColor = "var(--border2)")}
+              />
+            </div>
+
+            {/* Password */}
+            <div style={{ marginBottom: 24 }}>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: 10,
+                  color: "var(--text-muted)",
+                  letterSpacing: "0.1em",
+                  textTransform: "uppercase",
+                  marginBottom: 6,
+                  fontFamily: "var(--mono)",
+                }}
+              >
+                Password
+              </label>
+              <input
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                style={{
+                  width: "100%",
+                  padding: "10px 14px",
+                  background: "var(--bg)",
+                  border: "1px solid var(--border2)",
+                  color: "var(--text)",
+                  outline: "none",
+                  fontFamily: "var(--mono)",
+                  fontSize: 13,
+                  transition: "border-color 0.15s",
+                }}
+                onFocus={(e) => (e.target.style.borderColor = "var(--accent)")}
+                onBlur={(e) => (e.target.style.borderColor = "var(--border2)")}
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              style={{
+                width: "100%",
+                padding: "12px",
+                background: loading ? "#555" : "var(--accent)",
+                color: "#000",
+                fontWeight: 700,
+                fontSize: 12,
+                letterSpacing: "0.1em",
+                textTransform: "uppercase",
+                border: "none",
+                cursor: loading ? "not-allowed" : "pointer",
+                transition: "all 0.15s",
+                fontFamily: "var(--mono)",
+                boxShadow: loading ? "none" : "0 0 20px rgba(232,255,71,0.2)",
+              }}
+            >
+              {loading
+                ? "Please wait..."
+                : tab === "signin"
+                  ? "Sign In"
+                  : "Create Account"}
+            </button>
+          </form>
+
+          {message && (
+            <div
+              style={{
+                fontSize: 12,
+                marginTop: 16,
+                textAlign: "center",
+                color: message.error ? "var(--red)" : "var(--green)",
+                fontFamily: "var(--mono)",
+                letterSpacing: "0.02em",
+              }}
+            >
+              {message.text}
+            </div>
+          )}
+        </div>
+
+        {/* Bottom text */}
+        <div
+          style={{
+            textAlign: "center",
+            marginTop: 20,
+            fontSize: 11,
+            color: "var(--text-dim)",
+            letterSpacing: "0.05em",
+          }}
+        >
+          Data-driven · AI-powered · Built for athletes
+        </div>
       </div>
     </div>
   );

@@ -63,10 +63,13 @@ export default function AppShell({
           flexDirection: "column",
         }}
       >
+        {/* Header with gradient */}
         <div
           style={{
             padding: "24px 20px 20px",
             borderBottom: "1px solid var(--border)",
+            background:
+              "linear-gradient(180deg, rgba(232,255,71,0.05) 0%, transparent 100%)",
           }}
         >
           <div
@@ -74,9 +77,10 @@ export default function AppShell({
               fontFamily: "var(--mono)",
               fontSize: 11,
               fontWeight: 700,
-              letterSpacing: "0.2em",
+              letterSpacing: "0.25em",
               color: "var(--accent)",
               textTransform: "uppercase",
+              textShadow: "0 0 20px rgba(232,255,71,0.3)",
             }}
           >
             Observer OS
@@ -85,18 +89,20 @@ export default function AppShell({
             style={{
               fontSize: 11,
               color: "var(--text-muted)",
-              marginTop: 4,
+              marginTop: 6,
               fontFamily: "var(--mono)",
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
+              letterSpacing: "0.02em",
             }}
           >
             {userEmail}
           </div>
         </div>
 
-        <div style={{ flex: 1, padding: "12px 0", overflowY: "auto" }}>
+        {/* Nav items */}
+        <div style={{ flex: 1, padding: "8px 0", overflowY: "auto" }}>
           {NAV.map((item) => {
             const active = pathname === item.path;
             const Icon = item.icon;
@@ -107,25 +113,41 @@ export default function AppShell({
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: 12,
-                  padding: "10px 20px",
-                  fontSize: 13,
+                  gap: 10,
+                  padding: "9px 20px",
+                  fontSize: 12.5,
                   color: active ? "var(--accent)" : "var(--text-muted)",
                   textDecoration: "none",
                   borderLeft: `2px solid ${active ? "var(--accent)" : "transparent"}`,
-                  background: active ? "var(--accent-dim)" : "none",
+                  background: active
+                    ? "linear-gradient(90deg, var(--accent-dim) 0%, transparent 100%)"
+                    : "none",
                   transition: "all 0.15s",
+                  letterSpacing: "0.01em",
                 }}
               >
-                <Icon size={15} strokeWidth={active ? 2.5 : 1.8} />
+                <Icon
+                  size={14}
+                  strokeWidth={active ? 2.5 : 1.8}
+                  style={{
+                    flexShrink: 0,
+                    filter: active
+                      ? "drop-shadow(0 0 4px rgba(232,255,71,0.4))"
+                      : "none",
+                  }}
+                />
                 {item.label}
               </Link>
             );
           })}
         </div>
 
+        {/* Footer */}
         <div
-          style={{ padding: "16px 20px", borderTop: "1px solid var(--border)" }}
+          style={{
+            padding: "12px 20px 16px",
+            borderTop: "1px solid var(--border)",
+          }}
         >
           <button
             onClick={signOut}
@@ -134,17 +156,24 @@ export default function AppShell({
               alignItems: "center",
               gap: 8,
               fontSize: 11,
-              color: "var(--text-muted)",
+              color: "var(--text-dim)",
               background: "none",
               border: "none",
               cursor: "pointer",
-              letterSpacing: "0.05em",
+              letterSpacing: "0.08em",
               textTransform: "uppercase",
               padding: "6px 0",
               transition: "color 0.15s",
+              width: "100%",
             }}
+            onMouseOver={(e) =>
+              (e.currentTarget.style.color = "var(--text-muted)")
+            }
+            onMouseOut={(e) =>
+              (e.currentTarget.style.color = "var(--text-dim)")
+            }
           >
-            <LogOut size={13} />
+            <LogOut size={12} />
             Sign Out
           </button>
         </div>
@@ -155,7 +184,7 @@ export default function AppShell({
         id="main-content"
         style={{ flex: 1, overflowY: "auto", padding: "32px 36px" }}
       >
-        <div style={{ animation: "fadeIn 0.2s ease-out" }}>{children}</div>
+        <div className="animate-fade-in">{children}</div>
       </main>
 
       {/* MOBILE NAV */}
@@ -195,9 +224,12 @@ export default function AppShell({
                 letterSpacing: "0.05em",
                 textTransform: "uppercase",
                 transition: "color 0.15s",
+                borderTop: active
+                  ? "2px solid var(--accent)"
+                  : "2px solid transparent",
               }}
             >
-              <Icon size={18} strokeWidth={active ? 2.5 : 1.8} />
+              <Icon size={17} strokeWidth={active ? 2.5 : 1.8} />
               {item.label.split(" ")[0]}
             </Link>
           );
@@ -210,7 +242,6 @@ export default function AppShell({
           #mobile-nav { display: flex !important; }
           #main-content { padding: 20px 16px 80px !important; }
         }
-        a:hover { color: var(--text) !important; background: var(--surface2) !important; }
       `}</style>
     </div>
   );
