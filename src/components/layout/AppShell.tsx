@@ -370,7 +370,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               <div
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "repeat(4, 1fr)",
+                  gridTemplateColumns: "repeat(3, 1fr)",
                   gap: 8,
                   marginBottom: 16,
                 }}
@@ -378,6 +378,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 {[
                   { href: "/history", label: "History", icon: Clock },
                   { href: "/calendar", label: "Calendar", icon: CalendarDays },
+                  { href: "/metrics", label: "Metrics", icon: HeartPulse },
+                  { href: "/records", label: "Records", icon: Trophy },
                   { href: "/load", label: "Load", icon: BarChart2 },
                   { href: "/goals", label: "Goals", icon: Target },
                 ].map(({ href, label, icon: Icon }) => {
