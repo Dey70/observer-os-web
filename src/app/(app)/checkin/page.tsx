@@ -141,7 +141,6 @@ export default function CheckinPage() {
         setNotes(data.notes ?? "");
       }
 
-      // Streak
       if (logs?.length) {
         let s = 0;
         const yest = new Date(Date.now() - 86400000)
@@ -185,7 +184,6 @@ export default function CheckinPage() {
       ...vals,
       notes: notes.trim() || null,
     };
-
     await (sb as any)
       .from("daily_logs")
       .upsert(payload, { onConflict: "user_id,date" });
@@ -226,7 +224,6 @@ export default function CheckinPage() {
             "inset 0 1px 0 rgba(255,255,255,0.12), inset 0 -1px 0 rgba(0,0,0,0.2), 0 20px 60px rgba(0,0,0,0.5)",
         }}
       >
-        {/* Glass depth layers */}
         <div
           style={{
             position: "absolute",
@@ -247,8 +244,6 @@ export default function CheckinPage() {
             pointerEvents: "none",
           }}
         />
-
-        {/* Top shimmer line */}
         <div
           style={{
             position: "absolute",
@@ -261,8 +256,6 @@ export default function CheckinPage() {
             pointerEvents: "none",
           }}
         />
-
-        {/* Ambient score glow */}
         <div
           style={{
             position: "absolute",
@@ -284,11 +277,14 @@ export default function CheckinPage() {
             alignItems: "flex-start",
             justifyContent: "space-between",
             marginBottom: 24,
+            flexWrap: "wrap",
+            gap: 12,
           }}
         >
           <div>
             {mounted && (
               <div
+                className="readiness-score"
                 style={{
                   fontFamily: "var(--sans)",
                   fontSize: 96,
@@ -351,7 +347,7 @@ export default function CheckinPage() {
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 16,
+            gap: 12,
             marginBottom: 16,
           }}
         >
@@ -359,14 +355,15 @@ export default function CheckinPage() {
             style={{
               fontSize: 10,
               color: "rgba(255,255,255,0.55)",
-              width: 100,
+              width: 90,
+              minWidth: 90,
               textTransform: "uppercase",
               letterSpacing: "0.8px",
               fontFamily: "var(--mono)",
               flexShrink: 0,
             }}
           >
-            Sleep Hours
+            Sleep Hrs
           </span>
           <input
             type="range"
@@ -376,14 +373,14 @@ export default function CheckinPage() {
             value={sleepHours}
             onChange={(e) => setSleepHours(parseFloat(e.target.value))}
             data-color="yellow"
-            style={{ flex: 1 }}
+            style={{ flex: 1, minWidth: 0 }}
           />
           <span
             style={{
               fontFamily: "var(--mono)",
               fontSize: 14,
               fontWeight: 700,
-              width: 24,
+              width: 28,
               textAlign: "right",
               color: "#E8FF47",
               flexShrink: 0,
@@ -400,7 +397,7 @@ export default function CheckinPage() {
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 16,
+              gap: 12,
               marginBottom: 16,
             }}
           >
@@ -408,7 +405,8 @@ export default function CheckinPage() {
               style={{
                 fontSize: 10,
                 color: "rgba(255,255,255,0.55)",
-                width: 100,
+                width: 90,
+                minWidth: 90,
                 textTransform: "uppercase",
                 letterSpacing: "0.8px",
                 fontFamily: "var(--mono)",
@@ -429,14 +427,14 @@ export default function CheckinPage() {
                 }))
               }
               data-color={slider.dataColor}
-              style={{ flex: 1 }}
+              style={{ flex: 1, minWidth: 0 }}
             />
             <span
               style={{
                 fontFamily: "var(--mono)",
                 fontSize: 14,
                 fontWeight: 700,
-                width: 24,
+                width: 28,
                 textAlign: "right",
                 color: slider.color,
                 flexShrink: 0,
@@ -477,12 +475,20 @@ export default function CheckinPage() {
               outline: "none",
               fontFamily: "var(--mono)",
               fontSize: 13,
+              boxSizing: "border-box",
             }}
           />
         </div>
 
         {/* Button */}
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 16,
+            flexWrap: "wrap",
+          }}
+        >
           <button
             onClick={handleSubmit}
             disabled={saving}
@@ -565,7 +571,7 @@ export default function CheckinPage() {
               marginBottom: 4,
             }}
           >
-            {streak > 0 ? (streak >= 3 ? `${streak}` : streak) : "—"}
+            {streak > 0 ? `${streak}` : "—"}
           </div>
           <div
             style={{

@@ -8,43 +8,43 @@ export const dynamic = "force-dynamic";
 
 const QUICK_PROMPTS = [
   {
-    label: "Recovery check",
-    msg: "Pull my last 7 days of data and tell me how my recovery looks.",
+    label: "Recovery",
+    msg: "Pull my last 7 days and tell me how my recovery looks.",
   },
   {
-    label: "Train or rest today",
-    msg: "Look at my recent readiness and sessions — should I train hard today or take it easy?",
+    label: "Train today?",
+    msg: "Look at my recent readiness — should I train hard today or rest?",
   },
   {
-    label: "Sleep analysis",
-    msg: "Analyze my sleep trends and tell me how they're affecting my training performance.",
+    label: "Sleep",
+    msg: "Analyze my sleep trends and how they affect my training.",
   },
   {
-    label: "Weekly review",
-    msg: "Give me a detailed weekly review. Use my actual numbers. What went well, what needs work?",
+    label: "Week review",
+    msg: "Give me a detailed weekly review with actual numbers.",
   },
   {
     label: "Generate plan",
-    msg: "Based on my current fitness and recovery data, generate a training plan for this week.",
+    msg: "Generate a training plan for this week based on my data.",
   },
   {
-    label: "Set a goal",
-    msg: "Help me set a realistic body weight goal based on my current data.",
+    label: "Set goal",
+    msg: "Help me set a realistic body weight goal based on my data.",
   },
   {
     label: "Load vs recovery",
-    msg: "Analyze the trend in my training load vs my recovery scores over the last 2 weeks.",
+    msg: "Analyze training load vs recovery scores over 2 weeks.",
   },
   {
-    label: "Pattern analysis",
-    msg: "What patterns do you see in my data? Look at everything — sleep, mood, energy, training.",
+    label: "Patterns",
+    msg: "What patterns do you see across sleep, mood, energy, training?",
   },
 ];
 
 const INITIAL_MESSAGE: ChatMessage = {
   role: "assistant",
   content:
-    "Observer OS loaded. I have access to your data — I can query your check-ins, sessions, goals, and weight logs in real time. Ask me anything, or pick a quick action above.",
+    "Observer OS loaded. I have access to your data — check-ins, sessions, goals, weight logs. Ask me anything.",
 };
 
 export default function CoachPage() {
@@ -60,7 +60,6 @@ export default function CoachPage() {
   useEffect(() => {
     setMounted(true);
   }, []);
-
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
@@ -79,7 +78,6 @@ export default function CoachPage() {
   const sendMessage = useCallback(
     async (text: string) => {
       if (!text.trim() || loading) return;
-
       const userMsg: ChatMessage = {
         role: "user",
         content: text.trim(),
@@ -100,12 +98,10 @@ export default function CoachPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ messages: apiMessages }),
         });
-
         if (!res.ok) {
           const err = await res.json();
           throw new Error(err.error ?? "API error");
         }
-
         const data = await res.json();
         setMessages((prev) => [
           ...prev,
@@ -120,7 +116,7 @@ export default function CoachPage() {
           ...prev,
           {
             role: "assistant",
-            content: `Error: ${err instanceof Error ? err.message : "Something went wrong. Check your API keys."}`,
+            content: `Error: ${err instanceof Error ? err.message : "Something went wrong."}`,
             timestamp: new Date().toISOString(),
           },
         ]);
@@ -157,6 +153,7 @@ export default function CoachPage() {
 
   return (
     <div
+      className="coach-layout"
       style={{
         display: "flex",
         flexDirection: "column",
@@ -164,7 +161,7 @@ export default function CoachPage() {
       }}
     >
       {/* Header */}
-      <div style={{ marginBottom: 16 }}>
+      <div style={{ marginBottom: 12 }}>
         <div
           style={{
             display: "flex",
@@ -182,14 +179,21 @@ export default function CoachPage() {
             <Badge color="var(--accent)">📊 Weekly Review Day</Badge>
           )}
         </div>
-        <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
-          Powered by Groq · llama-3.3-70b · Tool-calling enabled
+        <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+          Groq · llama-3.3-70b · Tool-calling enabled
         </div>
       </div>
 
-      {/* Quick prompts */}
+      {/* Quick prompts — scrollable row on mobile */}
       <div
-        style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}
+        style={{
+          display: "flex",
+          gap: 6,
+          marginBottom: 10,
+          overflowX: "auto",
+          paddingBottom: 4,
+          WebkitOverflowScrolling: "touch" as any,
+        }}
       >
         {QUICK_PROMPTS.map((qp) => (
           <button
@@ -204,6 +208,8 @@ export default function CoachPage() {
               background: "none",
               cursor: loading ? "not-allowed" : "pointer",
               letterSpacing: "0.03em",
+              whiteSpace: "nowrap",
+              flexShrink: 0,
             }}
           >
             {qp.label}
@@ -218,24 +224,25 @@ export default function CoachPage() {
           overflowY: "auto",
           border: "1px solid var(--border)",
           background: "var(--surface)",
-          padding: 20,
+          padding: 16,
           display: "flex",
           flexDirection: "column",
-          gap: 16,
+          gap: 14,
+          WebkitOverflowScrolling: "touch" as any,
         }}
       >
         {messages.map((msg, i) => (
           <div
             key={i}
             style={{
-              maxWidth: "82%",
+              maxWidth: "85%",
               alignSelf: msg.role === "user" ? "flex-end" : "flex-start",
               animation: "fadeIn 0.2s ease-out",
             }}
           >
             <div
               style={{
-                padding: "12px 16px",
+                padding: "10px 14px",
                 fontSize: 13,
                 lineHeight: 1.7,
                 background:
@@ -258,9 +265,8 @@ export default function CoachPage() {
             </div>
           </div>
         ))}
-
         {loading && (
-          <div style={{ alignSelf: "flex-start", maxWidth: "82%" }}>
+          <div style={{ alignSelf: "flex-start", maxWidth: "85%" }}>
             <div
               style={{
                 background: "var(--surface2)",
@@ -277,7 +283,7 @@ export default function CoachPage() {
                 marginTop: 4,
               }}
             >
-              thinking + querying data...
+              thinking...
             </div>
           </div>
         )}
@@ -285,7 +291,7 @@ export default function CoachPage() {
       </div>
 
       {/* Input */}
-      <div style={{ display: "flex", marginTop: 12 }}>
+      <div style={{ display: "flex", marginTop: 10 }}>
         <textarea
           ref={inputRef}
           value={input}
@@ -293,10 +299,10 @@ export default function CoachPage() {
           onKeyDown={handleKeyDown}
           disabled={loading}
           rows={1}
-          placeholder="Ask the coach... (Enter to send, Shift+Enter for newline)"
+          placeholder="Ask the coach... (Enter to send)"
           style={{
             flex: 1,
-            padding: "12px 16px",
+            padding: "12px 14px",
             background: "var(--surface)",
             border: "1px solid var(--border2)",
             borderRight: "none",
@@ -312,7 +318,7 @@ export default function CoachPage() {
           onClick={() => sendMessage(input)}
           disabled={loading || !input.trim()}
           style={{
-            padding: "0 20px",
+            padding: "0 18px",
             background:
               loading || !input.trim() ? "var(--border2)" : "var(--accent)",
             color: "#000",

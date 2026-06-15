@@ -57,14 +57,9 @@ export default function LogPage() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
 
-  // Run fields
   const [distance, setDistance] = useState(5.0);
   const [terrain, setTerrain] = useState("Road");
-
-  // Lift fields
   const [liftType, setLiftType] = useState("Push");
-
-  // Study fields
   const [subject, setSubject] = useState("Programming");
   const [focusScore, setFocusScore] = useState(7);
 
@@ -75,9 +70,7 @@ export default function LogPage() {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) return;
-
       const durationMinutes = hours * 60 + minutes;
-
       const sessionData: any = {
         user_id: user.id,
         session_type: tab,
@@ -89,9 +82,7 @@ export default function LogPage() {
         ...(tab === "lift" && { lift_type: liftType }),
         ...(tab === "study" && { subject, focus_score: focusScore }),
       };
-
       await supabase.from("sessions").insert(sessionData as any);
-
       setSuccess(true);
       setTimeout(() => {
         router.push("/history");
@@ -127,12 +118,11 @@ export default function LogPage() {
 
   return (
     <div>
-      {/* Page header */}
-      <div style={{ marginBottom: "32px" }}>
+      <div style={{ marginBottom: "24px" }}>
         <h1
           style={{
             fontFamily: "JetBrains Mono, monospace",
-            fontSize: "28px",
+            fontSize: "24px",
             fontWeight: 700,
             letterSpacing: "0.06em",
             color: "#fff",
@@ -144,24 +134,21 @@ export default function LogPage() {
         <p
           style={{
             fontFamily: "JetBrains Mono, monospace",
-            fontSize: "13px",
+            fontSize: "12px",
             color: "rgba(255,255,255,0.35)",
             marginTop: "6px",
-            letterSpacing: "0.02em",
           }}
         >
           Record a training or study session
         </p>
       </div>
 
-      {/* Card */}
       <div
         style={{
           backgroundColor: "rgba(255,255,255,0.03)",
           border: "1px solid rgba(255,255,255,0.07)",
           borderRadius: "20px",
-          padding: "32px",
-          maxWidth: "860px",
+          padding: "24px 20px",
         }}
       >
         {/* Tab switcher */}
@@ -172,7 +159,7 @@ export default function LogPage() {
             backgroundColor: "rgba(255,255,255,0.04)",
             borderRadius: "12px",
             padding: "4px",
-            marginBottom: "32px",
+            marginBottom: "28px",
           }}
         >
           {tabs.map(({ key, label, icon: Icon }) => {
@@ -186,8 +173,8 @@ export default function LogPage() {
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  gap: "8px",
-                  padding: "11px 16px",
+                  gap: "6px",
+                  padding: "10px 8px",
                   borderRadius: "9px",
                   border: "none",
                   cursor: "pointer",
@@ -195,22 +182,21 @@ export default function LogPage() {
                     ? "rgba(232,255,71,0.1)"
                     : "transparent",
                   fontFamily: "JetBrains Mono, monospace",
-                  fontSize: "12px",
+                  fontSize: "11px",
                   fontWeight: isActive ? 700 : 500,
-                  letterSpacing: "0.1em",
+                  letterSpacing: "0.08em",
                   color: isActive ? "#E8FF47" : "rgba(255,255,255,0.35)",
                   transition: "all 0.15s ease",
                 }}
               >
                 <Icon
-                  size={14}
+                  size={13}
                   strokeWidth={isActive ? 2.5 : 1.75}
                   color={isActive ? "#E8FF47" : "rgba(255,255,255,0.35)"}
                   style={{
                     filter: isActive
                       ? "drop-shadow(0 0 4px rgba(232,255,71,0.6))"
                       : "none",
-                    transition: "all 0.15s ease",
                   }}
                 />
                 {label}
@@ -219,13 +205,13 @@ export default function LogPage() {
           })}
         </div>
 
-        {/* Date + Duration */}
+        {/* Date + Duration — stacked on mobile */}
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1fr auto auto",
-            gap: "16px",
-            marginBottom: "24px",
+            gridTemplateColumns: "1fr 80px 80px",
+            gap: "12px",
+            marginBottom: "20px",
             alignItems: "end",
           }}
         >
@@ -239,31 +225,31 @@ export default function LogPage() {
             />
           </div>
           <div>
-            <label style={labelStyle}>HOURS</label>
+            <label style={labelStyle}>HRS</label>
             <input
               type="number"
               min={0}
               max={24}
               value={hours}
               onChange={(e) => setHours(Number(e.target.value))}
-              style={{ ...inputStyle, width: "90px" }}
+              style={inputStyle}
             />
           </div>
           <div>
-            <label style={labelStyle}>MINUTES</label>
+            <label style={labelStyle}>MIN</label>
             <input
               type="number"
               min={0}
               max={59}
               value={minutes}
               onChange={(e) => setMinutes(Number(e.target.value))}
-              style={{ ...inputStyle, width: "90px" }}
+              style={inputStyle}
             />
           </div>
         </div>
 
         {/* Effort */}
-        <div style={{ marginBottom: "24px" }}>
+        <div style={{ marginBottom: "20px" }}>
           <label style={labelStyle}>EFFORT</label>
           <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
             {effortOptions.map(({ key, label }) => (
@@ -271,7 +257,7 @@ export default function LogPage() {
                 key={key}
                 onClick={() => setEffort(key)}
                 style={{
-                  padding: "9px 18px",
+                  padding: "9px 16px",
                   borderRadius: "9px",
                   border: `1px solid ${effort === key ? "#E8FF47" : "rgba(255,255,255,0.1)"}`,
                   backgroundColor:
@@ -290,14 +276,14 @@ export default function LogPage() {
           </div>
         </div>
 
-        {/* Run-specific fields */}
+        {/* Run fields */}
         {tab === "run" && (
           <div
             style={{
               display: "grid",
               gridTemplateColumns: "1fr 1fr",
-              gap: "16px",
-              marginBottom: "24px",
+              gap: "12px",
+              marginBottom: "20px",
             }}
           >
             <div>
@@ -332,9 +318,9 @@ export default function LogPage() {
           </div>
         )}
 
-        {/* Lift-specific fields */}
+        {/* Lift fields */}
         {tab === "lift" && (
-          <div style={{ marginBottom: "24px" }}>
+          <div style={{ marginBottom: "20px" }}>
             <label style={labelStyle}>SESSION TYPE</label>
             <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
               {liftTypes.map((t) => (
@@ -342,7 +328,7 @@ export default function LogPage() {
                   key={t}
                   onClick={() => setLiftType(t)}
                   style={{
-                    padding: "9px 18px",
+                    padding: "8px 14px",
                     borderRadius: "9px",
                     border: `1px solid ${liftType === t ? "#E8FF47" : "rgba(255,255,255,0.1)"}`,
                     backgroundColor:
@@ -353,7 +339,6 @@ export default function LogPage() {
                     fontSize: "13px",
                     fontWeight: liftType === t ? 600 : 400,
                     cursor: "pointer",
-                    transition: "all 0.15s ease",
                   }}
                 >
                   {t}
@@ -363,14 +348,14 @@ export default function LogPage() {
           </div>
         )}
 
-        {/* Study-specific fields */}
+        {/* Study fields */}
         {tab === "study" && (
           <div
             style={{
               display: "grid",
               gridTemplateColumns: "1fr 1fr",
-              gap: "16px",
-              marginBottom: "24px",
+              gap: "12px",
+              marginBottom: "20px",
             }}
           >
             <div>
@@ -392,7 +377,7 @@ export default function LogPage() {
               </select>
             </div>
             <div>
-              <label style={labelStyle}>FOCUS SCORE (1–10)</label>
+              <label style={labelStyle}>FOCUS SCORE</label>
               <input
                 type="number"
                 min={1}
@@ -406,7 +391,7 @@ export default function LogPage() {
         )}
 
         {/* Notes */}
-        <div style={{ marginBottom: "28px" }}>
+        <div style={{ marginBottom: "24px" }}>
           <label style={labelStyle}>NOTES</label>
           <textarea
             value={notes}
@@ -441,6 +426,7 @@ export default function LogPage() {
             cursor: loading || success ? "default" : "pointer",
             opacity: loading ? 0.7 : 1,
             transition: "all 0.2s ease",
+            width: "100%",
           }}
         >
           {success ? (

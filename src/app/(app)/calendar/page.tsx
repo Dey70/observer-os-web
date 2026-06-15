@@ -135,7 +135,10 @@ export default function CalendarPage() {
   const selectedData = selectedDate ? dayMap[selectedDate] : null;
 
   return (
-    <div style={{ display: "flex", gap: 24, alignItems: "flex-start" }}>
+    <div
+      style={{ display: "flex", gap: 24, alignItems: "flex-start" }}
+      className="calendar-layout"
+    >
       {/* Left: calendar */}
       <div style={{ flex: 1, minWidth: 0 }}>
         <PageHeader title="CALENDAR" subtitle="Sessions and check-ins by day" />
@@ -402,6 +405,7 @@ export default function CalendarPage() {
 
       {/* Right: day detail panel */}
       <div
+        className="calendar-panel"
         style={{
           width: 300,
           flexShrink: 0,

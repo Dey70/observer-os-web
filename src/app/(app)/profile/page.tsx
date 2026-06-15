@@ -88,19 +88,21 @@ export default function ProfilePage() {
       setSaving(false);
       return;
     }
-    await (sb as any).from("profiles").upsert(
-      {
-        user_id: user.id,
-        name: name.trim() || null,
-        age: age ? parseInt(age) : null,
-        split,
-        weekly_goal: parseInt(weeklyGoal) || 4,
-        target_weight: targetWeight ? parseFloat(targetWeight) : null,
-        notes: notes.trim() || null,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "user_id" },
-    );
+    await (sb as any)
+      .from("profiles")
+      .upsert(
+        {
+          user_id: user.id,
+          name: name.trim() || null,
+          age: age ? parseInt(age) : null,
+          split,
+          weekly_goal: parseInt(weeklyGoal) || 4,
+          target_weight: targetWeight ? parseFloat(targetWeight) : null,
+          notes: notes.trim() || null,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id" },
+      );
     setSaving(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
@@ -157,6 +159,7 @@ export default function ProfilePage() {
             padding: "10px 12px",
             background: "var(--bg)",
             border: "1px solid var(--border2)",
+            wordBreak: "break-all",
           }}
         >
           {email}
@@ -181,7 +184,7 @@ export default function ProfilePage() {
             marginBottom: 4,
           }}
         >
-          <div style={{ flex: "2 1 200px" }}>
+          <div style={{ flex: "2 1 160px" }}>
             <Field label="Name">
               <Input
                 placeholder="Rajdeep"
@@ -190,7 +193,7 @@ export default function ProfilePage() {
               />
             </Field>
           </div>
-          <div style={{ flex: "0 0 100px" }}>
+          <div style={{ flex: "0 0 90px" }}>
             <Field label="Age">
               <Input
                 type="number"
@@ -212,28 +215,19 @@ export default function ProfilePage() {
             marginTop: 8,
           }}
         >
-          Training Preferences
+          Training
         </div>
-        <div
-          style={{
-            display: "flex",
-            gap: 12,
-            flexWrap: "wrap",
-            marginBottom: 4,
-          }}
-        >
-          <div style={{ flex: "2 1 200px" }}>
-            <Field label="Training Split">
-              <Select value={split} onChange={(e) => setSplit(e.target.value)}>
-                {SPLITS.map((s) => (
-                  <option key={s.value} value={s.value}>
-                    {s.label}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-          </div>
-          <div style={{ flex: "0 0 140px" }}>
+        <Field label="Training Split">
+          <Select value={split} onChange={(e) => setSplit(e.target.value)}>
+            {SPLITS.map((s) => (
+              <option key={s.value} value={s.value}>
+                {s.label}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+          <div style={{ flex: "1 1 120px" }}>
             <Field label="Weekly Session Goal">
               <Input
                 type="number"
@@ -245,7 +239,7 @@ export default function ProfilePage() {
               />
             </Field>
           </div>
-          <div style={{ flex: "0 0 140px" }}>
+          <div style={{ flex: "1 1 120px" }}>
             <Field label="Target Weight (kg)">
               <Input
                 type="number"
@@ -274,7 +268,7 @@ export default function ProfilePage() {
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            placeholder="e.g. I have a 10K race in 6 weeks. I struggle with lower body soreness after leg days..."
+            placeholder="e.g. I have a 10K race in 6 weeks..."
             rows={4}
             style={{
               width: "100%",
@@ -287,6 +281,7 @@ export default function ProfilePage() {
               fontSize: 13,
               resize: "vertical",
               lineHeight: 1.6,
+              boxSizing: "border-box",
             }}
           />
         </Field>
@@ -297,6 +292,7 @@ export default function ProfilePage() {
             alignItems: "center",
             gap: 16,
             marginTop: 8,
+            flexWrap: "wrap",
           }}
         >
           <Button onClick={handleSave} disabled={saving}>
@@ -310,7 +306,7 @@ export default function ProfilePage() {
                 fontFamily: "var(--mono)",
               }}
             >
-              ✓ Saved — coach will use this from now on
+              ✓ Saved
             </span>
           )}
         </div>
@@ -329,11 +325,9 @@ export default function ProfilePage() {
         >
           Notifications
         </div>
-
         {!supported ? (
           <div style={{ fontSize: 13, color: "var(--text-muted)" }}>
-            Your browser doesn't support push notifications. Try Chrome on
-            desktop or Android.
+            Your browser doesn&apos;t support push notifications.
           </div>
         ) : (
           <>
@@ -343,9 +337,10 @@ export default function ProfilePage() {
                 alignItems: "center",
                 justifyContent: "space-between",
                 marginBottom: 16,
+                gap: 12,
               }}
             >
-              <div>
+              <div style={{ minWidth: 0 }}>
                 <div
                   style={{
                     fontSize: 13,
@@ -356,7 +351,7 @@ export default function ProfilePage() {
                   Daily reminders
                 </div>
                 <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                  8:00 AM — check-in reminder · 8:00 PM — session log reminder
+                  8 AM check-in · 8 PM session log
                 </div>
               </div>
               <button
@@ -388,16 +383,13 @@ export default function ProfilePage() {
                 />
               </button>
             </div>
-
             {permission === "denied" && (
               <div
                 style={{ fontSize: 12, color: "var(--red)", marginBottom: 12 }}
               >
-                Notifications blocked. Go to browser Settings → Site Settings →
-                Notifications → allow this site.
+                Notifications blocked in browser settings.
               </div>
             )}
-
             {enabled && (
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 <button
@@ -411,7 +403,7 @@ export default function ProfilePage() {
                     cursor: "pointer",
                   }}
                 >
-                  Test check-in reminder
+                  Test check-in
                 </button>
                 <button
                   onClick={() => sendTestNotification("session")}
@@ -424,63 +416,12 @@ export default function ProfilePage() {
                     cursor: "pointer",
                   }}
                 >
-                  Test session reminder
+                  Test session
                 </button>
               </div>
             )}
           </>
         )}
-      </Card>
-
-      {/* How coach uses profile */}
-      <Card style={{ borderColor: "var(--accent-dim)" }}>
-        <div
-          style={{
-            fontSize: 10,
-            color: "var(--text-muted)",
-            letterSpacing: "0.12em",
-            textTransform: "uppercase",
-            marginBottom: 12,
-          }}
-        >
-          How the coach uses your profile
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {[
-            ["Name", "Personalizes responses"],
-            [
-              "Age",
-              "Adjusts recovery expectations and training recommendations",
-            ],
-            [
-              "Training split",
-              "Informs training plan generation and session recommendations",
-            ],
-            ["Weekly goal", "Used to assess whether you're on track each week"],
-            [
-              "Target weight",
-              "Referenced when discussing body composition trends",
-            ],
-            [
-              "Coach notes",
-              "Permanent context — injury history, upcoming events, constraints",
-            ],
-          ].map(([key, val]) => (
-            <div key={key} style={{ display: "flex", gap: 16, fontSize: 12 }}>
-              <span
-                style={{
-                  fontFamily: "var(--mono)",
-                  color: "var(--accent)",
-                  width: 120,
-                  flexShrink: 0,
-                }}
-              >
-                {key}
-              </span>
-              <span style={{ color: "var(--text-muted)" }}>{val}</span>
-            </div>
-          ))}
-        </div>
       </Card>
     </div>
   );

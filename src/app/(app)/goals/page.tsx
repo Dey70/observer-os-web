@@ -39,7 +39,6 @@ export default function GoalsPage() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
-
   const [goalType, setGoalType] = useState("weight");
   const [title, setTitle] = useState("");
   const [target, setTarget] = useState("");
@@ -95,16 +94,18 @@ export default function GoalsPage() {
       setSaving(false);
       return;
     }
-    await (sb as any).from("goals").insert({
-      user_id: user.id,
-      type: goalType,
-      title,
-      target_value: parseFloat(target),
-      current_value: parseFloat(current) || 0,
-      unit,
-      deadline: deadline || null,
-      active: true,
-    });
+    await (sb as any)
+      .from("goals")
+      .insert({
+        user_id: user.id,
+        type: goalType,
+        title,
+        target_value: parseFloat(target),
+        current_value: parseFloat(current) || 0,
+        unit,
+        deadline: deadline || null,
+        active: true,
+      });
     setSaving(false);
     setShowForm(false);
     setTitle("");
@@ -147,10 +148,10 @@ export default function GoalsPage() {
     <div>
       <PageHeader
         title="GOALS"
-        subtitle="Set targets · track progress · let the coach generate plans"
+        subtitle="Set targets · track progress"
         right={
           <Button onClick={() => setShowForm((f) => !f)}>
-            {showForm ? "Cancel" : "+ New Goal"}
+            {showForm ? "Cancel" : "+ New"}
           </Button>
         }
       />
@@ -158,33 +159,33 @@ export default function GoalsPage() {
       {showForm && (
         <Card style={{ borderColor: "var(--accent)" }}>
           <SectionLabel>New Goal</SectionLabel>
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-            <div style={{ flex: "1 1 180px" }}>
-              <Field label="Goal Type">
-                <Select
-                  value={goalType}
-                  onChange={(e) => onTypeChange(e.target.value)}
-                >
-                  {GOAL_TYPES.map((t) => (
-                    <option key={t.value} value={t.value}>
-                      {t.label}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-            </div>
-            <div style={{ flex: "2 1 200px" }}>
-              <Field label="Title">
-                <Input
-                  placeholder="e.g. Reach 70kg body weight"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                />
-              </Field>
-            </div>
-          </div>
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-            <div style={{ flex: "1 1 100px" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <Field label="Goal Type">
+              <Select
+                value={goalType}
+                onChange={(e) => onTypeChange(e.target.value)}
+              >
+                {GOAL_TYPES.map((t) => (
+                  <option key={t.value} value={t.value}>
+                    {t.label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Title">
+              <Input
+                placeholder="e.g. Reach 70kg body weight"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+              />
+            </Field>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: 12,
+              }}
+            >
               <Field label={`Target (${unit || "value"})`}>
                 <Input
                   type="number"
@@ -193,8 +194,6 @@ export default function GoalsPage() {
                   onChange={(e) => setTarget(e.target.value)}
                 />
               </Field>
-            </div>
-            <div style={{ flex: "1 1 100px" }}>
               <Field label={`Current (${unit || "value"})`}>
                 <Input
                   type="number"
@@ -204,27 +203,19 @@ export default function GoalsPage() {
                 />
               </Field>
             </div>
-            {goalType === "custom" && (
-              <div style={{ flex: "0 0 80px" }}>
-                <Field label="Unit">
-                  <Input
-                    value={unit}
-                    onChange={(e) => setUnit(e.target.value)}
-                  />
-                </Field>
-              </div>
-            )}
-            <div style={{ flex: "1 1 140px" }}>
-              <Field label="Deadline (optional)">
-                <Input
-                  type="date"
-                  value={deadline}
-                  onChange={(e) => setDeadline(e.target.value)}
-                />
-              </Field>
-            </div>
+            <Field label="Deadline (optional)">
+              <Input
+                type="date"
+                value={deadline}
+                onChange={(e) => setDeadline(e.target.value)}
+              />
+            </Field>
           </div>
-          <Button onClick={saveGoal} disabled={saving || !title || !target}>
+          <Button
+            onClick={saveGoal}
+            disabled={saving || !title || !target}
+            style={{ marginTop: 8 }}
+          >
             {saving ? "Saving..." : "Save Goal"}
           </Button>
         </Card>
@@ -233,7 +224,7 @@ export default function GoalsPage() {
       <Card style={{ marginBottom: 16 }}>
         <SectionLabel>Active Goals</SectionLabel>
         {goals.length === 0 ? (
-          <EmptyState message="No active goals — add one above or ask the Coach to set goals for you" />
+          <EmptyState message="No active goals — add one above or ask the Coach" />
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {goals.map((g) => {
@@ -256,9 +247,10 @@ export default function GoalsPage() {
                       justifyContent: "space-between",
                       alignItems: "flex-start",
                       marginBottom: 10,
+                      gap: 8,
                     }}
                   >
-                    <div>
+                    <div style={{ minWidth: 0 }}>
                       <div style={{ fontSize: 14, fontWeight: 500 }}>
                         {g.title}
                       </div>
@@ -275,7 +267,12 @@ export default function GoalsPage() {
                       </div>
                     </div>
                     <div
-                      style={{ display: "flex", alignItems: "center", gap: 12 }}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 12,
+                        flexShrink: 0,
+                      }}
                     >
                       <span
                         style={{
@@ -295,7 +292,6 @@ export default function GoalsPage() {
                           background: "none",
                           border: "none",
                           cursor: "pointer",
-                          letterSpacing: "0.05em",
                           textTransform: "uppercase",
                         }}
                       >
@@ -324,7 +320,7 @@ export default function GoalsPage() {
       <Card>
         <SectionLabel>This Week&apos;s Training Plan</SectionLabel>
         {!plan ? (
-          <EmptyState message="No plan for this week — ask the Coach to generate one for you" />
+          <EmptyState message="No plan for this week — ask the Coach to generate one" />
         ) : (
           <>
             <div
@@ -346,14 +342,15 @@ export default function GoalsPage() {
                   <div
                     key={i}
                     style={{
-                      padding: "12px 16px",
+                      padding: "12px 14px",
                       background: isToday
                         ? "var(--accent-dim)"
                         : "var(--surface2)",
                       border: `1px solid ${isToday ? "var(--accent)" : "var(--border)"}`,
                       display: "flex",
                       alignItems: "flex-start",
-                      gap: 12,
+                      gap: 10,
+                      flexWrap: "wrap",
                     }}
                   >
                     <div style={{ minWidth: 80 }}>
@@ -386,7 +383,7 @@ export default function GoalsPage() {
                         {day.type}
                       </span>
                     </div>
-                    <div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 13, fontWeight: 500 }}>
                         {day.title}
                       </div>
@@ -399,18 +396,6 @@ export default function GoalsPage() {
                       >
                         {day.description}
                       </div>
-                      {day.target_rpe && (
-                        <div
-                          style={{
-                            fontSize: 11,
-                            color: "var(--text-dim)",
-                            fontFamily: "var(--mono)",
-                            marginTop: 4,
-                          }}
-                        >
-                          Target RPE: {day.target_rpe}/10
-                        </div>
-                      )}
                     </div>
                   </div>
                 );

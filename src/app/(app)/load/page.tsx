@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { Card, PageHeader, StatCard, EmptyState } from "@/components/ui";
+import { Card, PageHeader, EmptyState } from "@/components/ui";
 import type { Session } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -117,13 +117,13 @@ export default function LoadPage() {
       />
 
       {sessions.length === 0 ? (
-        <EmptyState message="No sessions logged yet — start training to see your load metrics" />
+        <EmptyState message="No sessions logged yet" />
       ) : (
         <>
           {/* TSB Zone Banner */}
           <div
             style={{
-              padding: "20px 24px",
+              padding: "20px",
               marginBottom: 16,
               background: "var(--surface)",
               border: `2px solid ${zone.color}`,
@@ -154,7 +154,7 @@ export default function LoadPage() {
                 <div
                   style={{
                     fontFamily: "var(--mono)",
-                    fontSize: 32,
+                    fontSize: 28,
                     fontWeight: 700,
                     color: zone.color,
                   }}
@@ -175,7 +175,7 @@ export default function LoadPage() {
                 <div
                   style={{
                     fontFamily: "var(--mono)",
-                    fontSize: 48,
+                    fontSize: 40,
                     fontWeight: 700,
                     color: zone.color,
                     lineHeight: 1,
@@ -193,130 +193,78 @@ export default function LoadPage() {
                     marginTop: 4,
                   }}
                 >
-                  Training Stress Balance
+                  TSB
                 </div>
               </div>
             </div>
           </div>
 
-          {/* ATL / CTL / TSB Cards */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(3, 1fr)",
-              gap: 12,
-              marginBottom: 16,
-            }}
-          >
-            <div
-              style={{
-                background: "var(--surface)",
-                border: "1px solid var(--border)",
-                padding: 16,
-              }}
-            >
+          {/* ATL / CTL / TSB Cards — 3 cols on desktop, all 3 on mobile too but smaller */}
+          <div className="grid-3" style={{ marginBottom: 16 }}>
+            {[
+              {
+                label: "ATL — Fatigue",
+                sublabel: "7-day avg load",
+                value: atl,
+                color: "var(--red)",
+              },
+              {
+                label: "CTL — Fitness",
+                sublabel: "42-day avg load",
+                value: ctl,
+                color: "var(--green)",
+              },
+              {
+                label: "TSB — Form",
+                sublabel: "CTL minus ATL",
+                value: `${tsb > 0 ? "+" : ""}${tsb}`,
+                color: zone.color,
+              },
+            ].map(({ label, sublabel, value, color }) => (
               <div
+                key={label}
                 style={{
-                  fontFamily: "var(--mono)",
-                  fontSize: 32,
-                  fontWeight: 700,
-                  color: "var(--red)",
-                  lineHeight: 1,
+                  background: "var(--surface)",
+                  border: `1px solid ${color === zone.color ? color : "var(--border)"}`,
+                  padding: 16,
                 }}
               >
-                {atl}
+                <div
+                  style={{
+                    fontFamily: "var(--mono)",
+                    fontSize: 28,
+                    fontWeight: 700,
+                    color,
+                    lineHeight: 1,
+                  }}
+                >
+                  {value}
+                </div>
+                <div
+                  style={{
+                    fontSize: 10,
+                    color: "var(--text-muted)",
+                    letterSpacing: "0.1em",
+                    textTransform: "uppercase",
+                    marginTop: 6,
+                  }}
+                >
+                  {label}
+                </div>
+                <div
+                  style={{
+                    fontSize: 11,
+                    color: "var(--text-dim)",
+                    marginTop: 4,
+                  }}
+                >
+                  {sublabel}
+                </div>
               </div>
-              <div
-                style={{
-                  fontSize: 10,
-                  color: "var(--text-muted)",
-                  letterSpacing: "0.1em",
-                  textTransform: "uppercase",
-                  marginTop: 6,
-                }}
-              >
-                ATL — Fatigue
-              </div>
-              <div
-                style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}
-              >
-                7-day avg load
-              </div>
-            </div>
-            <div
-              style={{
-                background: "var(--surface)",
-                border: "1px solid var(--border)",
-                padding: 16,
-              }}
-            >
-              <div
-                style={{
-                  fontFamily: "var(--mono)",
-                  fontSize: 32,
-                  fontWeight: 700,
-                  color: "var(--green)",
-                  lineHeight: 1,
-                }}
-              >
-                {ctl}
-              </div>
-              <div
-                style={{
-                  fontSize: 10,
-                  color: "var(--text-muted)",
-                  letterSpacing: "0.1em",
-                  textTransform: "uppercase",
-                  marginTop: 6,
-                }}
-              >
-                CTL — Fitness
-              </div>
-              <div
-                style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}
-              >
-                42-day avg load
-              </div>
-            </div>
-            <div
-              style={{
-                background: "var(--surface)",
-                border: `1px solid ${zone.color}`,
-                padding: 16,
-              }}
-            >
-              <div
-                style={{
-                  fontFamily: "var(--mono)",
-                  fontSize: 32,
-                  fontWeight: 700,
-                  color: zone.color,
-                  lineHeight: 1,
-                }}
-              >
-                {tsb > 0 ? "+" : ""}
-                {tsb}
-              </div>
-              <div
-                style={{
-                  fontSize: 10,
-                  color: "var(--text-muted)",
-                  letterSpacing: "0.1em",
-                  textTransform: "uppercase",
-                  marginTop: 6,
-                }}
-              >
-                TSB — Form
-              </div>
-              <div
-                style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}
-              >
-                CTL minus ATL
-              </div>
-            </div>
+            ))}
           </div>
 
-          {/* 28-day load chart */}
+          {/* Chart */}
           <Card>
             <div
               style={{
@@ -327,7 +275,7 @@ export default function LoadPage() {
                 marginBottom: 16,
               }}
             >
-              Daily Training Load — Last 28 Days
+              Daily Load — Last 28 Days
             </div>
             <div
               style={{
@@ -368,7 +316,6 @@ export default function LoadPage() {
                         background:
                           d.load === 0 ? "var(--border2)" : "var(--accent)",
                         opacity: 0.8,
-                        transition: "height 0.3s",
                       }}
                     />
                   </div>
@@ -386,100 +333,6 @@ export default function LoadPage() {
                   )}
                 </div>
               ))}
-            </div>
-          </Card>
-
-          {/* Interpretation guide */}
-          <Card style={{ borderColor: "var(--border)" }}>
-            <div
-              style={{
-                fontSize: 10,
-                color: "var(--text-muted)",
-                letterSpacing: "0.1em",
-                textTransform: "uppercase",
-                marginBottom: 14,
-              }}
-            >
-              How to read this
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {[
-                {
-                  range: "TSB > +10",
-                  color: "var(--green)",
-                  label: "Fresh",
-                  desc: "Well rested. Good for racing or performance testing.",
-                },
-                {
-                  range: "TSB -10 to +10",
-                  color: "var(--accent)",
-                  label: "Optimal",
-                  desc: "Peak performance zone. Train hard, compete well.",
-                },
-                {
-                  range: "TSB -10 to -30",
-                  color: "var(--yellow)",
-                  label: "Fatigued",
-                  desc: "Accumulated fatigue. Monitor recovery, reduce intensity.",
-                },
-                {
-                  range: "TSB < -30",
-                  color: "var(--red)",
-                  label: "Danger",
-                  desc: "Overtraining risk. Take rest days immediately.",
-                },
-              ].map((item) => (
-                <div
-                  key={item.range}
-                  style={{ display: "flex", gap: 12, alignItems: "flex-start" }}
-                >
-                  <div style={{ width: 80, flexShrink: 0 }}>
-                    <span
-                      style={{
-                        fontFamily: "var(--mono)",
-                        fontSize: 10,
-                        color: item.color,
-                        letterSpacing: "0.05em",
-                      }}
-                    >
-                      {item.label}
-                    </span>
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div
-                      style={{
-                        fontFamily: "var(--mono)",
-                        fontSize: 10,
-                        color: "var(--text-dim)",
-                        marginBottom: 2,
-                      }}
-                    >
-                      {item.range}
-                    </div>
-                    <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
-                      {item.desc}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div
-              style={{
-                marginTop: 16,
-                padding: "10px 12px",
-                background: "var(--bg)",
-                border: "1px solid var(--border2)",
-              }}
-            >
-              <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                <strong
-                  style={{ color: "var(--text)", fontFamily: "var(--mono)" }}
-                >
-                  Load formula:
-                </strong>{" "}
-                Duration (min) × RPE = Session Load. ATL = 7-day average. CTL =
-                42-day average. TSB = CTL − ATL.
-              </div>
             </div>
           </Card>
         </>

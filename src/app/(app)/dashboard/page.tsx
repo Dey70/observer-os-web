@@ -43,7 +43,6 @@ export default function DashboardPage() {
     } = await sb.auth.getUser();
     if (!user) return;
     const since = getLast14Days();
-
     const [{ data: l }, { data: s }, { data: w }] = await Promise.all([
       sb
         .from("daily_logs")
@@ -64,11 +63,9 @@ export default function DashboardPage() {
         .order("date", { ascending: false })
         .limit(14),
     ]);
-
     const logsData = (l ?? []) as DailyLog[];
     const sessData = (s ?? []) as Session[];
     const wData = (w ?? []) as WeightLog[];
-
     setLogs(logsData);
     setSessions(sessData);
     setWeights(wData);
@@ -110,7 +107,6 @@ export default function DashboardPage() {
     lift: "var(--purple)",
     study: "var(--yellow)",
   };
-
   const sleepChartData = logs.map((l) => ({
     label: l.date.slice(5),
     value: l.sleep_hours,
@@ -131,8 +127,7 @@ export default function DashboardPage() {
     : 100;
 
   function streakLabel(n: number) {
-    if (n === 0) return "—";
-    return n >= 3 ? `🔥 ${n}` : `${n}`;
+    return n === 0 ? "—" : n >= 3 ? `🔥 ${n}` : `${n}`;
   }
 
   if (loading)
@@ -155,15 +150,8 @@ export default function DashboardPage() {
     <div>
       <PageHeader title="DASHBOARD" subtitle="Last 14 days" />
 
-      {/* Main stats */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(4, 1fr)",
-          gap: 12,
-          marginBottom: 12,
-        }}
-      >
+      {/* Main stats — 2 cols on mobile, 4 on desktop */}
+      <div className="grid-4" style={{ marginBottom: 12 }}>
         <StatCard value={stats?.avgSleep ?? "—"} label="Avg Sleep (hrs)" />
         <StatCard
           value={stats?.avgMood ?? "—"}
@@ -183,22 +171,15 @@ export default function DashboardPage() {
       </div>
 
       {/* Second row */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(4, 1fr)",
-          gap: 12,
-          marginBottom: 16,
-        }}
-      >
+      <div className="grid-4" style={{ marginBottom: 16 }}>
         <StatCard
           value={stats?.avgReadiness?.toFixed(1) ?? "—"}
           label="Avg Readiness"
           color="var(--accent)"
         />
         <StatCard
-          value={`${stats?.sessionsByType.run ?? 0} / ${stats?.sessionsByType.lift ?? 0} / ${stats?.sessionsByType.study ?? 0}`}
-          label="Run / Lift / Study"
+          value={`${stats?.sessionsByType.run ?? 0}/${stats?.sessionsByType.lift ?? 0}/${stats?.sessionsByType.study ?? 0}`}
+          label="Run/Lift/Study"
         />
         <StatCard
           value={streakLabel(checkinStreak)}
@@ -224,7 +205,7 @@ export default function DashboardPage() {
             flexWrap: "wrap",
           }}
         >
-          <div style={{ maxWidth: 120 }}>
+          <div style={{ width: 120 }}>
             <Field label="Weight (kg)">
               <Input
                 type="number"
@@ -276,7 +257,7 @@ export default function DashboardPage() {
             maxVal={weightMax}
           />
         ) : (
-          <EmptyState message="No weight data yet — log your first entry above" />
+          <EmptyState message="No weight data yet" />
         )}
       </Card>
 
@@ -340,7 +321,7 @@ export default function DashboardPage() {
             </div>
           </>
         ) : (
-          <EmptyState message="No check-ins yet — start with your daily check-in" />
+          <EmptyState message="No check-ins yet" />
         )}
       </Card>
 
@@ -361,9 +342,17 @@ export default function DashboardPage() {
                   padding: "12px 16px",
                   background: "var(--surface2)",
                   border: "1px solid var(--border)",
+                  gap: 8,
                 }}
               >
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    minWidth: 0,
+                  }}
+                >
                   <span
                     style={{
                       fontFamily: "var(--mono)",
@@ -373,11 +362,20 @@ export default function DashboardPage() {
                       border: `1px solid ${typeColor[s.type]}`,
                       color: typeColor[s.type],
                       textTransform: "uppercase",
+                      flexShrink: 0,
                     }}
                   >
                     {s.type}
                   </span>
-                  <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                  <span
+                    style={{
+                      fontSize: 12,
+                      color: "var(--text-muted)",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
                     {s.notes || "—"}
                   </span>
                 </div>
@@ -392,7 +390,7 @@ export default function DashboardPage() {
                       color: "var(--text-dim)",
                     }}
                   >
-                    {rpeToLabel(s.rpe)} · {s.date}
+                    {s.date}
                   </div>
                 </div>
               </div>
