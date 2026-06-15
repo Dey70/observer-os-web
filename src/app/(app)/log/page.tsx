@@ -1,321 +1,460 @@
 "use client";
 
-import { useState } from "react";
-import { createClient } from "@/lib/supabase/client";
-import { effortToRpe } from "@/lib/utils";
-import {
-  Card,
-  PageHeader,
-  Button,
-  Field,
-  Input,
-  Select,
-  Chip,
-  EffortButton,
-} from "@/components/ui";
-
-type SessionType = "run" | "lift" | "study";
-type Effort = "easy" | "medium" | "hard" | "vhard";
-
-const MUSCLES = ["Chest", "Back", "Legs", "Shoulders", "Arms", "Core"];
-const TERRAINS = ["Road", "Trail", "Track", "Treadmill"];
-
 export const dynamic = "force-dynamic";
 
+import { useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { useRouter } from "next/navigation";
+import { PersonStanding, Dumbbell, BookOpen, CheckCircle } from "lucide-react";
+
+type Tab = "run" | "lift" | "study";
+type Effort = "easy" | "medium" | "hard" | "very_hard";
+
+const tabs: { key: Tab; label: string; icon: React.ElementType }[] = [
+  { key: "run", label: "RUN", icon: PersonStanding },
+  { key: "lift", label: "LIFT", icon: Dumbbell },
+  { key: "study", label: "STUDY", icon: BookOpen },
+];
+
+const effortOptions: { key: Effort; label: string }[] = [
+  { key: "easy", label: "Easy" },
+  { key: "medium", label: "Medium" },
+  { key: "hard", label: "Hard" },
+  { key: "very_hard", label: "Very Hard" },
+];
+
+const terrainOptions = ["Road", "Trail", "Track", "Treadmill", "Mixed"];
+const liftTypes = [
+  "Push",
+  "Pull",
+  "Legs",
+  "Full Body",
+  "Upper",
+  "Lower",
+  "Core",
+];
+const studySubjects = [
+  "Math",
+  "Science",
+  "Languages",
+  "Programming",
+  "History",
+  "Other",
+];
+
 export default function LogPage() {
-  const sb = createClient();
-  const [type, setType] = useState<SessionType>("run");
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
-  const [hours, setHours] = useState("");
-  const [mins, setMins] = useState("");
-  const [effort, setEffort] = useState<Effort | null>(null);
+  const router = useRouter();
+  const supabase = createClient();
+
+  const [tab, setTab] = useState<Tab>("run");
+  const [date, setDate] = useState(
+    () => new Date().toISOString().split("T")[0],
+  );
+  const [hours, setHours] = useState(0);
+  const [minutes, setMinutes] = useState(30);
+  const [effort, setEffort] = useState<Effort>("medium");
   const [notes, setNotes] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [distance, setDistance] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
+
+  // Run fields
+  const [distance, setDistance] = useState(5.0);
   const [terrain, setTerrain] = useState("Road");
-  const [exercises, setExercises] = useState("");
-  const [muscles, setMuscles] = useState<string[]>([]);
-  const [topic, setTopic] = useState("");
-  const [focus, setFocus] = useState("Medium");
 
-  function toggleMuscle(m: string) {
-    setMuscles((prev) =>
-      prev.includes(m) ? prev.filter((x) => x !== m) : [...prev, m],
-    );
-  }
+  // Lift fields
+  const [liftType, setLiftType] = useState("Push");
 
-  async function handleSubmit() {
-    const duration = (parseInt(hours) || 0) * 60 + (parseInt(mins) || 0);
-    if (!duration) return;
-    setSaving(true);
-    const {
-      data: { user },
-    } = await sb.auth.getUser();
-    if (!user) {
-      setSaving(false);
-      return;
+  // Study fields
+  const [subject, setSubject] = useState("Programming");
+  const [focusScore, setFocusScore] = useState(7);
+
+  const handleSubmit = async () => {
+    setLoading(true);
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const durationMinutes = hours * 60 + minutes;
+
+      const sessionData: any = {
+        user_id: user.id,
+        session_type: tab,
+        date,
+        duration_minutes: durationMinutes,
+        effort,
+        notes,
+        ...(tab === "run" && { distance_km: distance, terrain }),
+        ...(tab === "lift" && { lift_type: liftType }),
+        ...(tab === "study" && { subject, focus_score: focusScore }),
+      };
+
+      await supabase.from("sessions").insert(sessionData as any);
+
+      setSuccess(true);
+      setTimeout(() => {
+        router.push("/history");
+      }, 1200);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
     }
+  };
 
-    let notesArr: string[] = [];
-    if (type === "run") {
-      if (distance) notesArr.push(`${distance}km · ${terrain}`);
-    } else if (type === "lift") {
-      if (exercises) notesArr.push(exercises);
-      if (muscles.length) notesArr.push(muscles.join(", "));
-    } else {
-      if (topic) notesArr.push(topic);
-      notesArr.push(`Focus: ${focus}`);
-    }
-    if (notes) notesArr.push(notes);
+  const inputStyle: React.CSSProperties = {
+    width: "100%",
+    padding: "12px 16px",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    border: "1px solid rgba(255,255,255,0.08)",
+    borderRadius: "10px",
+    color: "#fff",
+    fontFamily: "JetBrains Mono, monospace",
+    fontSize: "14px",
+    outline: "none",
+    boxSizing: "border-box",
+  };
 
-    await (sb as any).from("sessions").insert({
-      user_id: user.id,
-      date,
-      type,
-      duration,
-      rpe: effortToRpe(effort ?? "medium"),
-      notes: notesArr.join(" · ") || null,
-    });
-
-    setSaving(false);
-    setSaved(true);
-    setHours("");
-    setMins("");
-    setEffort(null);
-    setNotes("");
-    setDistance("");
-    setExercises("");
-    setMuscles([]);
-    setTopic("");
-    setTimeout(() => setSaved(false), 3000);
-  }
+  const labelStyle: React.CSSProperties = {
+    fontFamily: "JetBrains Mono, monospace",
+    fontSize: "11px",
+    letterSpacing: "0.1em",
+    color: "rgba(255,255,255,0.35)",
+    marginBottom: "8px",
+    display: "block",
+  };
 
   return (
     <div>
-      <PageHeader
-        title="LOG SESSION"
-        subtitle="Record a training or study session"
-      />
+      {/* Page header */}
+      <div style={{ marginBottom: "32px" }}>
+        <h1
+          style={{
+            fontFamily: "JetBrains Mono, monospace",
+            fontSize: "28px",
+            fontWeight: 700,
+            letterSpacing: "0.06em",
+            color: "#fff",
+            margin: 0,
+          }}
+        >
+          LOG SESSION
+        </h1>
+        <p
+          style={{
+            fontFamily: "JetBrains Mono, monospace",
+            fontSize: "13px",
+            color: "rgba(255,255,255,0.35)",
+            marginTop: "6px",
+            letterSpacing: "0.02em",
+          }}
+        >
+          Record a training or study session
+        </p>
+      </div>
 
-      <Card>
-        {/* Type tabs */}
+      {/* Card */}
+      <div
+        style={{
+          backgroundColor: "rgba(255,255,255,0.03)",
+          border: "1px solid rgba(255,255,255,0.07)",
+          borderRadius: "20px",
+          padding: "32px",
+          maxWidth: "860px",
+        }}
+      >
+        {/* Tab switcher */}
         <div
           style={{
             display: "flex",
-            borderBottom: "1px solid var(--border2)",
-            marginBottom: 24,
+            gap: "4px",
+            backgroundColor: "rgba(255,255,255,0.04)",
+            borderRadius: "12px",
+            padding: "4px",
+            marginBottom: "32px",
           }}
         >
-          {(["run", "lift", "study"] as const).map((t) => (
-            <button
-              key={t}
-              onClick={() => setType(t)}
-              style={{
-                flex: 1,
-                padding: 10,
-                textAlign: "center",
-                fontFamily: "var(--mono)",
-                fontSize: 12,
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
-                color: type === t ? "var(--accent)" : "var(--text-muted)",
-                background: type === t ? "var(--accent-dim)" : "none",
-                border: "none",
-                borderRight: "1px solid var(--border2)",
-                cursor: "pointer",
-              }}
-            >
-              {t === "run" ? "🏃 Run" : t === "lift" ? "🏋 Lift" : "📚 Study"}
-            </button>
-          ))}
+          {tabs.map(({ key, label, icon: Icon }) => {
+            const isActive = tab === key;
+            return (
+              <button
+                key={key}
+                onClick={() => setTab(key)}
+                style={{
+                  flex: 1,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "8px",
+                  padding: "11px 16px",
+                  borderRadius: "9px",
+                  border: "none",
+                  cursor: "pointer",
+                  backgroundColor: isActive
+                    ? "rgba(232,255,71,0.1)"
+                    : "transparent",
+                  fontFamily: "JetBrains Mono, monospace",
+                  fontSize: "12px",
+                  fontWeight: isActive ? 700 : 500,
+                  letterSpacing: "0.1em",
+                  color: isActive ? "#E8FF47" : "rgba(255,255,255,0.35)",
+                  transition: "all 0.15s ease",
+                }}
+              >
+                <Icon
+                  size={14}
+                  strokeWidth={isActive ? 2.5 : 1.75}
+                  color={isActive ? "#E8FF47" : "rgba(255,255,255,0.35)"}
+                  style={{
+                    filter: isActive
+                      ? "drop-shadow(0 0 4px rgba(232,255,71,0.6))"
+                      : "none",
+                    transition: "all 0.15s ease",
+                  }}
+                />
+                {label}
+              </button>
+            );
+          })}
         </div>
 
         {/* Date + Duration */}
         <div
           style={{
-            display: "flex",
-            gap: 12,
-            marginBottom: 4,
-            flexWrap: "wrap",
+            display: "grid",
+            gridTemplateColumns: "1fr auto auto",
+            gap: "16px",
+            marginBottom: "24px",
+            alignItems: "end",
           }}
         >
-          <div style={{ flex: "1 1 140px" }}>
-            <Field label="Date">
-              <Input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-              />
-            </Field>
+          <div>
+            <label style={labelStyle}>DATE</label>
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              style={{ ...inputStyle, colorScheme: "dark" }}
+            />
           </div>
-          <div style={{ flex: "0 0 80px" }}>
-            <Field label="Hours">
-              <Input
-                type="number"
-                min={0}
-                max={12}
-                placeholder="0"
-                value={hours}
-                onChange={(e) => setHours(e.target.value)}
-              />
-            </Field>
+          <div>
+            <label style={labelStyle}>HOURS</label>
+            <input
+              type="number"
+              min={0}
+              max={24}
+              value={hours}
+              onChange={(e) => setHours(Number(e.target.value))}
+              style={{ ...inputStyle, width: "90px" }}
+            />
           </div>
-          <div style={{ flex: "0 0 80px" }}>
-            <Field label="Minutes">
-              <Input
-                type="number"
-                min={0}
-                max={59}
-                placeholder="30"
-                value={mins}
-                onChange={(e) => setMins(e.target.value)}
-              />
-            </Field>
+          <div>
+            <label style={labelStyle}>MINUTES</label>
+            <input
+              type="number"
+              min={0}
+              max={59}
+              value={minutes}
+              onChange={(e) => setMinutes(Number(e.target.value))}
+              style={{ ...inputStyle, width: "90px" }}
+            />
           </div>
         </div>
 
         {/* Effort */}
-        <Field label="Effort">
-          <div
-            style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 4 }}
-          >
-            {(["easy", "medium", "hard", "vhard"] as Effort[]).map((e) => (
-              <EffortButton
-                key={e}
-                value={e}
-                label={
-                  e === "vhard"
-                    ? "Very Hard"
-                    : e.charAt(0).toUpperCase() + e.slice(1)
-                }
-                selected={effort === e}
-                onClick={() => setEffort(e)}
-              />
-            ))}
-          </div>
-        </Field>
-
-        {/* Run fields */}
-        {type === "run" && (
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-            <div style={{ flex: "1 1 120px" }}>
-              <Field label="Distance (km)">
-                <Input
-                  type="number"
-                  step={0.1}
-                  placeholder="5.0"
-                  value={distance}
-                  onChange={(e) => setDistance(e.target.value)}
-                />
-              </Field>
-            </div>
-            <div style={{ flex: "1 1 140px" }}>
-              <Field label="Terrain">
-                <Select
-                  value={terrain}
-                  onChange={(e) => setTerrain(e.target.value)}
-                >
-                  {TERRAINS.map((t) => (
-                    <option key={t}>{t}</option>
-                  ))}
-                </Select>
-              </Field>
-            </div>
-          </div>
-        )}
-
-        {/* Lift fields */}
-        {type === "lift" && (
-          <>
-            <Field label="Exercises">
-              <Input
-                placeholder="Squat 3×5, Bench 4×8..."
-                value={exercises}
-                onChange={(e) => setExercises(e.target.value)}
-              />
-            </Field>
-            <Field label="Muscle Groups">
-              <div
+        <div style={{ marginBottom: "24px" }}>
+          <label style={labelStyle}>EFFORT</label>
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+            {effortOptions.map(({ key, label }) => (
+              <button
+                key={key}
+                onClick={() => setEffort(key)}
                 style={{
-                  display: "flex",
-                  flexWrap: "wrap",
-                  gap: 6,
-                  marginTop: 4,
+                  padding: "9px 18px",
+                  borderRadius: "9px",
+                  border: `1px solid ${effort === key ? "#E8FF47" : "rgba(255,255,255,0.1)"}`,
+                  backgroundColor:
+                    effort === key ? "rgba(232,255,71,0.08)" : "transparent",
+                  color: effort === key ? "#E8FF47" : "rgba(255,255,255,0.45)",
+                  fontFamily: "Inter, sans-serif",
+                  fontSize: "13px",
+                  fontWeight: effort === key ? 600 : 400,
+                  cursor: "pointer",
+                  transition: "all 0.15s ease",
                 }}
               >
-                {MUSCLES.map((m) => (
-                  <Chip
-                    key={m}
-                    label={m}
-                    active={muscles.includes(m)}
-                    onClick={() => toggleMuscle(m)}
-                  />
-                ))}
-              </div>
-            </Field>
-          </>
-        )}
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
 
-        {/* Study fields */}
-        {type === "study" && (
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-            <div style={{ flex: "1 1 180px" }}>
-              <Field label="Topic / Subject">
-                <Input
-                  placeholder="Machine Learning, DSA..."
-                  value={topic}
-                  onChange={(e) => setTopic(e.target.value)}
-                />
-              </Field>
+        {/* Run-specific fields */}
+        {tab === "run" && (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: "16px",
+              marginBottom: "24px",
+            }}
+          >
+            <div>
+              <label style={labelStyle}>DISTANCE (KM)</label>
+              <input
+                type="number"
+                step="0.1"
+                min={0}
+                value={distance}
+                onChange={(e) => setDistance(Number(e.target.value))}
+                style={inputStyle}
+              />
             </div>
-            <div style={{ flex: "0 0 140px" }}>
-              <Field label="Focus Quality">
-                <Select
-                  value={focus}
-                  onChange={(e) => setFocus(e.target.value)}
-                >
-                  {["Low", "Medium", "High", "Deep Work"].map((f) => (
-                    <option key={f}>{f}</option>
-                  ))}
-                </Select>
-              </Field>
+            <div>
+              <label style={labelStyle}>TERRAIN</label>
+              <select
+                value={terrain}
+                onChange={(e) => setTerrain(e.target.value)}
+                style={{
+                  ...inputStyle,
+                  cursor: "pointer",
+                  colorScheme: "dark",
+                }}
+              >
+                {terrainOptions.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
         )}
 
-        <Field label="Notes">
-          <Input
-            placeholder="How did it go?"
+        {/* Lift-specific fields */}
+        {tab === "lift" && (
+          <div style={{ marginBottom: "24px" }}>
+            <label style={labelStyle}>SESSION TYPE</label>
+            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+              {liftTypes.map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setLiftType(t)}
+                  style={{
+                    padding: "9px 18px",
+                    borderRadius: "9px",
+                    border: `1px solid ${liftType === t ? "#E8FF47" : "rgba(255,255,255,0.1)"}`,
+                    backgroundColor:
+                      liftType === t ? "rgba(232,255,71,0.08)" : "transparent",
+                    color:
+                      liftType === t ? "#E8FF47" : "rgba(255,255,255,0.45)",
+                    fontFamily: "Inter, sans-serif",
+                    fontSize: "13px",
+                    fontWeight: liftType === t ? 600 : 400,
+                    cursor: "pointer",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Study-specific fields */}
+        {tab === "study" && (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: "16px",
+              marginBottom: "24px",
+            }}
+          >
+            <div>
+              <label style={labelStyle}>SUBJECT</label>
+              <select
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+                style={{
+                  ...inputStyle,
+                  cursor: "pointer",
+                  colorScheme: "dark",
+                }}
+              >
+                {studySubjects.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle}>FOCUS SCORE (1–10)</label>
+              <input
+                type="number"
+                min={1}
+                max={10}
+                value={focusScore}
+                onChange={(e) => setFocusScore(Number(e.target.value))}
+                style={inputStyle}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Notes */}
+        <div style={{ marginBottom: "28px" }}>
+          <label style={labelStyle}>NOTES</label>
+          <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
+            placeholder="How did it go?"
+            rows={3}
+            style={{
+              ...inputStyle,
+              resize: "vertical",
+              fontFamily: "Inter, sans-serif",
+            }}
           />
-        </Field>
+        </div>
 
-        <div
+        {/* Submit */}
+        <button
+          onClick={handleSubmit}
+          disabled={loading || success}
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 16,
-            marginTop: 8,
+            gap: "8px",
+            padding: "13px 28px",
+            backgroundColor: success ? "rgba(232,255,71,0.15)" : "#E8FF47",
+            border: success ? "1px solid #E8FF47" : "none",
+            borderRadius: "10px",
+            color: success ? "#E8FF47" : "#060608",
+            fontFamily: "JetBrains Mono, monospace",
+            fontSize: "13px",
+            fontWeight: 700,
+            letterSpacing: "0.08em",
+            cursor: loading || success ? "default" : "pointer",
+            opacity: loading ? 0.7 : 1,
+            transition: "all 0.2s ease",
           }}
         >
-          <Button onClick={handleSubmit} disabled={saving || (!hours && !mins)}>
-            {saving ? "Saving..." : "Log Session"}
-          </Button>
-          {saved && (
-            <span
-              style={{
-                fontSize: 12,
-                color: "var(--green)",
-                fontFamily: "var(--mono)",
-              }}
-            >
-              ✓ Saved
-            </span>
+          {success ? (
+            <>
+              <CheckCircle size={15} strokeWidth={2.5} />
+              LOGGED
+            </>
+          ) : loading ? (
+            "LOGGING..."
+          ) : (
+            "LOG SESSION"
           )}
-        </div>
-      </Card>
+        </button>
+      </div>
     </div>
   );
 }

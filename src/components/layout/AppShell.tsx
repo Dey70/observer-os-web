@@ -1,380 +1,313 @@
 "use client";
 
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
+import {
+  Activity,
+  Dumbbell,
+  LayoutDashboard,
+  Clock,
+  BarChart2,
+  Target,
+  Bot,
+  User,
+  LogOut,
+  Zap,
+} from "lucide-react";
 
-const NAV = [
-  { path: "/checkin", label: "Check-in" },
-  { path: "/log", label: "Log Session" },
-  { path: "/dashboard", label: "Dashboard" },
-  { path: "/history", label: "History" },
-  { path: "/load", label: "Load" },
-  { path: "/goals", label: "Goals" },
-  { path: "/coach", label: "Coach" },
-  { path: "/profile", label: "Profile" },
+const navItems = [
+  { href: "/checkin", label: "Check-in", icon: Activity },
+  { href: "/log", label: "Log Session", icon: Dumbbell },
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/history", label: "History", icon: Clock },
+  { href: "/load", label: "Load", icon: BarChart2 },
+  { href: "/goals", label: "Goals", icon: Target },
+  { href: "/coach", label: "Coach", icon: Bot },
+  { href: "/profile", label: "Profile", icon: User },
 ];
 
-export default function AppShell({
-  children,
-  userEmail,
-}: {
-  children: React.ReactNode;
-  userEmail: string;
-}) {
+export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const sb = createClient();
-  const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const supabase = createClient();
+  const [email, setEmail] = useState<string | null>(null);
+  const [darkMode, setDarkMode] = useState(true);
 
   useEffect(() => {
-    const saved = localStorage.getItem("theme") as "dark" | "light" | null;
-    if (saved) {
-      setTheme(saved);
-      document.documentElement.setAttribute("data-theme", saved);
-    }
+    supabase.auth.getUser().then(({ data }) => {
+      setEmail(data.user?.email ?? null);
+    });
   }, []);
 
-  function toggleTheme() {
-    const next = theme === "dark" ? "light" : "dark";
-    setTheme(next);
-    document.documentElement.setAttribute("data-theme", next);
-    localStorage.setItem("theme", next);
-  }
+  useEffect(() => {
+    document.documentElement.setAttribute(
+      "data-theme",
+      darkMode ? "dark" : "light",
+    );
+  }, [darkMode]);
 
-  async function signOut() {
-    await sb.auth.signOut();
-    router.push("/auth");
-  }
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    router.push("/auth/login");
+  };
 
   return (
     <div
       style={{
         display: "flex",
-        height: "100vh",
-        overflow: "hidden",
-        background: "var(--bg)",
-        position: "relative",
+        minHeight: "100vh",
+        backgroundColor: "var(--bg, #060608)",
+        color: "#fff",
       }}
     >
-      {/* Extra orb — bottom left */}
-      <div
+      {/* Sidebar */}
+      <aside
         style={{
-          position: "fixed",
-          width: 300,
-          height: 300,
-          borderRadius: "50%",
-          background:
-            "radial-gradient(circle, rgba(0,230,118,0.04) 0%, transparent 65%)",
-          bottom: -80,
-          left: 80,
-          pointerEvents: "none",
-          zIndex: 0,
-          animation: "orbFloat 12s ease-in-out infinite reverse",
-        }}
-      />
-
-      {/* SIDEBAR */}
-      <nav
-        id="sidebar"
-        style={{
-          width: 220,
-          flexShrink: 0,
-          background: "rgba(6,6,8,0.92)",
+          width: "260px",
+          minHeight: "100vh",
+          backgroundColor: "rgba(255,255,255,0.02)",
           borderRight: "1px solid rgba(255,255,255,0.06)",
           display: "flex",
           flexDirection: "column",
-          position: "relative",
-          zIndex: 10,
-          backdropFilter: "blur(20px)",
+          padding: "24px 16px",
+          position: "fixed",
+          top: 0,
+          left: 0,
+          bottom: 0,
+          zIndex: 100,
         }}
       >
-        {/* Header */}
+        {/* Logo */}
         <div
           style={{
-            padding: "22px 18px 16px",
-            borderBottom: "1px solid rgba(255,255,255,0.05)",
+            display: "flex",
+            alignItems: "center",
+            gap: "12px",
+            marginBottom: "8px",
+            padding: "0 8px",
           }}
         >
           <div
             style={{
+              width: "40px",
+              height: "40px",
+              backgroundColor: "#E8FF47",
+              borderRadius: "10px",
               display: "flex",
               alignItems: "center",
-              gap: 10,
-              marginBottom: 10,
+              justifyContent: "center",
+              flexShrink: 0,
             }}
           >
+            <Zap size={20} color="#060608" strokeWidth={2.5} />
+          </div>
+          <div>
             <div
               style={{
-                width: 32,
-                height: 32,
-                borderRadius: 9,
-                background: "var(--accent)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                flexShrink: 0,
-                boxShadow: "0 0 16px rgba(232,255,71,0.3)",
+                fontFamily: "JetBrains Mono, monospace",
+                fontSize: "13px",
+                fontWeight: 700,
+                letterSpacing: "0.12em",
+                color: "#fff",
+                lineHeight: 1,
               }}
             >
-              <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-                <path
-                  d="M1 9 L3.5 9 L5 5 L7 13 L9 2 L11 13 L13 5 L14.5 9 L17 9"
-                  stroke="#000"
-                  strokeWidth="2.2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
+              OBSERVER OS
             </div>
-            <div>
-              <div
-                style={{
-                  fontFamily: "var(--mono)",
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: "var(--accent)",
-                  letterSpacing: "2px",
-                }}
-              >
-                OBSERVER OS
-              </div>
-              <div
-                style={{
-                  fontFamily: "var(--mono)",
-                  fontSize: 8,
-                  color: "rgba(232,255,71,0.3)",
-                  letterSpacing: "1.5px",
-                  marginTop: 1,
-                }}
-              >
-                PERFORMANCE AI
-              </div>
+            <div
+              style={{
+                fontFamily: "JetBrains Mono, monospace",
+                fontSize: "10px",
+                fontWeight: 400,
+                letterSpacing: "0.08em",
+                color: "rgba(255,255,255,0.35)",
+                marginTop: "3px",
+              }}
+            >
+              PERFORMANCE AI
             </div>
           </div>
+        </div>
 
+        {/* Email */}
+        {email && (
           <div
             style={{
-              fontFamily: "var(--mono)",
-              fontSize: 10,
-              color: "rgba(255,255,255,0.25)",
-              marginBottom: 12,
+              padding: "0 8px",
+              marginBottom: "20px",
+              fontFamily: "Inter, sans-serif",
+              fontSize: "12px",
+              color: "rgba(255,255,255,0.3)",
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
             }}
           >
-            {userEmail}
+            {email}
           </div>
+        )}
 
-          {/* Theme toggle */}
-          <div
-            onClick={toggleTheme}
+        {/* Dark mode toggle */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "10px 12px",
+            marginBottom: "24px",
+            borderRadius: "10px",
+            border: "1px solid rgba(255,255,255,0.06)",
+            backgroundColor: "rgba(255,255,255,0.03)",
+          }}
+        >
+          <span
             style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              padding: "7px 10px",
-              background: "rgba(255,255,255,0.03)",
-              border: "1px solid rgba(255,255,255,0.06)",
-              borderRadius: 8,
+              fontFamily: "JetBrains Mono, monospace",
+              fontSize: "11px",
+              letterSpacing: "0.08em",
+              color: "rgba(255,255,255,0.4)",
+            }}
+          >
+            DARK MODE
+          </span>
+          <button
+            onClick={() => setDarkMode(!darkMode)}
+            style={{
+              width: "40px",
+              height: "22px",
+              borderRadius: "11px",
+              border: "none",
               cursor: "pointer",
+              backgroundColor: darkMode ? "#E8FF47" : "rgba(255,255,255,0.15)",
+              position: "relative",
+              transition: "background-color 0.2s ease",
+              flexShrink: 0,
             }}
           >
             <span
               style={{
-                fontSize: 9,
-                color: "rgba(255,255,255,0.3)",
-                letterSpacing: "1px",
-                textTransform: "uppercase",
+                position: "absolute",
+                top: "3px",
+                left: darkMode ? "21px" : "3px",
+                width: "16px",
+                height: "16px",
+                borderRadius: "50%",
+                backgroundColor: darkMode ? "#060608" : "#fff",
+                transition: "left 0.2s ease",
+                display: "block",
               }}
-            >
-              {theme === "dark" ? "Dark Mode" : "Light Mode"}
-            </span>
-            <div
-              style={{
-                width: 28,
-                height: 15,
-                borderRadius: 99,
-                background: "var(--accent)",
-                position: "relative",
-              }}
-            >
-              <div
-                style={{
-                  width: 11,
-                  height: 11,
-                  borderRadius: "50%",
-                  background: "#000",
-                  position: "absolute",
-                  top: 2,
-                  left: theme === "dark" ? 15 : 2,
-                  transition: "left 0.2s",
-                }}
-              />
-            </div>
-          </div>
+            />
+          </button>
         </div>
 
-        {/* Nav items with dots */}
-        <div style={{ flex: 1, padding: "10px 0", overflowY: "auto" }}>
-          {NAV.map((item) => {
-            const active = pathname === item.path;
+        {/* Nav */}
+        <nav
+          style={{
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            gap: "2px",
+          }}
+        >
+          {navItems.map(({ href, label, icon: Icon }) => {
+            const isActive =
+              pathname === href || pathname.startsWith(href + "/");
             return (
               <Link
-                key={item.path}
-                href={item.path}
+                key={href}
+                href={href}
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: 12,
-                  padding: "10px 18px",
-                  fontSize: 12.5,
-                  color: active ? "#F0F0F0" : "rgba(255,255,255,0.3)",
+                  gap: "12px",
+                  padding: "10px 12px",
+                  borderRadius: "10px",
                   textDecoration: "none",
-                  background: active ? "rgba(232,255,71,0.06)" : "none",
-                  transition: "all 0.15s",
+                  backgroundColor: isActive
+                    ? "rgba(232,255,71,0.08)"
+                    : "transparent",
+                  transition: "all 0.15s ease",
                 }}
               >
-                {/* Dot indicator */}
-                <div
+                <Icon
+                  size={16}
+                  strokeWidth={isActive ? 2.5 : 1.75}
+                  color={isActive ? "#E8FF47" : "rgba(255,255,255,0.35)"}
                   style={{
-                    width: 6,
-                    height: 6,
-                    borderRadius: "50%",
                     flexShrink: 0,
-                    background: active
-                      ? "var(--accent)"
-                      : "rgba(255,255,255,0.1)",
-                    boxShadow: active
-                      ? "0 0 8px rgba(232,255,71,0.8), 0 0 16px rgba(232,255,71,0.4)"
+                    filter: isActive
+                      ? "drop-shadow(0 0 6px rgba(232,255,71,0.7))"
                       : "none",
-                    transition: "all 0.2s",
+                    transition: "all 0.15s ease",
                   }}
                 />
-                {item.label}
+                <span
+                  style={{
+                    fontFamily: "JetBrains Mono, monospace",
+                    fontSize: "13px",
+                    fontWeight: isActive ? 600 : 400,
+                    letterSpacing: "0.02em",
+                    color: isActive ? "#E8FF47" : "rgba(255,255,255,0.35)",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  {label}
+                </span>
               </Link>
             );
           })}
-        </div>
+        </nav>
 
-        {/* Footer */}
-        <div
+        {/* Sign out */}
+        <button
+          onClick={handleSignOut}
           style={{
-            padding: "14px 18px",
-            borderTop: "1px solid rgba(255,255,255,0.05)",
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            padding: "10px 12px",
+            borderRadius: "10px",
+            border: "none",
+            background: "transparent",
+            cursor: "pointer",
+            width: "100%",
+            transition: "background-color 0.15s ease",
           }}
+          onMouseEnter={(e) =>
+            (e.currentTarget.style.backgroundColor = "rgba(255,80,80,0.08)")
+          }
+          onMouseLeave={(e) =>
+            (e.currentTarget.style.backgroundColor = "transparent")
+          }
         >
-          <button
-            onClick={signOut}
+          <LogOut size={15} strokeWidth={1.75} color="rgba(255,255,255,0.25)" />
+          <span
             style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              fontSize: 10,
-              color: "rgba(255,255,255,0.2)",
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              letterSpacing: "1px",
-              textTransform: "uppercase",
-              padding: 0,
-              transition: "color 0.15s",
+              fontFamily: "JetBrains Mono, monospace",
+              fontSize: "12px",
+              letterSpacing: "0.05em",
+              color: "rgba(255,255,255,0.25)",
             }}
-            onMouseOver={(e) =>
-              (e.currentTarget.style.color = "rgba(255,255,255,0.45)")
-            }
-            onMouseOut={(e) =>
-              (e.currentTarget.style.color = "rgba(255,255,255,0.2)")
-            }
           >
-            <svg
-              width="12"
-              height="12"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-            >
-              <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" />
-            </svg>
-            Sign Out
-          </button>
-        </div>
-      </nav>
+            SIGN OUT
+          </span>
+        </button>
+      </aside>
 
-      {/* MAIN */}
+      {/* Main content */}
       <main
-        id="main-content"
         style={{
+          marginLeft: "260px",
           flex: 1,
-          overflowY: "auto",
-          padding: "32px 36px",
+          minHeight: "100vh",
+          padding: "40px 48px",
           position: "relative",
-          zIndex: 1,
         }}
       >
-        <div className="animate-fade-in">{children}</div>
+        {children}
       </main>
-
-      {/* MOBILE NAV */}
-      <nav
-        id="mobile-nav"
-        style={{
-          display: "none",
-          position: "fixed",
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: 60,
-          background: "rgba(6,6,8,0.95)",
-          borderTop: "1px solid rgba(255,255,255,0.06)",
-          justifyContent: "space-around",
-          alignItems: "center",
-          zIndex: 100,
-          backdropFilter: "blur(20px)",
-        }}
-      >
-        {NAV.slice(0, 6).map((item) => {
-          const active = pathname === item.path;
-          return (
-            <Link
-              key={item.path}
-              href={item.path}
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                gap: 5,
-                flex: 1,
-                padding: "8px 0",
-                color: active ? "var(--accent)" : "rgba(255,255,255,0.25)",
-                textDecoration: "none",
-                fontSize: 8,
-                letterSpacing: "0.5px",
-                textTransform: "uppercase",
-                transition: "color 0.15s",
-                borderTop: active
-                  ? "1.5px solid var(--accent)"
-                  : "1.5px solid transparent",
-              }}
-            >
-              <div
-                style={{
-                  width: 5,
-                  height: 5,
-                  borderRadius: "50%",
-                  background: active ? "var(--accent)" : "transparent",
-                  boxShadow: active ? "0 0 6px rgba(232,255,71,0.8)" : "none",
-                }}
-              />
-              {item.label.split(" ")[0]}
-            </Link>
-          );
-        })}
-      </nav>
     </div>
   );
 }
