@@ -31,7 +31,7 @@ const METRICS = [
     label: "HRV",
     unit: "ms",
     icon: Zap,
-    color: "#E8FF47",
+    color: "var(--accent)",
     description: "Heart Rate Variability — higher is better",
     goodDirection: "up",
     placeholder: "45",
@@ -43,7 +43,7 @@ const METRICS = [
     label: "Resting HR",
     unit: "bpm",
     icon: Heart,
-    color: "#FF4444",
+    color: "var(--red)",
     description: "Resting Heart Rate — lower is better",
     goodDirection: "down",
     placeholder: "55",
@@ -55,7 +55,7 @@ const METRICS = [
     label: "VO2 Max",
     unit: "ml/kg/min",
     icon: Wind,
-    color: "#00E676",
+    color: "var(--green)",
     description: "Aerobic capacity — higher is better",
     goodDirection: "up",
     placeholder: "45",
@@ -67,7 +67,7 @@ const METRICS = [
     label: "Body Fat",
     unit: "%",
     icon: Percent,
-    color: "#A78BFA",
+    color: "var(--purple)",
     description: "Body fat percentage",
     goodDirection: "down",
     placeholder: "15",
@@ -107,10 +107,10 @@ function MiniChart({
   const isGood = goodDirection === "up" ? delta >= 0 : delta <= 0;
   const trendColor =
     Math.abs(delta) < 0.5
-      ? "rgba(255,255,255,0.3)"
+      ? "var(--text-dim)"
       : isGood
-        ? "#00E676"
-        : "#FF4444";
+        ? "var(--green)"
+        : "var(--red)";
 
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -255,8 +255,8 @@ export default function MetricsPage() {
   const inputStyle: React.CSSProperties = {
     width: "100%",
     padding: "11px 14px",
-    background: "rgba(255,255,255,0.05)",
-    border: "1px solid rgba(255,255,255,0.1)",
+    background: "var(--surface2)",
+    border: "1px solid var(--border)",
     borderRadius: 10,
     color: "var(--text)",
     outline: "none",
@@ -302,8 +302,8 @@ export default function MetricsPage() {
               <div
                 key={key}
                 style={{
-                  background: "rgba(255,255,255,0.04)",
-                  border: "1px solid rgba(255,255,255,0.08)",
+                  background: "var(--surface)",
+                  border: "1px solid var(--border)",
                   borderRadius: 16,
                   padding: 16,
                   position: "relative",
@@ -335,7 +335,7 @@ export default function MetricsPage() {
                   <span
                     style={{
                       fontSize: 10,
-                      color: "rgba(255,255,255,0.4)",
+                      color: "var(--text-muted)",
                       fontFamily: "var(--mono)",
                       textTransform: "uppercase",
                       letterSpacing: "0.1em",
@@ -362,7 +362,7 @@ export default function MetricsPage() {
                     <div
                       style={{
                         fontSize: 10,
-                        color: "rgba(255,255,255,0.3)",
+                        color: "var(--text-dim)",
                         fontFamily: "var(--mono)",
                         marginBottom: 12,
                       }}
@@ -379,7 +379,7 @@ export default function MetricsPage() {
                   <div
                     style={{
                       fontSize: 12,
-                      color: "rgba(255,255,255,0.2)",
+                      color: "var(--text-dim)",
                       fontFamily: "var(--mono)",
                       paddingTop: 4,
                     }}
@@ -416,7 +416,7 @@ export default function MetricsPage() {
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            style={{ ...inputStyle, colorScheme: "dark" }}
+            style={{ ...inputStyle, colorScheme: "var(--color-scheme)" }}
           />
         </div>
 
@@ -438,7 +438,7 @@ export default function MetricsPage() {
                     alignItems: "center",
                     gap: 6,
                     fontSize: 9,
-                    color: "rgba(255,255,255,0.4)",
+                    color: "var(--text-muted)",
                     letterSpacing: "1.5px",
                     textTransform: "uppercase",
                     marginBottom: 6,
@@ -458,9 +458,7 @@ export default function MetricsPage() {
                   }
                   style={{
                     ...inputStyle,
-                    borderColor: vals[key]
-                      ? `${color}40`
-                      : "rgba(255,255,255,0.1)",
+                    borderColor: vals[key] ? color : "var(--border)",
                   }}
                 />
               </div>
@@ -502,7 +500,7 @@ export default function MetricsPage() {
               background: "var(--accent)",
               border: "none",
               borderRadius: 8,
-              color: "#000",
+              color: "var(--bg)",
               fontFamily: "var(--mono)",
               fontSize: 11,
               fontWeight: 700,
@@ -559,10 +557,10 @@ export default function MetricsPage() {
                         padding: "8px 12px",
                         textAlign: "left",
                         fontSize: 9,
-                        color: "rgba(255,255,255,0.3)",
+                        color: "var(--text-dim)",
                         letterSpacing: "1.5px",
                         textTransform: "uppercase",
-                        borderBottom: "1px solid rgba(255,255,255,0.06)",
+                        borderBottom: "1px solid var(--border2)",
                         whiteSpace: "nowrap",
                       }}
                     >
@@ -578,14 +576,14 @@ export default function MetricsPage() {
                     style={{
                       borderBottom:
                         i < logs.length - 1
-                          ? "1px solid rgba(255,255,255,0.04)"
+                          ? "1px solid var(--border2)"
                           : "none",
                     }}
                   >
                     <td
                       style={{
                         padding: "10px 12px",
-                        color: "rgba(255,255,255,0.6)",
+                        color: "var(--text-secondary)",
                       }}
                     >
                       {log.date}
@@ -593,7 +591,7 @@ export default function MetricsPage() {
                     <td
                       style={{
                         padding: "10px 12px",
-                        color: log.hrv ? "#E8FF47" : "rgba(255,255,255,0.2)",
+                        color: log.hrv ? "var(--accent)" : "var(--text-dim)",
                       }}
                     >
                       {log.hrv ?? "—"}
@@ -602,8 +600,8 @@ export default function MetricsPage() {
                       style={{
                         padding: "10px 12px",
                         color: log.resting_hr
-                          ? "#FF4444"
-                          : "rgba(255,255,255,0.2)",
+                          ? "var(--red)"
+                          : "var(--text-dim)",
                       }}
                     >
                       {log.resting_hr ?? "—"}
@@ -611,7 +609,7 @@ export default function MetricsPage() {
                     <td
                       style={{
                         padding: "10px 12px",
-                        color: log.vo2max ? "#00E676" : "rgba(255,255,255,0.2)",
+                        color: log.vo2max ? "var(--green)" : "var(--text-dim)",
                       }}
                     >
                       {log.vo2max ?? "—"}
@@ -620,8 +618,8 @@ export default function MetricsPage() {
                       style={{
                         padding: "10px 12px",
                         color: log.body_fat
-                          ? "#A78BFA"
-                          : "rgba(255,255,255,0.2)",
+                          ? "var(--purple)"
+                          : "var(--text-dim)",
                       }}
                     >
                       {log.body_fat ? `${log.body_fat}%` : "—"}
@@ -629,7 +627,7 @@ export default function MetricsPage() {
                     <td
                       style={{
                         padding: "10px 12px",
-                        color: "rgba(255,255,255,0.4)",
+                        color: "var(--text-muted)",
                         maxWidth: 200,
                         overflow: "hidden",
                         textOverflow: "ellipsis",
@@ -653,7 +651,7 @@ export default function MetricsPage() {
           {[
             {
               metric: "HRV",
-              color: "#E8FF47",
+              color: "var(--accent)",
               ranges: [
                 {
                   label: "Low",
@@ -674,7 +672,7 @@ export default function MetricsPage() {
             },
             {
               metric: "Resting HR",
-              color: "#FF4444",
+              color: "var(--red)",
               ranges: [
                 { label: "Athlete", range: "< 50 bpm", note: "Highly trained" },
                 {
@@ -691,7 +689,7 @@ export default function MetricsPage() {
             },
             {
               metric: "VO2 Max",
-              color: "#00E676",
+              color: "var(--green)",
               ranges: [
                 { label: "Poor", range: "< 35", note: "Below average" },
                 { label: "Good", range: "45–55", note: "Above average" },
@@ -707,8 +705,8 @@ export default function MetricsPage() {
               key={metric}
               style={{
                 padding: "12px 14px",
-                background: "rgba(255,255,255,0.03)",
-                border: "1px solid rgba(255,255,255,0.06)",
+                background: "var(--surface2)",
+                border: "1px solid var(--border)",
                 borderRadius: 10,
               }}
             >
@@ -731,15 +729,13 @@ export default function MetricsPage() {
                       style={{
                         fontSize: 11,
                         fontFamily: "var(--mono)",
-                        color: "rgba(255,255,255,0.7)",
+                        color: "var(--text)",
                         marginBottom: 2,
                       }}
                     >
                       {label}: <span style={{ color }}>{range}</span>
                     </div>
-                    <div
-                      style={{ fontSize: 10, color: "rgba(255,255,255,0.3)" }}
-                    >
+                    <div style={{ fontSize: 10, color: "var(--text-muted)" }}>
                       {note}
                     </div>
                   </div>
