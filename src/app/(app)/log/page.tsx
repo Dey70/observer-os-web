@@ -241,6 +241,14 @@ export default function LogPage() {
     display: "block",
   };
 
+  function fmtDur(v: number): string {
+    const h = Math.floor(v / 60);
+    const m = v % 60;
+    if (h === 0) return `${m}m`;
+    if (m === 0) return `${h}h`;
+    return `${h}h ${m}m`;
+  }
+
   // ── SUCCESS SCREEN ──
   if (loggedSession) {
     const Icon =
@@ -561,7 +569,7 @@ export default function LogPage() {
                       >
                         {pr.metric.includes("load")
                           ? pr.previous
-                          : `${Math.floor(pr.previous / 60)}h ${pr.previous % 60}m`}
+                          : fmtDur(pr.previous)}
                       </span>
                     )}
                     <span
@@ -572,9 +580,7 @@ export default function LogPage() {
                         fontFamily: "var(--mono)",
                       }}
                     >
-                      {pr.metric.includes("load")
-                        ? pr.value
-                        : `${Math.floor(pr.value / 60)}h ${pr.value % 60}m`}
+                      {pr.metric.includes("load") ? pr.value : fmtDur(pr.value)}
                     </span>
                   </div>
                 </div>

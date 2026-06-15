@@ -15,26 +15,29 @@ type PR = {
   date: string;
 };
 
+function fmtDuration(v: number): string {
+  const h = Math.floor(v / 60);
+  const m = v % 60;
+  if (h === 0) return `${m}m`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
+}
+
 const METRIC_META: Record<
   string,
   { label: string; format: (v: number) => string }
 > = {
-  longest_run: {
-    label: "Longest Run",
-    format: (v) => `${Math.floor(v / 60)}h ${v % 60}m`,
-  },
+  longest_run: { label: "Longest Run", format: fmtDuration },
   highest_load_run: { label: "Highest Run Load", format: (v) => `${v} pts` },
-  longest_lift: {
-    label: "Longest Lift Session",
-    format: (v) => `${Math.floor(v / 60)}h ${v % 60}m`,
-  },
+  longest_lift: { label: "Longest Lift Session", format: fmtDuration },
   highest_load_lift: { label: "Highest Lift Load", format: (v) => `${v} pts` },
-  longest_study: {
-    label: "Longest Study Session",
-    format: (v) => `${Math.floor(v / 60)}h ${v % 60}m`,
-  },
+  longest_study: { label: "Longest Study Session", format: fmtDuration },
   highest_focus_load: {
     label: "Highest Focus Load",
+    format: (v) => `${v} pts`,
+  },
+  highest_load_study: {
+    label: "Highest Study Load",
     format: (v) => `${v} pts`,
   },
 };
