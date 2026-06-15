@@ -26,26 +26,111 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--sans); }
 
+/* ── SCROLLBAR ── */
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: #444; }
 
+/* ── RANGE SLIDER ── */
 input[type=range] {
   -webkit-appearance: none; appearance: none;
-  height: 3px; background: var(--border2); outline: none; cursor: pointer;
-  border-radius: 0;
+  height: 3px; background: var(--border2); outline: none; cursor: pointer; border-radius: 0;
 }
 input[type=range]::-webkit-slider-thumb {
   -webkit-appearance: none; width: 14px; height: 14px;
   background: var(--accent); border-radius: 0; cursor: pointer;
+  transition: transform 0.1s;
 }
+input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.2); }
 input[type=range]::-moz-range-thumb {
   width: 14px; height: 14px; background: var(--accent);
   border-radius: 0; border: none; cursor: pointer;
 }
 
-@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes spin { to { transform: rotate(360deg); } }
+/* ── ANIMATIONS ── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeInFast {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes spin   { to { transform: rotate(360deg); } }
 @keyframes bounce { 0%,80%,100% { transform: scale(0.6); } 40% { transform: scale(1); } }
+@keyframes pulse  { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+@keyframes countUp {
+  from { opacity: 0; transform: scale(0.8); }
+  to   { opacity: 1; transform: scale(1); }
+}
 
-.animate-fade-in { animation: fadeIn 0.2s ease-out; }
+.animate-fade-in     { animation: fadeIn 0.25s ease-out; }
+.animate-fade-in-fast { animation: fadeInFast 0.15s ease-out; }
+.animate-count-up    { animation: countUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
+
+/* ── SKELETON LOADING ── */
+.skeleton {
+  background: linear-gradient(90deg, var(--surface) 25%, var(--surface2) 50%, var(--surface) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 2px;
+}
+
+/* ── CARD HOVER ── */
+.card-hover {
+  transition: border-color 0.2s, transform 0.15s;
+}
+.card-hover:hover {
+  border-color: var(--border2) !important;
+  transform: translateY(-1px);
+}
+
+/* ── BUTTON PRESS ── */
+button:active:not(:disabled) { transform: scale(0.97); }
+
+/* ── INPUT FOCUS GLOW ── */
+input:focus, textarea:focus, select:focus {
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+/* ── LINK HOVER ── */
+a { transition: color 0.15s, background 0.15s; }
+
+/* ── SESSION ITEM HOVER ── */
+.session-item {
+  transition: background 0.15s, border-color 0.15s;
+}
+.session-item:hover {
+  background: var(--surface) !important;
+  border-color: var(--border) !important;
+}
+
+/* ── STAT CARD HOVER ── */
+.stat-card-hover {
+  transition: border-color 0.2s, box-shadow 0.2s;
+  cursor: default;
+}
+.stat-card-hover:hover {
+  border-color: var(--border) !important;
+  box-shadow: 0 0 0 1px var(--border);
+}
+
+/* ── NAV ITEM HOVER ── */
+.nav-item-hover {
+  transition: color 0.15s, background 0.15s, border-left-color 0.15s;
+}
+.nav-item-hover:hover {
+  color: var(--text) !important;
+  background: var(--surface2) !important;
+}
+
+/* ── MOBILE RESPONSIVE ── */
+@media (max-width: 768px) {
+  .hide-mobile { display: none !important; }
+  .main-content { padding: 20px 16px 80px !important; }
+}

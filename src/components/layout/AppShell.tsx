@@ -3,16 +3,27 @@
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
+import {
+  Sun,
+  Zap,
+  LayoutDashboard,
+  ClipboardList,
+  Activity,
+  Target,
+  Bot,
+  User,
+  LogOut,
+} from "lucide-react";
 
 const NAV = [
-  { path: "/checkin", icon: "☀", label: "Check-in" },
-  { path: "/log", icon: "⚡", label: "Log Session" },
-  { path: "/dashboard", icon: "📊", label: "Dashboard" },
-  { path: "/history", icon: "📋", label: "History" },
-  { path: "/load", icon: "⚡", label: "Load" },
-  { path: "/goals", icon: "🎯", label: "Goals" },
-  { path: "/coach", icon: "🤖", label: "Coach" },
-  { path: "/profile", icon: "👤", label: "Profile" },
+  { path: "/checkin", icon: Sun, label: "Check-in" },
+  { path: "/log", icon: Zap, label: "Log Session" },
+  { path: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
+  { path: "/history", icon: ClipboardList, label: "History" },
+  { path: "/load", icon: Activity, label: "Load" },
+  { path: "/goals", icon: Target, label: "Goals" },
+  { path: "/coach", icon: Bot, label: "Coach" },
+  { path: "/profile", icon: User, label: "Profile" },
 ];
 
 export default function AppShell({
@@ -85,9 +96,10 @@ export default function AppShell({
           </div>
         </div>
 
-        <div style={{ flex: 1, padding: "12px 0" }}>
+        <div style={{ flex: 1, padding: "12px 0", overflowY: "auto" }}>
           {NAV.map((item) => {
             const active = pathname === item.path;
+            const Icon = item.icon;
             return (
               <Link
                 key={item.path}
@@ -96,18 +108,16 @@ export default function AppShell({
                   display: "flex",
                   alignItems: "center",
                   gap: 12,
-                  padding: "11px 20px",
+                  padding: "10px 20px",
                   fontSize: 13,
                   color: active ? "var(--accent)" : "var(--text-muted)",
                   textDecoration: "none",
                   borderLeft: `2px solid ${active ? "var(--accent)" : "transparent"}`,
                   background: active ? "var(--accent-dim)" : "none",
-                  transition: "all 0.1s",
+                  transition: "all 0.15s",
                 }}
               >
-                <span style={{ fontSize: 16, width: 20, textAlign: "center" }}>
-                  {item.icon}
-                </span>
+                <Icon size={15} strokeWidth={active ? 2.5 : 1.8} />
                 {item.label}
               </Link>
             );
@@ -120,6 +130,9 @@ export default function AppShell({
           <button
             onClick={signOut}
             style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
               fontSize: 11,
               color: "var(--text-muted)",
               background: "none",
@@ -128,8 +141,10 @@ export default function AppShell({
               letterSpacing: "0.05em",
               textTransform: "uppercase",
               padding: "6px 0",
+              transition: "color 0.15s",
             }}
           >
+            <LogOut size={13} />
             Sign Out
           </button>
         </div>
@@ -140,7 +155,7 @@ export default function AppShell({
         id="main-content"
         style={{ flex: 1, overflowY: "auto", padding: "32px 36px" }}
       >
-        {children}
+        <div style={{ animation: "fadeIn 0.2s ease-out" }}>{children}</div>
       </main>
 
       {/* MOBILE NAV */}
@@ -162,6 +177,7 @@ export default function AppShell({
       >
         {NAV.map((item) => {
           const active = pathname === item.path;
+          const Icon = item.icon;
           return (
             <Link
               key={item.path}
@@ -178,9 +194,10 @@ export default function AppShell({
                 fontSize: 9,
                 letterSpacing: "0.05em",
                 textTransform: "uppercase",
+                transition: "color 0.15s",
               }}
             >
-              <span style={{ fontSize: 18 }}>{item.icon}</span>
+              <Icon size={18} strokeWidth={active ? 2.5 : 1.8} />
               {item.label.split(" ")[0]}
             </Link>
           );
@@ -193,6 +210,7 @@ export default function AppShell({
           #mobile-nav { display: flex !important; }
           #main-content { padding: 20px 16px 80px !important; }
         }
+        a:hover { color: var(--text) !important; background: var(--surface2) !important; }
       `}</style>
     </div>
   );

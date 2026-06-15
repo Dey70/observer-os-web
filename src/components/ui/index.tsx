@@ -6,13 +6,16 @@ export function Card({
   children,
   style,
   accent,
+  hover,
 }: {
   children: ReactNode;
   style?: CSSProperties;
   accent?: string;
+  hover?: boolean;
 }) {
   return (
     <div
+      className={hover ? "card-hover" : ""}
       style={{
         background: "var(--surface)",
         border: `1px solid ${accent ?? "var(--border)"}`,
@@ -51,6 +54,7 @@ export function PageHeader({
             fontSize: 18,
             fontWeight: 700,
             color: "var(--text)",
+            letterSpacing: "0.02em",
           }}
         >
           {title}
@@ -95,6 +99,7 @@ export function StatCard({
 }) {
   return (
     <div
+      className="stat-card-hover"
       style={{
         background: "var(--surface)",
         border: "1px solid var(--border)",
@@ -102,6 +107,7 @@ export function StatCard({
       }}
     >
       <div
+        className="animate-count-up"
         style={{
           fontFamily: "var(--mono)",
           fontSize: 26,
@@ -169,6 +175,7 @@ export function Input({
         outline: "none",
         fontFamily: "var(--mono)",
         fontSize: 13,
+        transition: "border-color 0.15s",
         ...style,
       }}
     />
@@ -193,6 +200,7 @@ export function Select({
         fontFamily: "var(--mono)",
         fontSize: 13,
         cursor: "pointer",
+        transition: "border-color 0.15s",
         ...style,
       }}
     >
@@ -235,7 +243,7 @@ export function Button({
         border: "none",
         cursor: disabled ? "not-allowed" : "pointer",
         opacity: disabled ? 0.4 : 1,
-        transition: "opacity 0.15s",
+        transition: "opacity 0.15s, transform 0.1s",
         fontFamily: "var(--sans)",
         ...styles[variant],
         ...style,
@@ -359,6 +367,7 @@ export function BarChart({
             whiteSpace: "nowrap",
             pointerEvents: "none",
             zIndex: 10,
+            animation: "fadeInFast 0.1s ease-out",
           }}
         >
           {tooltip.label}: <strong>{tooltip.value}</strong>
@@ -432,6 +441,67 @@ export function Spinner({ size = 14 }: { size?: number }) {
         display: "inline-block",
       }}
     />
+  );
+}
+
+export function SkeletonCard({ rows = 3 }: { rows?: number }) {
+  return (
+    <div
+      style={{
+        background: "var(--surface)",
+        border: "1px solid var(--border)",
+        padding: 20,
+        marginBottom: 16,
+      }}
+    >
+      {Array.from({ length: rows }).map((_, i) => (
+        <div
+          key={i}
+          className="skeleton"
+          style={{
+            height: i === 0 ? 28 : 14,
+            width: i === 0 ? "40%" : `${60 + Math.random() * 30}%`,
+            marginBottom: i === rows - 1 ? 0 : 12,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+export function SkeletonGrid({
+  cols = 4,
+  rows = 1,
+}: {
+  cols?: number;
+  rows?: number;
+}) {
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: `repeat(${cols}, 1fr)`,
+        gap: 12,
+        marginBottom: 16,
+      }}
+    >
+      {Array.from({ length: cols * rows }).map((_, i) => (
+        <div
+          key={i}
+          style={{
+            background: "var(--surface)",
+            border: "1px solid var(--border)",
+            padding: 16,
+          }}
+        >
+          <div
+            className="skeleton"
+            style={{ height: 28, width: "60%", marginBottom: 8 }}
+          />
+          <div className="skeleton" style={{ height: 10, width: "80%" }} />
+        </div>
+      ))}
+    </div>
   );
 }
 
