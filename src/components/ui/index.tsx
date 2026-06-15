@@ -7,22 +7,44 @@ export function Card({
   style,
   accent,
   hover,
+  glass,
 }: {
   children: ReactNode;
   style?: CSSProperties;
   accent?: string;
   hover?: boolean;
+  glass?: boolean;
 }) {
   return (
     <div
-      className={hover ? "card-hover" : ""}
+      className={glass ? "glass" : ""}
       style={{
-        background: "var(--surface)",
-        border: `1px solid ${accent ?? "var(--border)"}`,
+        background: glass ? undefined : "var(--surface)",
+        border: glass ? undefined : `1px solid ${accent ?? "var(--border)"}`,
+        borderRadius: "var(--radius-lg)",
         padding: 20,
         marginBottom: 16,
+        position: "relative",
+        overflow: "hidden",
+        transition: hover ? "transform 0.15s, border-color 0.15s" : undefined,
         ...style,
       }}
+      onMouseOver={
+        hover
+          ? (e) => {
+              (e.currentTarget as HTMLDivElement).style.transform =
+                "translateY(-1px)";
+            }
+          : undefined
+      }
+      onMouseOut={
+        hover
+          ? (e) => {
+              (e.currentTarget as HTMLDivElement).style.transform =
+                "translateY(0)";
+            }
+          : undefined
+      }
     >
       {children}
     </div>
@@ -50,18 +72,22 @@ export function PageHeader({
       <div>
         <div
           style={{
-            fontFamily: "var(--mono)",
-            fontSize: 18,
+            fontSize: 20,
             fontWeight: 700,
             color: "var(--text)",
-            letterSpacing: "0.02em",
+            letterSpacing: "0.3px",
           }}
         >
           {title}
         </div>
         {subtitle && (
           <div
-            style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}
+            style={{
+              fontSize: 11,
+              color: "var(--text-muted)",
+              marginTop: 4,
+              fontFamily: "var(--mono)",
+            }}
           >
             {subtitle}
           </div>
@@ -76,11 +102,12 @@ export function SectionLabel({ children }: { children: ReactNode }) {
   return (
     <div
       style={{
-        fontSize: 10,
+        fontSize: 9,
         color: "var(--text-muted)",
-        letterSpacing: "0.12em",
+        letterSpacing: "2px",
         textTransform: "uppercase",
-        marginBottom: 10,
+        marginBottom: 12,
+        fontFamily: "var(--mono)",
       }}
     >
       {children}
@@ -99,14 +126,14 @@ export function StatCard({
 }) {
   return (
     <div
-      className="stat-card-hover"
       style={{
-        background: "var(--surface)",
+        background: "rgba(255,255,255,0.02)",
         border: "1px solid var(--border)",
+        borderRadius: "var(--radius-md)",
         padding: 16,
-        borderTop: `2px solid ${color ?? "var(--border)"}`,
         position: "relative",
         overflow: "hidden",
+        transition: "border-color 0.2s",
       }}
     >
       <div
@@ -115,32 +142,30 @@ export function StatCard({
           top: 0,
           left: 0,
           right: 0,
-          height: 40,
-          background: color ? `${color}08` : "transparent",
-          pointerEvents: "none",
+          height: 2,
+          background: color ?? "var(--border)",
+          borderRadius: "12px 12px 0 0",
         }}
       />
       <div
-        className="animate-count-up"
         style={{
           fontFamily: "var(--mono)",
           fontSize: 26,
           fontWeight: 700,
           color: color ?? "var(--text)",
           lineHeight: 1,
-          position: "relative",
+          marginTop: 4,
         }}
       >
         {value}
       </div>
       <div
         style={{
-          fontSize: 10,
+          fontSize: 9,
           color: "var(--text-muted)",
-          letterSpacing: "0.1em",
+          letterSpacing: "1.5px",
           textTransform: "uppercase",
           marginTop: 6,
-          position: "relative",
         }}
       >
         {label}
@@ -161,11 +186,12 @@ export function Field({
       <label
         style={{
           display: "block",
-          fontSize: 10,
+          fontSize: 9,
           color: "var(--text-muted)",
-          letterSpacing: "0.1em",
+          letterSpacing: "1.5px",
           textTransform: "uppercase",
           marginBottom: 6,
+          fontFamily: "var(--mono)",
         }}
       >
         {label}
@@ -184,14 +210,15 @@ export function Input({
       {...props}
       style={{
         width: "100%",
-        padding: "9px 12px",
-        background: "var(--bg)",
-        border: "1px solid var(--border2)",
+        padding: "10px 14px",
+        background: "rgba(255,255,255,0.03)",
+        border: "1px solid var(--border)",
+        borderRadius: "var(--radius-sm)",
         color: "var(--text)",
         outline: "none",
         fontFamily: "var(--mono)",
         fontSize: 13,
-        transition: "border-color 0.15s",
+        transition: "border-color 0.15s, box-shadow 0.15s",
         ...style,
       }}
     />
@@ -208,9 +235,10 @@ export function Select({
       {...props}
       style={{
         width: "100%",
-        padding: "9px 12px",
-        background: "var(--bg)",
-        border: "1px solid var(--border2)",
+        padding: "10px 14px",
+        background: "rgba(255,255,255,0.03)",
+        border: "1px solid var(--border)",
+        borderRadius: "var(--radius-sm)",
         color: "var(--text)",
         outline: "none",
         fontFamily: "var(--mono)",
@@ -235,16 +263,21 @@ export function Button({
   variant?: "primary" | "secondary" | "danger";
 }) {
   const styles: Record<string, CSSProperties> = {
-    primary: { background: "var(--accent)", color: "#000", fontWeight: 600 },
+    primary: {
+      background: "var(--accent)",
+      color: "#000",
+      fontWeight: 700,
+      boxShadow: "0 0 20px rgba(232,255,71,0.15)",
+    },
     secondary: {
-      background: "none",
+      background: "rgba(255,255,255,0.03)",
       color: "var(--text-muted)",
-      border: "1px solid var(--border2)",
+      border: "1px solid var(--border)",
     },
     danger: {
-      background: "none",
+      background: "rgba(255,68,68,0.08)",
       color: "var(--red)",
-      border: "1px solid var(--red)",
+      border: "1px solid rgba(255,68,68,0.2)",
     },
   };
   return (
@@ -252,15 +285,17 @@ export function Button({
       {...props}
       disabled={disabled}
       style={{
-        padding: "10px 20px",
-        fontSize: 12,
-        letterSpacing: "0.06em",
+        padding: "11px 22px",
+        fontSize: 11,
+        letterSpacing: "1.5px",
         textTransform: "uppercase",
         border: "none",
+        borderRadius: "var(--radius-sm)",
         cursor: disabled ? "not-allowed" : "pointer",
         opacity: disabled ? 0.4 : 1,
-        transition: "opacity 0.15s, transform 0.1s",
+        transition: "opacity 0.15s, transform 0.1s, box-shadow 0.15s",
         fontFamily: "var(--sans)",
+        fontWeight: 600,
         ...styles[variant],
         ...style,
       }}
@@ -284,12 +319,13 @@ export function Chip({
       onClick={onClick}
       style={{
         padding: "5px 12px",
-        border: `1px solid ${active ? "var(--accent)" : "var(--border2)"}`,
+        border: `1px solid ${active ? "var(--accent)" : "var(--border)"}`,
+        borderRadius: "var(--radius-sm)",
         fontSize: 11,
         color: active ? "var(--accent)" : "var(--text-muted)",
-        background: active ? "var(--accent-dim)" : "none",
+        background: active ? "var(--accent-dim)" : "rgba(255,255,255,0.02)",
         cursor: "pointer",
-        letterSpacing: "0.04em",
+        letterSpacing: "0.5px",
         transition: "all 0.15s",
       }}
     >
@@ -334,14 +370,15 @@ export function EffortButton({
       onClick={onClick}
       style={{
         padding: "8px 16px",
-        border: `1px solid ${selected ? c.border : "var(--border2)"}`,
-        fontSize: 12,
+        border: `1px solid ${selected ? c.border : "var(--border)"}`,
+        borderRadius: "var(--radius-sm)",
+        fontSize: 11,
         fontFamily: "var(--mono)",
         color: selected ? c.color : "var(--text-muted)",
-        background: selected ? c.bg : "none",
+        background: selected ? c.bg : "rgba(255,255,255,0.02)",
         cursor: "pointer",
         transition: "all 0.15s",
-        letterSpacing: "0.05em",
+        letterSpacing: "0.5px",
       }}
     >
       {label}
@@ -376,6 +413,7 @@ export function BarChart({
             transform: "translateX(-50%)",
             background: "var(--surface2)",
             border: "1px solid var(--border)",
+            borderRadius: "var(--radius-sm)",
             padding: "4px 10px",
             fontFamily: "var(--mono)",
             fontSize: 11,
@@ -421,7 +459,8 @@ export function BarChart({
                   width: "100%",
                   height: `${Math.max(2, (d.value / max) * 100)}%`,
                   background: tooltip?.index === i ? "var(--text)" : color,
-                  opacity: tooltip?.index === i ? 1 : 0.75,
+                  borderRadius: "3px 3px 0 0",
+                  opacity: tooltip?.index === i ? 1 : 0.7,
                   transition: "all 0.15s",
                   cursor: "pointer",
                 }}
@@ -450,7 +489,7 @@ export function Spinner({ size = 14 }: { size?: number }) {
       style={{
         width: size,
         height: size,
-        border: `2px solid var(--border2)`,
+        border: `2px solid var(--border)`,
         borderTopColor: "var(--accent)",
         borderRadius: "50%",
         animation: "spin 0.6s linear infinite",
@@ -466,6 +505,7 @@ export function SkeletonCard({ rows = 3 }: { rows?: number }) {
       style={{
         background: "var(--surface)",
         border: "1px solid var(--border)",
+        borderRadius: "var(--radius-lg)",
         padding: 20,
         marginBottom: 16,
       }}
@@ -475,7 +515,7 @@ export function SkeletonCard({ rows = 3 }: { rows?: number }) {
           key={i}
           className="skeleton"
           style={{
-            height: i === 0 ? 28 : 14,
+            height: i === 0 ? 24 : 12,
             width: i === 0 ? "40%" : `${60 + Math.random() * 30}%`,
             marginBottom: i === rows - 1 ? 0 : 12,
           }}
@@ -485,13 +525,7 @@ export function SkeletonCard({ rows = 3 }: { rows?: number }) {
   );
 }
 
-export function SkeletonGrid({
-  cols = 4,
-  rows = 1,
-}: {
-  cols?: number;
-  rows?: number;
-}) {
+export function SkeletonGrid({ cols = 4 }: { cols?: number }) {
   return (
     <div
       style={{
@@ -501,18 +535,19 @@ export function SkeletonGrid({
         marginBottom: 16,
       }}
     >
-      {Array.from({ length: cols * rows }).map((_, i) => (
+      {Array.from({ length: cols }).map((_, i) => (
         <div
           key={i}
           style={{
             background: "var(--surface)",
             border: "1px solid var(--border)",
+            borderRadius: "var(--radius-md)",
             padding: 16,
           }}
         >
           <div
             className="skeleton"
-            style={{ height: 28, width: "60%", marginBottom: 8 }}
+            style={{ height: 24, width: "60%", marginBottom: 8 }}
           />
           <div className="skeleton" style={{ height: 10, width: "80%" }} />
         </div>
@@ -525,11 +560,13 @@ export function EmptyState({ message }: { message: string }) {
   return (
     <div
       style={{
-        padding: "40px 20px",
+        padding: "48px 20px",
         textAlign: "center",
         color: "var(--text-dim)",
         fontSize: 13,
         border: "1px dashed var(--border)",
+        borderRadius: "var(--radius-md)",
+        fontFamily: "var(--mono)",
       }}
     >
       {message}
@@ -550,12 +587,14 @@ export function Badge({
         display: "inline-flex",
         alignItems: "center",
         gap: 5,
-        padding: "3px 8px",
-        border: `1px solid ${color}`,
+        padding: "4px 10px",
+        borderRadius: 6,
+        border: `1px solid ${color}20`,
+        background: `${color}10`,
         fontFamily: "var(--mono)",
         fontSize: 10,
         color,
-        letterSpacing: "0.1em",
+        letterSpacing: "1px",
         textTransform: "uppercase",
       }}
     >
@@ -586,6 +625,77 @@ export function TypingDots() {
           }}
         />
       ))}
+    </div>
+  );
+}
+
+export function NudgeCard({ children }: { children: ReactNode }) {
+  return (
+    <div
+      style={{
+        background: "rgba(232,255,71,0.03)",
+        border: "1px solid rgba(232,255,71,0.1)",
+        borderRadius: "var(--radius-md)",
+        padding: "14px 16px",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          marginBottom: 8,
+        }}
+      >
+        <div
+          style={{
+            width: 18,
+            height: 18,
+            borderRadius: 5,
+            background: "rgba(232,255,71,0.1)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+          }}
+        >
+          <svg
+            width="10"
+            height="10"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="var(--accent)"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+          >
+            <circle cx="12" cy="12" r="10" />
+            <path d="M12 16v-4M12 8h.01" />
+          </svg>
+        </div>
+        <div
+          style={{
+            fontSize: 9,
+            fontWeight: 700,
+            color: "var(--accent)",
+            letterSpacing: "2px",
+            textTransform: "uppercase",
+            fontFamily: "var(--mono)",
+          }}
+        >
+          Coach Insight
+        </div>
+      </div>
+      <div
+        style={{
+          fontFamily: "var(--soft)",
+          fontSize: 13,
+          color: "var(--text-muted)",
+          lineHeight: 1.7,
+          fontWeight: 300,
+        }}
+      >
+        {children}
+      </div>
     </div>
   );
 }

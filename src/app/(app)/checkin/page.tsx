@@ -3,7 +3,14 @@
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { calcReadiness } from "@/lib/utils";
-import { Card, PageHeader, Button, Field, Input } from "@/components/ui";
+import {
+  Card,
+  PageHeader,
+  Button,
+  Field,
+  Input,
+  NudgeCard,
+} from "@/components/ui";
 
 const SLIDERS = [
   { key: "sleep_quality", label: "Sleep Quality", min: 1, max: 10 },
@@ -14,6 +21,14 @@ const SLIDERS = [
 ] as const;
 
 type SliderKey = (typeof SLIDERS)[number]["key"];
+
+const SLIDER_COLORS: Record<SliderKey, string> = {
+  sleep_quality: "var(--accent)",
+  soreness: "var(--red)",
+  fatigue: "var(--yellow)",
+  mood: "var(--green)",
+  energy: "var(--purple)",
+};
 
 const DEFAULT_VALS: Record<SliderKey, number> = {
   sleep_quality: 7,
@@ -129,138 +144,181 @@ export default function CheckinPage() {
 
   return (
     <div>
-      <PageHeader title="DAILY CHECK-IN" subtitle={todayLabel} />
+      <PageHeader title="Daily Check-in" subtitle={todayLabel} />
 
-      <Card accent={readiness.color}>
-        <div style={{ textAlign: "center", padding: "24px 0 20px" }}>
-          <div
-            style={{
-              fontFamily: "var(--mono)",
-              fontSize: 96,
-              fontWeight: 700,
-              lineHeight: 1,
-              color: readiness.color,
-              transition: "color 0.3s",
-            }}
-          >
-            {readiness.score.toFixed(1)}
+      {/* Readiness Card — glass style */}
+      <div className="glass" style={{ padding: 24, marginBottom: 16 }}>
+        {/* Ambient glow */}
+        <div
+          style={{
+            position: "absolute",
+            width: 200,
+            height: 200,
+            borderRadius: "50%",
+            background: `radial-gradient(circle, ${readiness.color}15 0%, transparent 70%)`,
+            top: -60,
+            right: -40,
+            pointerEvents: "none",
+          }}
+        />
+
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+            marginBottom: 20,
+          }}
+        >
+          <div>
+            <div
+              style={{
+                fontFamily: "var(--mono)",
+                fontSize: 80,
+                fontWeight: 700,
+                color: readiness.color,
+                lineHeight: 1,
+                transition: "color 0.3s",
+              }}
+            >
+              {readiness.score.toFixed(1)}
+            </div>
+            <div
+              style={{
+                fontSize: 9,
+                color: "var(--text-muted)",
+                letterSpacing: "2.5px",
+                textTransform: "uppercase",
+                marginTop: 4,
+                fontFamily: "var(--mono)",
+              }}
+            >
+              Readiness Score
+            </div>
+            <div
+              style={{
+                fontFamily: "var(--mono)",
+                fontSize: 11,
+                color: readiness.color,
+                letterSpacing: "1px",
+                marginTop: 3,
+              }}
+            >
+              {readiness.label}
+            </div>
           </div>
           <div
             style={{
-              fontSize: 11,
-              letterSpacing: "0.2em",
+              display: "inline-flex",
+              padding: "5px 12px",
+              borderRadius: 8,
+              background: `${readiness.color}10`,
+              border: `1px solid ${readiness.color}25`,
+              fontFamily: "var(--mono)",
+              fontSize: 10,
+              color: readiness.color,
+              letterSpacing: "1px",
               textTransform: "uppercase",
-              color: "var(--text-muted)",
               marginTop: 8,
             }}
           >
-            Readiness Score
-          </div>
-          <div
-            style={{
-              fontFamily: "var(--mono)",
-              fontSize: 13,
-              marginTop: 4,
-              letterSpacing: "0.08em",
-              color: readiness.color,
-            }}
-          >
-            {readiness.label}
+            {readiness.level}
           </div>
         </div>
 
-        <div style={{ marginBottom: 8 }}>
+        {/* Sleep Hours */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 14,
+            marginBottom: 14,
+          }}
+        >
+          <span
+            style={{
+              fontSize: 9,
+              color: "var(--text-muted)",
+              width: 88,
+              textTransform: "uppercase",
+              letterSpacing: "0.8px",
+              fontFamily: "var(--mono)",
+            }}
+          >
+            Sleep Hours
+          </span>
+          <input
+            type="range"
+            min={0}
+            max={12}
+            step={0.5}
+            value={sleepHours}
+            onChange={(e) => setSleepHours(parseFloat(e.target.value))}
+            style={{ flex: 1, accentColor: "var(--accent)" }}
+          />
+          <span
+            style={{
+              fontFamily: "var(--mono)",
+              fontSize: 13,
+              fontWeight: 700,
+              width: 24,
+              textAlign: "right",
+              color: "var(--accent)",
+            }}
+          >
+            {sleepHours}
+          </span>
+        </div>
+
+        {SLIDERS.map((slider) => (
           <div
+            key={slider.key}
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 16,
-              marginBottom: 16,
+              gap: 14,
+              marginBottom: 14,
             }}
           >
             <span
               style={{
-                fontSize: 11,
+                fontSize: 9,
                 color: "var(--text-muted)",
-                width: 110,
-                flexShrink: 0,
+                width: 88,
                 textTransform: "uppercase",
-                letterSpacing: "0.06em",
+                letterSpacing: "0.8px",
+                fontFamily: "var(--mono)",
               }}
             >
-              Sleep Hours
+              {slider.label}
             </span>
             <input
               type="range"
-              min={0}
-              max={12}
-              step={0.5}
-              value={sleepHours}
-              onChange={(e) => setSleepHours(parseFloat(e.target.value))}
-              style={{ flex: 1 }}
+              min={slider.min}
+              max={slider.max}
+              value={vals[slider.key]}
+              onChange={(e) =>
+                setVals((prev) => ({
+                  ...prev,
+                  [slider.key]: parseInt(e.target.value),
+                }))
+              }
+              style={{ flex: 1, accentColor: SLIDER_COLORS[slider.key] }}
             />
             <span
               style={{
                 fontFamily: "var(--mono)",
-                fontSize: 14,
+                fontSize: 13,
                 fontWeight: 700,
-                width: 36,
+                width: 24,
                 textAlign: "right",
+                color: SLIDER_COLORS[slider.key],
               }}
             >
-              {sleepHours}
+              {vals[slider.key]}
             </span>
           </div>
-
-          {SLIDERS.map((slider) => (
-            <div
-              key={slider.key}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 16,
-                marginBottom: 16,
-              }}
-            >
-              <span
-                style={{
-                  fontSize: 11,
-                  color: "var(--text-muted)",
-                  width: 110,
-                  flexShrink: 0,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.06em",
-                }}
-              >
-                {slider.label}
-              </span>
-              <input
-                type="range"
-                min={slider.min}
-                max={slider.max}
-                value={vals[slider.key]}
-                onChange={(e) =>
-                  setVals((prev) => ({
-                    ...prev,
-                    [slider.key]: parseInt(e.target.value),
-                  }))
-                }
-                style={{ flex: 1 }}
-              />
-              <span
-                style={{
-                  fontFamily: "var(--mono)",
-                  fontSize: 14,
-                  fontWeight: 700,
-                  width: 36,
-                  textAlign: "right",
-                }}
-              >
-                {vals[slider.key]}
-              </span>
-            </div>
-          ))}
-        </div>
+        ))}
 
         <Field label="Notes (optional)">
           <Input
@@ -288,35 +346,20 @@ export default function CheckinPage() {
           {saved && (
             <span
               style={{
-                fontSize: 12,
+                fontSize: 11,
                 color: "var(--green)",
                 fontFamily: "var(--mono)",
               }}
             >
-              ✓ Saved
+              Saved
             </span>
           )}
         </div>
-      </Card>
+      </div>
 
+      {/* AI Nudge */}
       {(nudgeLoading || nudge) && (
-        <Card
-          style={{
-            borderColor: "var(--accent)",
-            background: "var(--accent-dim)",
-          }}
-        >
-          <div
-            style={{
-              fontSize: 10,
-              color: "var(--accent)",
-              letterSpacing: "0.12em",
-              textTransform: "uppercase",
-              marginBottom: 8,
-            }}
-          >
-            🤖 Coach Insight
-          </div>
+        <NudgeCard>
           {nudgeLoading ? (
             <div style={{ display: "flex", gap: 4 }}>
               {[0, 1, 2].map((i) => (
@@ -333,13 +376,9 @@ export default function CheckinPage() {
               ))}
             </div>
           ) : (
-            <div
-              style={{ fontSize: 13, color: "var(--text)", lineHeight: 1.7 }}
-            >
-              {nudge}
-            </div>
+            nudge
           )}
-        </Card>
+        </NudgeCard>
       )}
     </div>
   );
