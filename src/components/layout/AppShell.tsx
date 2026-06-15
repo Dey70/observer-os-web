@@ -16,6 +16,7 @@ import {
   LogOut,
   Zap,
   CalendarDays,
+  HeartPulse,
 } from "lucide-react";
 
 const navItems = [
@@ -24,6 +25,7 @@ const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/history", label: "History", icon: Clock },
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
+  { href: "/metrics", label: "Metrics", icon: HeartPulse },
   { href: "/load", label: "Load", icon: BarChart2 },
   { href: "/goals", label: "Goals", icon: Target },
   { href: "/coach", label: "Coach", icon: Bot },

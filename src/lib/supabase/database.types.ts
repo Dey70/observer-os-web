@@ -143,6 +143,35 @@ export interface Database {
           generated_at?: string;
         };
       };
+      body_metrics: {
+        Row: {
+          id: number;
+          user_id: string;
+          date: string;
+          hrv: number | null;
+          resting_hr: number | null;
+          vo2max: number | null;
+          body_fat: number | null;
+          notes: string | null;
+          created_at: string;
+        };
+        Insert: {
+          user_id: string;
+          date: string;
+          hrv?: number | null;
+          resting_hr?: number | null;
+          vo2max?: number | null;
+          body_fat?: number | null;
+          notes?: string | null;
+        };
+        Update: {
+          hrv?: number | null;
+          resting_hr?: number | null;
+          vo2max?: number | null;
+          body_fat?: number | null;
+          notes?: string | null;
+        };
+      };
       profiles: {
         Row: {
           id: number;
