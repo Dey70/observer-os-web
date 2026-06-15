@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { calcReadiness } from "@/lib/utils";
-import { PageHeader, Button, Field, Input, NudgeCard } from "@/components/ui";
+import { PageHeader, NudgeCard } from "@/components/ui";
 
 const SLIDERS = [
   {
@@ -12,11 +12,40 @@ const SLIDERS = [
     min: 1,
     max: 10,
     color: "#E8FF47",
+    dataColor: "yellow",
   },
-  { key: "soreness", label: "Soreness", min: 1, max: 10, color: "#FF6600" },
-  { key: "fatigue", label: "Fatigue", min: 1, max: 10, color: "#FF4444" },
-  { key: "mood", label: "Mood", min: 1, max: 10, color: "#00E676" },
-  { key: "energy", label: "Energy", min: 1, max: 10, color: "#A78BFA" },
+  {
+    key: "soreness",
+    label: "Soreness",
+    min: 1,
+    max: 10,
+    color: "#FF6600",
+    dataColor: "orange",
+  },
+  {
+    key: "fatigue",
+    label: "Fatigue",
+    min: 1,
+    max: 10,
+    color: "#FF4444",
+    dataColor: "red",
+  },
+  {
+    key: "mood",
+    label: "Mood",
+    min: 1,
+    max: 10,
+    color: "#00E676",
+    dataColor: "green",
+  },
+  {
+    key: "energy",
+    label: "Energy",
+    min: 1,
+    max: 10,
+    color: "#A78BFA",
+    dataColor: "purple",
+  },
 ] as const;
 
 type SliderKey = (typeof SLIDERS)[number]["key"];
@@ -42,6 +71,8 @@ export default function CheckinPage() {
   const [nudgeLoading, setNudgeLoading] = useState(false);
   const [alreadyChecked, setAlreadyChecked] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [streak, setStreak] = useState(0);
+  const [weight, setWeight] = useState<number | null>(null);
 
   const readiness = calcReadiness(
     vals.sleep_quality,
@@ -59,19 +90,36 @@ export default function CheckinPage() {
 
   useEffect(() => {
     setMounted(true);
-    async function checkToday() {
+    async function load() {
       const todayStr = new Date().toISOString().split("T")[0];
       const {
         data: { user },
       } = await sb.auth.getUser();
       if (!user) return;
-      const { data: raw } = await sb
-        .from("daily_logs")
-        .select("*")
-        .eq("user_id", user.id)
-        .eq("date", todayStr)
-        .maybeSingle();
-      const data = raw as {
+
+      const [{ data: rawLog }, { data: logs }, { data: weights }] =
+        await Promise.all([
+          sb
+            .from("daily_logs")
+            .select("*")
+            .eq("user_id", user.id)
+            .eq("date", todayStr)
+            .maybeSingle(),
+          sb
+            .from("daily_logs")
+            .select("date")
+            .eq("user_id", user.id)
+            .order("date", { ascending: false })
+            .limit(30),
+          sb
+            .from("weight_logs")
+            .select("weight")
+            .eq("user_id", user.id)
+            .order("date", { ascending: false })
+            .limit(1),
+        ]);
+
+      const data = rawLog as {
         sleep_hours: number;
         sleep_quality: number;
         soreness: number;
@@ -92,8 +140,31 @@ export default function CheckinPage() {
         });
         setNotes(data.notes ?? "");
       }
+
+      // Streak
+      if (logs?.length) {
+        let s = 0;
+        const yest = new Date(Date.now() - 86400000)
+          .toISOString()
+          .split("T")[0];
+        const dates = (logs as any[]).map((l) => l.date);
+        if (dates[0] === todayStr || dates[0] === yest) {
+          s = 1;
+          for (let i = 1; i < dates.length; i++) {
+            const diff =
+              (new Date(dates[i - 1]).getTime() -
+                new Date(dates[i]).getTime()) /
+              86400000;
+            if (diff === 1) s++;
+            else break;
+          }
+        }
+        setStreak(s);
+      }
+
+      if (weights?.length) setWeight((weights[0] as any).weight);
     }
-    checkToday();
+    load();
   }, []);
 
   async function handleSubmit() {
@@ -139,23 +210,45 @@ export default function CheckinPage() {
     <div style={{ maxWidth: 800 }}>
       <PageHeader title="Daily Check-in" subtitle={todayLabel} />
 
-      {/* MAIN GLASS CARD */}
+      {/* GLASS CARD */}
       <div
         style={{
-          background: "rgba(255,255,255,0.04)",
-          border: "1px solid rgba(255,255,255,0.12)",
+          position: "relative",
           borderRadius: 24,
           padding: 28,
           marginBottom: 16,
-          position: "relative",
           overflow: "hidden",
+          background: "rgba(255,255,255,0.04)",
+          border: "1px solid rgba(255,255,255,0.18)",
           backdropFilter: "blur(60px)",
           WebkitBackdropFilter: "blur(60px)",
           boxShadow:
-            "inset 0 1px 0 rgba(255,255,255,0.1), inset 0 -1px 0 rgba(0,0,0,0.2), 0 20px 60px rgba(0,0,0,0.4)",
+            "inset 0 1px 0 rgba(255,255,255,0.12), inset 0 -1px 0 rgba(0,0,0,0.2), 0 20px 60px rgba(0,0,0,0.5)",
         }}
       >
-        {/* Top shimmer */}
+        {/* Glass depth layers */}
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            borderRadius: 24,
+            background:
+              "linear-gradient(180deg, rgba(255,255,255,0.06) 0%, transparent 40%)",
+            pointerEvents: "none",
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            borderRadius: 24,
+            background:
+              "linear-gradient(0deg, rgba(0,0,0,0.15) 0%, transparent 40%)",
+            pointerEvents: "none",
+          }}
+        />
+
+        {/* Top shimmer line */}
         <div
           style={{
             position: "absolute",
@@ -164,27 +257,27 @@ export default function CheckinPage() {
             right: "15%",
             height: 1,
             background:
-              "linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent)",
+              "linear-gradient(90deg, transparent, rgba(255,255,255,0.35), transparent)",
             pointerEvents: "none",
           }}
         />
 
-        {/* Ambient glow based on score */}
+        {/* Ambient score glow */}
         <div
           style={{
             position: "absolute",
-            width: 300,
-            height: 300,
+            width: 320,
+            height: 320,
             borderRadius: "50%",
-            background: `radial-gradient(circle, ${readiness.color}18 0%, transparent 70%)`,
-            top: -100,
+            background: `radial-gradient(circle, ${readiness.color}20 0%, transparent 70%)`,
+            top: -120,
             right: -80,
             pointerEvents: "none",
             transition: "background 0.5s",
           }}
         />
 
-        {/* Score row */}
+        {/* Score */}
         <div
           style={{
             display: "flex",
@@ -198,14 +291,14 @@ export default function CheckinPage() {
               <div
                 style={{
                   fontFamily: "var(--sans)",
-                  fontSize: 88,
+                  fontSize: 96,
                   fontWeight: 900,
                   color: readiness.color,
                   lineHeight: 1,
-                  letterSpacing: "-4px",
-                  textShadow: `0 0 60px ${readiness.color}40, 0 0 120px ${readiness.color}20`,
+                  letterSpacing: "-5px",
+                  textShadow: `0 0 60px ${readiness.color}50, 0 0 120px ${readiness.color}25`,
                   animation: "scoreIn 0.5s cubic-bezier(0.34,1.56,0.64,1)",
-                  transition: "color 0.3s, text-shadow 0.3s",
+                  transition: "color 0.3s",
                 }}
               >
                 {readiness.score.toFixed(1)}
@@ -217,7 +310,7 @@ export default function CheckinPage() {
                 color: "rgba(255,255,255,0.35)",
                 letterSpacing: "3px",
                 textTransform: "uppercase",
-                marginTop: 4,
+                marginTop: 6,
                 fontFamily: "var(--mono)",
               }}
             >
@@ -235,27 +328,25 @@ export default function CheckinPage() {
               {readiness.label}
             </div>
           </div>
-
-          {/* Badge */}
           <div
             style={{
               padding: "6px 14px",
               borderRadius: 99,
+              marginTop: 14,
               background: `${readiness.color}15`,
-              border: `1px solid ${readiness.color}30`,
+              border: `1px solid ${readiness.color}35`,
               fontFamily: "var(--mono)",
               fontSize: 10,
               color: readiness.color,
               letterSpacing: "1px",
               textTransform: "uppercase",
-              marginTop: 12,
             }}
           >
             {readiness.level}
           </div>
         </div>
 
-        {/* Sleep Hours slider */}
+        {/* Sleep Hours */}
         <div
           style={{
             display: "flex",
@@ -267,8 +358,8 @@ export default function CheckinPage() {
           <span
             style={{
               fontSize: 10,
-              color: "rgba(255,255,255,0.5)",
-              width: 96,
+              color: "rgba(255,255,255,0.55)",
+              width: 100,
               textTransform: "uppercase",
               letterSpacing: "0.8px",
               fontFamily: "var(--mono)",
@@ -277,17 +368,16 @@ export default function CheckinPage() {
           >
             Sleep Hours
           </span>
-          <div style={{ flex: 1, position: "relative" }}>
-            <input
-              type="range"
-              min={0}
-              max={12}
-              step={0.5}
-              value={sleepHours}
-              onChange={(e) => setSleepHours(parseFloat(e.target.value))}
-              style={{ width: "100%", accentColor: "#E8FF47" }}
-            />
-          </div>
+          <input
+            type="range"
+            min={0}
+            max={12}
+            step={0.5}
+            value={sleepHours}
+            onChange={(e) => setSleepHours(parseFloat(e.target.value))}
+            data-color="yellow"
+            style={{ flex: 1 }}
+          />
           <span
             style={{
               fontFamily: "var(--mono)",
@@ -317,8 +407,8 @@ export default function CheckinPage() {
             <span
               style={{
                 fontSize: 10,
-                color: "rgba(255,255,255,0.5)",
-                width: 96,
+                color: "rgba(255,255,255,0.55)",
+                width: 100,
                 textTransform: "uppercase",
                 letterSpacing: "0.8px",
                 fontFamily: "var(--mono)",
@@ -327,21 +417,20 @@ export default function CheckinPage() {
             >
               {slider.label}
             </span>
-            <div style={{ flex: 1 }}>
-              <input
-                type="range"
-                min={slider.min}
-                max={slider.max}
-                value={vals[slider.key]}
-                onChange={(e) =>
-                  setVals((prev) => ({
-                    ...prev,
-                    [slider.key]: parseInt(e.target.value),
-                  }))
-                }
-                style={{ width: "100%", accentColor: slider.color }}
-              />
-            </div>
+            <input
+              type="range"
+              min={slider.min}
+              max={slider.max}
+              value={vals[slider.key]}
+              onChange={(e) =>
+                setVals((prev) => ({
+                  ...prev,
+                  [slider.key]: parseInt(e.target.value),
+                }))
+              }
+              data-color={slider.dataColor}
+              style={{ flex: 1 }}
+            />
             <span
               style={{
                 fontFamily: "var(--mono)",
@@ -359,7 +448,7 @@ export default function CheckinPage() {
         ))}
 
         {/* Notes */}
-        <div style={{ marginBottom: 16, marginTop: 4 }}>
+        <div style={{ marginBottom: 16, marginTop: 8 }}>
           <label
             style={{
               display: "block",
@@ -382,7 +471,7 @@ export default function CheckinPage() {
               width: "100%",
               padding: "11px 16px",
               background: "rgba(255,255,255,0.05)",
-              border: "1px solid rgba(255,255,255,0.1)",
+              border: "1px solid rgba(255,255,255,0.12)",
               borderRadius: 10,
               color: "rgba(255,255,255,0.8)",
               outline: "none",
@@ -392,7 +481,7 @@ export default function CheckinPage() {
           />
         </div>
 
-        {/* Button row */}
+        {/* Button */}
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           <button
             onClick={handleSubmit}
@@ -412,6 +501,7 @@ export default function CheckinPage() {
               boxShadow:
                 "0 4px 20px rgba(232,255,71,0.3), 0 0 40px rgba(232,255,71,0.1)",
               transition: "all 0.2s",
+              fontFamily: "var(--sans)",
             }}
           >
             {saving
@@ -435,7 +525,7 @@ export default function CheckinPage() {
         </div>
       </div>
 
-      {/* Stat mini cards */}
+      {/* Stat cards */}
       <div
         style={{
           display: "grid",
@@ -444,70 +534,97 @@ export default function CheckinPage() {
           marginBottom: 16,
         }}
       >
-        {[
-          {
-            val: "—",
-            label: "Check-in Streak",
-            color: "#E8FF47",
-            gradient: "linear-gradient(90deg,#E8FF47,#00E676)",
-          },
-          {
-            val: "—",
-            label: "Current Weight",
-            color: "#00E676",
-            gradient: "linear-gradient(90deg,#00E676,#10B981)",
-          },
-        ].map((s, i) => (
+        <div
+          style={{
+            background: "rgba(255,255,255,0.04)",
+            border: "1px solid rgba(255,255,255,0.12)",
+            borderRadius: 16,
+            padding: 18,
+            position: "relative",
+            overflow: "hidden",
+            backdropFilter: "blur(20px)",
+          }}
+        >
           <div
-            key={i}
             style={{
-              background: "rgba(255,255,255,0.04)",
-              border: "1px solid rgba(255,255,255,0.1)",
-              borderRadius: 16,
-              padding: 18,
-              position: "relative",
-              overflow: "hidden",
-              backdropFilter: "blur(20px)",
-              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.07)",
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              height: 2,
+              background: "linear-gradient(90deg,#E8FF47,#00E676)",
+              borderRadius: "16px 16px 0 0",
+            }}
+          />
+          <div
+            style={{
+              fontFamily: "var(--mono)",
+              fontSize: 24,
+              fontWeight: 700,
+              color: "#E8FF47",
+              marginBottom: 4,
             }}
           >
-            <div
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                right: 0,
-                height: 2,
-                background: s.gradient,
-                borderRadius: "16px 16px 0 0",
-              }}
-            />
-            <div
-              style={{
-                fontFamily: "var(--mono)",
-                fontSize: 24,
-                fontWeight: 700,
-                color: s.color,
-                marginBottom: 4,
-              }}
-            >
-              {s.val}
-            </div>
-            <div
-              style={{
-                fontSize: 9,
-                color: "rgba(255,255,255,0.4)",
-                letterSpacing: "1.5px",
-                textTransform: "uppercase",
-              }}
-            >
-              {s.label}
-            </div>
+            {streak > 0 ? (streak >= 3 ? `${streak}` : streak) : "—"}
           </div>
-        ))}
+          <div
+            style={{
+              fontSize: 9,
+              color: "rgba(255,255,255,0.4)",
+              letterSpacing: "1.5px",
+              textTransform: "uppercase",
+            }}
+          >
+            Check-in Streak
+          </div>
+        </div>
+        <div
+          style={{
+            background: "rgba(255,255,255,0.04)",
+            border: "1px solid rgba(255,255,255,0.12)",
+            borderRadius: 16,
+            padding: 18,
+            position: "relative",
+            overflow: "hidden",
+            backdropFilter: "blur(20px)",
+          }}
+        >
+          <div
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              height: 2,
+              background: "linear-gradient(90deg,#00E676,#10B981)",
+              borderRadius: "16px 16px 0 0",
+            }}
+          />
+          <div
+            style={{
+              fontFamily: "var(--mono)",
+              fontSize: 24,
+              fontWeight: 700,
+              color: "#00E676",
+              marginBottom: 4,
+            }}
+          >
+            {weight ? `${weight} kg` : "—"}
+          </div>
+          <div
+            style={{
+              fontSize: 9,
+              color: "rgba(255,255,255,0.4)",
+              letterSpacing: "1.5px",
+              textTransform: "uppercase",
+            }}
+          >
+            Current Weight
+          </div>
+        </div>
       </div>
 
-      {/* AI Nudge */}
+      {/* Nudge */}
       {(nudgeLoading || nudge) && (
         <NudgeCard>
           {nudgeLoading ? (
