@@ -18,11 +18,26 @@ import { Pencil, Trash2, Check, X, CheckCircle2 } from "lucide-react";
 export const dynamic = "force-dynamic";
 
 const GOAL_TYPES = [
-  { value: "weight", label: "Body Weight", unit: "kg" },
-  { value: "sleep", label: "Sleep Duration", unit: "hrs" },
-  { value: "sessions_per_week", label: "Sessions / Week", unit: "sessions" },
-  { value: "run_distance", label: "Weekly Run (km)", unit: "km" },
-  { value: "custom", label: "Custom Goal", unit: "" },
+  { value: "weight", label: "Body Weight", unit: "kg", direction: "decrease" },
+  {
+    value: "sleep",
+    label: "Sleep Duration",
+    unit: "hrs",
+    direction: "increase",
+  },
+  {
+    value: "sessions_per_week",
+    label: "Sessions / Week",
+    unit: "sessions",
+    direction: "increase",
+  },
+  {
+    value: "run_distance",
+    label: "Weekly Run (km)",
+    unit: "km",
+    direction: "increase",
+  },
+  { value: "custom", label: "Custom Goal", unit: "", direction: "increase" },
 ];
 
 function getWeekStart() {
@@ -40,6 +55,7 @@ type EditState = {
   current_value: number;
   unit: string;
   deadline: string;
+  direction: "increase" | "decrease";
 };
 
 export default function GoalsPage() {
@@ -57,6 +73,9 @@ export default function GoalsPage() {
   const [current, setCurrent] = useState("");
   const [unit, setUnit] = useState("kg");
   const [deadline, setDeadline] = useState("");
+  const [direction, setDirection] = useState<"increase" | "decrease">(
+    "increase",
+  );
 
   // Edit state
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -102,6 +121,7 @@ export default function GoalsPage() {
     if (preset) {
       setUnit(preset.unit);
       setTitle(preset.label);
+      setDirection(preset.direction as "increase" | "decrease");
     }
   }
 
@@ -124,6 +144,7 @@ export default function GoalsPage() {
       unit,
       deadline: deadline || null,
       active: true,
+      direction,
     });
     setSaving(false);
     setShowForm(false);
@@ -144,6 +165,7 @@ export default function GoalsPage() {
       current_value: g.current_value,
       unit: g.unit,
       deadline: g.deadline ?? "",
+      direction: (g as any).direction ?? "increase",
     });
   }
 
@@ -170,6 +192,7 @@ export default function GoalsPage() {
         current_value: editState.current_value,
         unit: editState.unit,
         deadline: editState.deadline || null,
+        direction: editState.direction,
       })
       .eq("id", editState.id)
       .eq("user_id", user.id);
@@ -308,6 +331,17 @@ export default function GoalsPage() {
                 />
               </Field>
             </div>
+            <Field label="Direction">
+              <Select
+                value={direction}
+                onChange={(e) =>
+                  setDirection(e.target.value as "increase" | "decrease")
+                }
+              >
+                <option value="increase">↑ Increase (higher is better)</option>
+                <option value="decrease">↓ Decrease (lower is better)</option>
+              </Select>
+            </Field>
             <Field label="Deadline (optional)">
               <Input
                 type="date"
@@ -334,11 +368,42 @@ export default function GoalsPage() {
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {goals.map((g) => {
-              const pct = Math.min(
-                100,
-                Math.round((g.current_value / g.target_value) * 100),
-              );
-              const isComplete = pct >= 100;
+              const dir = (g as any).direction ?? "increase";
+              const pct =
+                dir === "decrease"
+                  ? Math.min(
+                      100,
+                      Math.max(
+                        0,
+                        Math.round(
+                          g.current_value - g.target_value <= 0 ? 100 : 0,
+                        ),
+                      ),
+                    )
+                  : Math.min(
+                      100,
+                      Math.round((g.current_value / g.target_value) * 100),
+                    );
+              // For decrease goals: 100% when current <= target, 0% when at start
+              // We approximate using how close current is to target vs initial
+              const pctDisplay =
+                dir === "decrease"
+                  ? g.current_value <= g.target_value
+                    ? 100
+                    : Math.max(
+                        0,
+                        Math.round(
+                          (1 -
+                            (g.current_value - g.target_value) /
+                              g.target_value) *
+                            100,
+                        ),
+                      )
+                  : Math.min(
+                      100,
+                      Math.round((g.current_value / g.target_value) * 100),
+                    );
+              const isComplete = pctDisplay >= 100;
               const isEditing = editingId === g.id;
               const isConfirmingDelete = confirmDeleteId === g.id;
 
@@ -443,7 +508,7 @@ export default function GoalsPage() {
                               : "var(--accent)",
                           }}
                         >
-                          {pct}%
+                          {pctDisplay}%
                         </span>
                         {/* Action buttons */}
                         <div style={{ display: "flex", gap: 4 }}>
@@ -544,12 +609,12 @@ export default function GoalsPage() {
                       <div
                         style={{
                           height: "100%",
-                          width: `${pct}%`,
+                          width: `${pctDisplay}%`,
                           background: isComplete
                             ? "var(--green)"
-                            : pct > 66
+                            : pctDisplay > 66
                               ? "var(--accent)"
-                              : pct > 33
+                              : pctDisplay > 33
                                 ? "var(--yellow)"
                                 : "var(--red)",
                           borderRadius: 99,
@@ -779,6 +844,50 @@ export default function GoalsPage() {
                             }
                             style={{ ...inputStyle, colorScheme: "dark" }}
                           />
+                        </div>
+                      </div>
+                      <div style={{ marginBottom: 10 }}>
+                        <label
+                          style={{
+                            display: "block",
+                            fontSize: 8,
+                            color: "var(--text-dim)",
+                            letterSpacing: "1.5px",
+                            textTransform: "uppercase",
+                            marginBottom: 4,
+                            fontFamily: "var(--mono)",
+                          }}
+                        >
+                          Direction
+                        </label>
+                        <div style={{ display: "flex", gap: 8 }}>
+                          {(["increase", "decrease"] as const).map((d) => (
+                            <button
+                              key={d}
+                              onClick={() =>
+                                setEditState({ ...editState, direction: d })
+                              }
+                              style={{
+                                flex: 1,
+                                padding: "7px",
+                                fontSize: 11,
+                                fontFamily: "var(--mono)",
+                                background:
+                                  editState.direction === d
+                                    ? "rgba(232,255,71,0.1)"
+                                    : "var(--surface)",
+                                border: `1px solid ${editState.direction === d ? "rgba(232,255,71,0.3)" : "var(--border)"}`,
+                                color:
+                                  editState.direction === d
+                                    ? "#E8FF47"
+                                    : "var(--text-muted)",
+                                borderRadius: 6,
+                                cursor: "pointer",
+                              }}
+                            >
+                              {d === "increase" ? "↑ Increase" : "↓ Decrease"}
+                            </button>
+                          ))}
                         </div>
                       </div>
                       <div style={{ display: "flex", gap: 8 }}>
