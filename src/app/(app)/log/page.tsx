@@ -41,10 +41,22 @@ const effortToRpe: Record<Effort, number> = {
   very_hard: 9,
 };
 
-const TYPE_COLOR: Record<Tab, string> = {
-  run: "#00E676",
-  lift: "#A78BFA",
-  study: "#FFB800",
+const TYPE_COLOR: Record<Tab, { main: string; bg: string; border: string }> = {
+  run: {
+    main: "var(--color-run)",
+    bg: "var(--color-run-bg)",
+    border: "var(--color-run-border)",
+  },
+  lift: {
+    main: "var(--color-lift)",
+    bg: "var(--color-lift-bg)",
+    border: "var(--color-lift-border)",
+  },
+  study: {
+    main: "var(--color-study)",
+    bg: "var(--color-study-bg)",
+    border: "var(--color-study-border)",
+  },
 };
 
 const TYPE_LABEL: Record<Tab, string> = {
@@ -213,11 +225,11 @@ export default function LogPage() {
   const inputStyle: React.CSSProperties = {
     width: "100%",
     padding: "12px 14px",
-    backgroundColor: "rgba(255,255,255,0.04)",
-    border: "1px solid rgba(255,255,255,0.08)",
+    backgroundColor: "var(--bg-input)",
+    border: "1px solid var(--border-subtle)",
     borderRadius: "10px",
-    color: "#fff",
-    fontFamily: "JetBrains Mono, monospace",
+    color: "var(--text-primary)",
+    fontFamily: "var(--mono)",
     fontSize: "14px",
     outline: "none",
     boxSizing: "border-box",
@@ -225,10 +237,10 @@ export default function LogPage() {
   };
 
   const labelStyle: React.CSSProperties = {
-    fontFamily: "JetBrains Mono, monospace",
+    fontFamily: "var(--mono)",
     fontSize: "11px",
     letterSpacing: "0.1em",
-    color: "rgba(255,255,255,0.35)",
+    color: "var(--text-muted)",
     marginBottom: "8px",
     display: "block",
   };
@@ -245,7 +257,7 @@ export default function LogPage() {
   if (loggedSession) {
     const Icon =
       tabs.find((t) => t.key === loggedSession.type)?.icon ?? CheckCircle;
-    const color = TYPE_COLOR[loggedSession.type];
+    const themeColors = TYPE_COLOR[loggedSession.type];
     const hrs = Math.floor(loggedSession.duration / 60);
     const mins = loggedSession.duration % 60;
     const durationLabel = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
@@ -265,24 +277,24 @@ export default function LogPage() {
               width: 80,
               height: 80,
               borderRadius: "50%",
-              background: `${color}15`,
-              border: `2px solid ${color}40`,
+              background: themeColors.bg,
+              border: `2px solid ${themeColors.border}`,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               margin: "0 auto 20px",
-              boxShadow: `0 0 40px ${color}25`,
+              boxShadow: `0 0 40px ${themeColors.bg}`,
               animation: "scoreIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both",
             }}
           >
-            <Icon size={36} color={color} strokeWidth={1.75} />
+            <Icon size={36} color={themeColors.main} strokeWidth={1.75} />
           </div>
           <div
             style={{
               fontFamily: "var(--mono)",
               fontSize: 22,
               fontWeight: 700,
-              color,
+              color: themeColors.main,
               letterSpacing: "0.05em",
               marginBottom: 6,
             }}
@@ -292,7 +304,7 @@ export default function LogPage() {
           <div
             style={{
               fontSize: 13,
-              color: "rgba(255,255,255,0.4)",
+              color: "var(--text-muted)",
               fontFamily: "var(--mono)",
             }}
           >
@@ -303,8 +315,8 @@ export default function LogPage() {
         {/* Stats card */}
         <div
           style={{
-            background: "rgba(255,255,255,0.04)",
-            border: `1px solid ${color}25`,
+            background: "var(--bg-card)",
+            border: `1px solid var(--border-subtle)`,
             borderRadius: 20,
             padding: 24,
             marginBottom: 16,
@@ -320,7 +332,7 @@ export default function LogPage() {
               left: 0,
               right: 0,
               height: 3,
-              background: color,
+              background: themeColors.main,
               borderRadius: "20px 20px 0 0",
             }}
           />
@@ -338,12 +350,12 @@ export default function LogPage() {
               style={{
                 padding: "4px 12px",
                 borderRadius: 99,
-                background: `${color}15`,
-                border: `1px solid ${color}35`,
+                background: themeColors.bg,
+                border: `1px solid ${themeColors.border}`,
                 fontFamily: "var(--mono)",
                 fontSize: 11,
                 fontWeight: 700,
-                color,
+                color: themeColors.main,
                 letterSpacing: "0.1em",
                 textTransform: "uppercase",
               }}
@@ -354,7 +366,7 @@ export default function LogPage() {
               <span
                 style={{
                   fontSize: 13,
-                  color: "rgba(255,255,255,0.5)",
+                  color: "var(--text-secondary)",
                   overflow: "hidden",
                   textOverflow: "ellipsis",
                   whiteSpace: "nowrap",
@@ -379,26 +391,26 @@ export default function LogPage() {
                 icon: Clock,
                 label: "Duration",
                 value: durationLabel,
-                color: "rgba(255,255,255,0.8)",
+                color: "var(--text-primary)",
               },
               {
                 icon: Zap,
                 label: "RPE",
                 value: `${loggedSession.rpe}/10`,
-                color,
+                color: themeColors.main,
               },
               {
                 icon: TrendingUp,
                 label: "Load",
                 value: loggedSession.load.toString(),
-                color: "var(--yellow)",
+                color: "var(--color-study)",
               },
             ].map(({ icon: StatIcon, label, value, color: c }) => (
               <div
                 key={label}
                 style={{
-                  background: "rgba(255,255,255,0.04)",
-                  border: "1px solid rgba(255,255,255,0.08)",
+                  background: "var(--bg-input)",
+                  border: "1px solid var(--border-subtle)",
                   borderRadius: 12,
                   padding: "14px 12px",
                   textAlign: "center",
@@ -406,7 +418,7 @@ export default function LogPage() {
               >
                 <StatIcon
                   size={14}
-                  color="rgba(255,255,255,0.3)"
+                  color="var(--text-muted)"
                   strokeWidth={1.75}
                   style={{ marginBottom: 6 }}
                 />
@@ -425,7 +437,7 @@ export default function LogPage() {
                 <div
                   style={{
                     fontSize: 9,
-                    color: "rgba(255,255,255,0.3)",
+                    color: "var(--text-muted)",
                     letterSpacing: "1.5px",
                     textTransform: "uppercase",
                     fontFamily: "var(--mono)",
@@ -442,7 +454,7 @@ export default function LogPage() {
             <span
               style={{
                 fontSize: 10,
-                color: "rgba(255,255,255,0.3)",
+                color: "var(--text-muted)",
                 fontFamily: "var(--mono)",
                 textTransform: "uppercase",
                 letterSpacing: "1px",
@@ -453,7 +465,7 @@ export default function LogPage() {
             <span
               style={{
                 fontSize: 12,
-                color: "rgba(255,255,255,0.6)",
+                color: "var(--text-secondary)",
                 fontFamily: "var(--mono)",
               }}
             >
@@ -466,9 +478,8 @@ export default function LogPage() {
         {newPRs.length > 0 && (
           <div
             style={{
-              background:
-                "linear-gradient(135deg, rgba(255,184,0,0.1) 0%, rgba(255,184,0,0.05) 100%)",
-              border: "1px solid rgba(255,184,0,0.35)",
+              background: "var(--color-study-bg)",
+              border: "1px solid var(--color-study-border)",
               borderRadius: 16,
               padding: "16px 18px",
               marginBottom: 16,
@@ -488,14 +499,14 @@ export default function LogPage() {
                   width: 32,
                   height: 32,
                   borderRadius: 10,
-                  background: "rgba(255,184,0,0.15)",
+                  background: "var(--color-study-bg)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                   flexShrink: 0,
                 }}
               >
-                <Trophy size={16} color="#FFB800" strokeWidth={2} />
+                <Trophy size={16} color="var(--color-study)" strokeWidth={2} />
               </div>
               <div>
                 <div
@@ -503,7 +514,7 @@ export default function LogPage() {
                     fontFamily: "var(--mono)",
                     fontSize: 12,
                     fontWeight: 700,
-                    color: "#FFB800",
+                    color: "var(--color-study)",
                     letterSpacing: "0.1em",
                     textTransform: "uppercase",
                   }}
@@ -515,7 +526,7 @@ export default function LogPage() {
                 <div
                   style={{
                     fontSize: 10,
-                    color: "rgba(255,255,255,0.4)",
+                    color: "var(--text-secondary)",
                     fontFamily: "var(--mono)",
                     marginTop: 1,
                   }}
@@ -533,15 +544,15 @@ export default function LogPage() {
                     alignItems: "center",
                     justifyContent: "space-between",
                     padding: "8px 12px",
-                    background: "rgba(255,184,0,0.06)",
-                    border: "1px solid rgba(255,184,0,0.15)",
+                    background: "var(--bg-card)",
+                    border: "1px solid var(--border-subtle)",
                     borderRadius: 8,
                   }}
                 >
                   <span
                     style={{
                       fontSize: 12,
-                      color: "rgba(255,255,255,0.7)",
+                      color: "var(--text-secondary)",
                       fontFamily: "var(--mono)",
                     }}
                   >
@@ -554,7 +565,7 @@ export default function LogPage() {
                       <span
                         style={{
                           fontSize: 10,
-                          color: "rgba(255,255,255,0.3)",
+                          color: "var(--text-muted)",
                           fontFamily: "var(--mono)",
                           textDecoration: "line-through",
                         }}
@@ -568,7 +579,7 @@ export default function LogPage() {
                       style={{
                         fontSize: 13,
                         fontWeight: 700,
-                        color: "#FFB800",
+                        color: "var(--color-study)",
                         fontFamily: "var(--mono)",
                       }}
                     >
@@ -585,8 +596,8 @@ export default function LogPage() {
         {(nudgeLoading || nudge) && (
           <div
             style={{
-              background: "rgba(232,255,71,0.04)",
-              border: "1px solid rgba(232,255,71,0.15)",
+              background: "var(--accent-transparent)",
+              border: "1px solid var(--accent-border)",
               borderRadius: 14,
               padding: "14px 16px",
               marginBottom: 16,
@@ -606,7 +617,7 @@ export default function LogPage() {
                   width: 18,
                   height: 18,
                   borderRadius: 5,
-                  background: "rgba(232,255,71,0.12)",
+                  background: "var(--accent-transparent)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -618,7 +629,7 @@ export default function LogPage() {
                   height="10"
                   viewBox="0 0 24 24"
                   fill="none"
-                  stroke="#E8FF47"
+                  stroke="var(--accent)"
                   strokeWidth="2.5"
                   strokeLinecap="round"
                 >
@@ -659,7 +670,7 @@ export default function LogPage() {
                 style={{
                   fontFamily: "var(--sans)",
                   fontSize: 13,
-                  color: "rgba(255,255,255,0.6)",
+                  color: "var(--text-secondary)",
                   lineHeight: 1.7,
                   fontWeight: 300,
                 }}
@@ -681,10 +692,10 @@ export default function LogPage() {
               justifyContent: "center",
               gap: 8,
               padding: "13px",
-              background: "rgba(255,255,255,0.05)",
-              border: "1px solid rgba(255,255,255,0.1)",
+              background: "var(--bg-input)",
+              border: "1px solid var(--border-subtle)",
               borderRadius: 10,
-              color: "rgba(255,255,255,0.7)",
+              color: "var(--text-secondary)",
               fontFamily: "var(--mono)",
               fontSize: 12,
               fontWeight: 600,
@@ -707,7 +718,7 @@ export default function LogPage() {
               background: "var(--accent)",
               border: "none",
               borderRadius: 10,
-              color: "#000",
+              color: "var(--bg-main)",
               fontFamily: "var(--mono)",
               fontSize: 12,
               fontWeight: 700,
@@ -729,11 +740,11 @@ export default function LogPage() {
       <div style={{ marginBottom: "24px" }}>
         <h1
           style={{
-            fontFamily: "JetBrains Mono, monospace",
+            fontFamily: "var(--mono)",
             fontSize: "24px",
             fontWeight: 700,
             letterSpacing: "0.06em",
-            color: "#fff",
+            color: "var(--text-primary)",
             margin: 0,
           }}
         >
@@ -741,9 +752,9 @@ export default function LogPage() {
         </h1>
         <p
           style={{
-            fontFamily: "JetBrains Mono, monospace",
+            fontFamily: "var(--mono)",
             fontSize: "12px",
-            color: "rgba(255,255,255,0.35)",
+            color: "var(--text-muted)",
             marginTop: "6px",
           }}
         >
@@ -753,8 +764,8 @@ export default function LogPage() {
 
       <div
         style={{
-          backgroundColor: "rgba(255,255,255,0.03)",
-          border: "1px solid rgba(255,255,255,0.07)",
+          backgroundColor: "var(--bg-card)",
+          border: "1px solid var(--border-subtle)",
           borderRadius: "20px",
           padding: "24px 20px",
           overflow: "hidden",
@@ -767,7 +778,7 @@ export default function LogPage() {
           style={{
             display: "flex",
             gap: "4px",
-            backgroundColor: "rgba(255,255,255,0.04)",
+            backgroundColor: "var(--bg-input)",
             borderRadius: "12px",
             padding: "4px",
             marginBottom: "28px",
@@ -790,13 +801,13 @@ export default function LogPage() {
                   border: "none",
                   cursor: "pointer",
                   backgroundColor: isActive
-                    ? "rgba(232,255,71,0.1)"
+                    ? "var(--accent-transparent)"
                     : "transparent",
-                  fontFamily: "JetBrains Mono, monospace",
+                  fontFamily: "var(--mono)",
                   fontSize: "11px",
                   fontWeight: isActive ? 700 : 500,
                   letterSpacing: "0.08em",
-                  color: isActive ? "#E8FF47" : "rgba(255,255,255,0.35)",
+                  color: isActive ? "var(--accent)" : "var(--text-muted)",
                   transition: "all 0.15s ease",
                   minWidth: 0,
                 }}
@@ -804,10 +815,10 @@ export default function LogPage() {
                 <Icon
                   size={13}
                   strokeWidth={isActive ? 2.5 : 1.75}
-                  color={isActive ? "#E8FF47" : "rgba(255,255,255,0.35)"}
+                  color={isActive ? "var(--accent)" : "var(--text-muted)"}
                   style={{
                     filter: isActive
-                      ? "drop-shadow(0 0 4px rgba(232,255,71,0.6))"
+                      ? "drop-shadow(0 0 4px var(--accent-transparent))"
                       : "none",
                     flexShrink: 0,
                   }}
@@ -827,9 +838,8 @@ export default function LogPage() {
             onChange={(e) => setDate(e.target.value)}
             style={{
               ...inputStyle,
-              colorScheme: "dark",
+              colorScheme: "light dark",
               display: "block",
-              // MOBILE FIXES: Prevent text clipping in native date pickers
               minHeight: "48px",
               lineHeight: "1.5",
               WebkitAppearance: "none",
@@ -888,11 +898,14 @@ export default function LogPage() {
                 style={{
                   padding: "10px 8px",
                   borderRadius: "9px",
-                  border: `1px solid ${effort === key ? "#E8FF47" : "rgba(255,255,255,0.1)"}`,
+                  border: `1px solid ${effort === key ? "var(--accent)" : "var(--border-subtle)"}`,
                   backgroundColor:
-                    effort === key ? "rgba(232,255,71,0.08)" : "transparent",
-                  color: effort === key ? "#E8FF47" : "rgba(255,255,255,0.45)",
-                  fontFamily: "Inter, sans-serif",
+                    effort === key
+                      ? "var(--accent-transparent)"
+                      : "transparent",
+                  color:
+                    effort === key ? "var(--accent)" : "var(--text-secondary)",
+                  fontFamily: "var(--sans)",
                   fontSize: "13px",
                   fontWeight: effort === key ? 600 : 400,
                   cursor: "pointer",
@@ -934,7 +947,7 @@ export default function LogPage() {
                 style={{
                   ...inputStyle,
                   cursor: "pointer",
-                  colorScheme: "dark",
+                  colorScheme: "light dark",
                 }}
               >
                 {terrainOptions.map((t) => (
@@ -965,12 +978,16 @@ export default function LogPage() {
                   style={{
                     padding: "8px 14px",
                     borderRadius: "9px",
-                    border: `1px solid ${liftType === t ? "#E8FF47" : "rgba(255,255,255,0.1)"}`,
+                    border: `1px solid ${liftType === t ? "var(--accent)" : "var(--border-subtle)"}`,
                     backgroundColor:
-                      liftType === t ? "rgba(232,255,71,0.08)" : "transparent",
+                      liftType === t
+                        ? "var(--accent-transparent)"
+                        : "transparent",
                     color:
-                      liftType === t ? "#E8FF47" : "rgba(255,255,255,0.45)",
-                    fontFamily: "Inter, sans-serif",
+                      liftType === t
+                        ? "var(--accent)"
+                        : "var(--text-secondary)",
+                    fontFamily: "var(--sans)",
                     fontSize: "13px",
                     fontWeight: liftType === t ? 600 : 400,
                     cursor: "pointer",
@@ -1028,7 +1045,7 @@ export default function LogPage() {
             style={{
               ...inputStyle,
               resize: "vertical",
-              fontFamily: "Inter, sans-serif",
+              fontFamily: "var(--sans)",
             }}
           />
         </div>
@@ -1043,11 +1060,11 @@ export default function LogPage() {
             justifyContent: "center",
             gap: "8px",
             padding: "14px",
-            backgroundColor: "#E8FF47",
+            backgroundColor: "var(--accent)",
             border: "none",
             borderRadius: "10px",
-            color: "#060608",
-            fontFamily: "JetBrains Mono, monospace",
+            color: "var(--bg-main)",
+            fontFamily: "var(--mono)",
             fontSize: "13px",
             fontWeight: 700,
             letterSpacing: "0.08em",
