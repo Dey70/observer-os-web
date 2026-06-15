@@ -136,9 +136,10 @@ export default function LogPage() {
 
       const sessionData: any = {
         user_id: user.id,
-        type: tab,
+        session_type: tab,
         date,
-        duration: durationMinutes,
+        duration_minutes: durationMinutes,
+        effort,
         rpe,
         notes: notes.trim() || null,
         ...(tab === "run" && { distance_km: distance, terrain }),
