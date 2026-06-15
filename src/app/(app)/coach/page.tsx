@@ -152,227 +152,218 @@ export default function CoachPage() {
   }
 
   return (
-    /*
-      Key insight: we use a fixed-height flex column.
-      On desktop: height = calc(100vh - 120px) — sidebar + padding
-      On mobile:  height = calc(100dvh - 160px) — bottom nav + padding
-      The middle messages div gets flex:1 and overflows-y scroll.
-      Input is always at the bottom of the flex column, never pushed off screen.
-    */
-    <div
-      className="coach-root"
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        /* desktop height */
-        height: "calc(100vh - 120px)",
-        maxHeight: "calc(100vh - 120px)",
-      }}
-    >
-      {/* Inject mobile override via a style tag */}
+    <>
+      {/* CSS handles both desktop and mobile heights cleanly */}
       <style>{`
+        .coach-root {
+          display: flex;
+          flex-direction: column;
+          width: 100%;
+          height: calc(100vh - 120px);
+          overflow: hidden;
+        }
         @media (max-width: 768px) {
           .coach-root {
-            height: calc(100dvh - 160px) !important;
-            max-height: calc(100dvh - 160px) !important;
+            height: calc(100dvh - 160px);
           }
         }
       `}</style>
 
-      {/* Header */}
-      <div style={{ flexShrink: 0, marginBottom: 10 }}>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            marginBottom: 2,
-            flexWrap: "wrap",
-            gap: 8,
-          }}
-        >
+      <div className="coach-root">
+        {/* Header */}
+        <div style={{ flexShrink: 0, marginBottom: 10 }}>
           <div
-            style={{ fontFamily: "var(--mono)", fontSize: 18, fontWeight: 700 }}
-          >
-            AI COACH
-          </div>
-          {isSunday && <Badge color="var(--accent)">📊 Weekly Review</Badge>}
-        </div>
-        <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
-          Groq · llama-3.3-70b · Tool-calling enabled
-        </div>
-      </div>
-
-      {/* Quick prompts — horizontal scroll, never wraps */}
-      <div
-        style={{
-          flexShrink: 0,
-          overflowX: "auto",
-          marginBottom: 10,
-          paddingBottom: 2,
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            gap: 6,
-            width: "max-content",
-            paddingRight: 4,
-          }}
-        >
-          {QUICK_PROMPTS.map((qp) => (
-            <button
-              key={qp.label}
-              onClick={() => sendMessage(qp.msg)}
-              disabled={loading}
-              style={{
-                padding: "6px 14px",
-                border: "1px solid var(--border2)",
-                fontSize: 12,
-                color: loading ? "var(--text-dim)" : "var(--text-muted)",
-                background: "rgba(255,255,255,0.03)",
-                cursor: loading ? "not-allowed" : "pointer",
-                whiteSpace: "nowrap",
-                borderRadius: 8,
-                flexShrink: 0,
-              }}
-            >
-              {qp.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Messages — takes all remaining space, scrolls internally */}
-      <div
-        style={{
-          flex: 1,
-          overflowY: "auto",
-          overflowX: "hidden",
-          border: "1px solid var(--border)",
-          background: "var(--surface)",
-          padding: 16,
-          display: "flex",
-          flexDirection: "column",
-          gap: 12,
-          borderRadius: 12,
-          minHeight: 0 /* critical — prevents flex child from overflowing */,
-        }}
-      >
-        {messages.map((msg, i) => (
-          <div
-            key={i}
             style={{
-              maxWidth: "85%",
-              alignSelf: msg.role === "user" ? "flex-end" : "flex-start",
-              animation: "fadeIn 0.2s ease-out",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: 2,
+              flexWrap: "wrap",
+              gap: 8,
             }}
           >
             <div
               style={{
-                padding: "10px 14px",
-                fontSize: 13,
-                lineHeight: 1.65,
-                background:
-                  msg.role === "user" ? "var(--accent-dim)" : "var(--surface2)",
-                border: `1px solid ${msg.role === "user" ? "var(--accent)" : "var(--border)"}`,
-                color: "var(--text)",
-                borderRadius: 10,
-                wordBreak: "break-word",
-              }}
-              dangerouslySetInnerHTML={{ __html: formatContent(msg.content) }}
-            />
-            <div
-              style={{
                 fontFamily: "var(--mono)",
-                fontSize: 9,
-                color: "var(--text-dim)",
-                marginTop: 3,
-                textAlign: msg.role === "user" ? "right" : "left",
+                fontSize: 18,
+                fontWeight: 700,
               }}
             >
-              {formatTime(msg.timestamp)}
+              AI COACH
             </div>
+            {isSunday && <Badge color="var(--accent)">📊 Weekly Review</Badge>}
           </div>
-        ))}
-
-        {loading && (
-          <div style={{ alignSelf: "flex-start", maxWidth: "85%" }}>
-            <div
-              style={{
-                background: "var(--surface2)",
-                border: "1px solid var(--border)",
-                borderRadius: 10,
-              }}
-            >
-              <TypingDots />
-            </div>
-            <div
-              style={{
-                fontFamily: "var(--mono)",
-                fontSize: 9,
-                color: "var(--text-dim)",
-                marginTop: 3,
-              }}
-            >
-              thinking...
-            </div>
+          <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+            Groq · llama-3.3-70b · Tool-calling enabled
           </div>
-        )}
-        <div ref={messagesEndRef} />
-      </div>
+        </div>
 
-      {/* Input — always at bottom, never scrolls away */}
-      <div
-        style={{
-          flexShrink: 0,
-          display: "flex",
-          marginTop: 10,
-          borderRadius: 10,
-          overflow: "hidden",
-          border: "1px solid var(--border2)",
-        }}
-      >
-        <textarea
-          ref={inputRef}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          disabled={loading}
-          rows={2}
-          placeholder="Ask the coach... (Enter to send, Shift+Enter for newline)"
+        {/* Quick prompts — horizontal scroll */}
+        <div
           style={{
-            flex: 1,
-            padding: "12px 14px",
-            background: "var(--surface)",
-            border: "none",
-            color: "var(--text)",
-            outline: "none",
-            fontSize: 13,
-            resize: "none",
-            fontFamily: "var(--sans)",
-            lineHeight: 1.5,
-            minWidth: 0,
-          }}
-        />
-        <button
-          onClick={() => sendMessage(input)}
-          disabled={loading || !input.trim()}
-          style={{
-            padding: "0 20px",
-            background:
-              loading || !input.trim() ? "var(--border2)" : "var(--accent)",
-            color: "#000",
-            fontWeight: 700,
-            fontSize: 20,
-            border: "none",
-            cursor: loading || !input.trim() ? "not-allowed" : "pointer",
             flexShrink: 0,
+            overflowX: "auto",
+            marginBottom: 10,
+            paddingBottom: 2,
           }}
         >
-          ↑
-        </button>
+          <div style={{ display: "flex", gap: 6, width: "max-content" }}>
+            {QUICK_PROMPTS.map((qp) => (
+              <button
+                key={qp.label}
+                onClick={() => sendMessage(qp.msg)}
+                disabled={loading}
+                style={{
+                  padding: "6px 14px",
+                  border: "1px solid var(--border2)",
+                  fontSize: 12,
+                  color: loading ? "var(--text-dim)" : "var(--text-muted)",
+                  background: "rgba(255,255,255,0.03)",
+                  cursor: loading ? "not-allowed" : "pointer",
+                  whiteSpace: "nowrap",
+                  borderRadius: 8,
+                  flexShrink: 0,
+                }}
+              >
+                {qp.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Messages — flex 1, minHeight 0 is critical */}
+        <div
+          style={{
+            flex: 1,
+            minHeight: 0,
+            overflowY: "auto",
+            overflowX: "hidden",
+            border: "1px solid var(--border)",
+            background: "var(--surface)",
+            padding: 16,
+            display: "flex",
+            flexDirection: "column",
+            gap: 12,
+            borderRadius: 12,
+          }}
+        >
+          {messages.map((msg, i) => (
+            <div
+              key={i}
+              style={{
+                maxWidth: "85%",
+                alignSelf: msg.role === "user" ? "flex-end" : "flex-start",
+                animation: "fadeIn 0.2s ease-out",
+              }}
+            >
+              <div
+                style={{
+                  padding: "10px 14px",
+                  fontSize: 13,
+                  lineHeight: 1.65,
+                  background:
+                    msg.role === "user"
+                      ? "var(--accent-dim)"
+                      : "var(--surface2)",
+                  border: `1px solid ${msg.role === "user" ? "var(--accent)" : "var(--border)"}`,
+                  color: "var(--text)",
+                  borderRadius: 10,
+                  wordBreak: "break-word",
+                }}
+                dangerouslySetInnerHTML={{ __html: formatContent(msg.content) }}
+              />
+              <div
+                style={{
+                  fontFamily: "var(--mono)",
+                  fontSize: 9,
+                  color: "var(--text-dim)",
+                  marginTop: 3,
+                  textAlign: msg.role === "user" ? "right" : "left",
+                }}
+              >
+                {formatTime(msg.timestamp)}
+              </div>
+            </div>
+          ))}
+
+          {loading && (
+            <div style={{ alignSelf: "flex-start", maxWidth: "85%" }}>
+              <div
+                style={{
+                  background: "var(--surface2)",
+                  border: "1px solid var(--border)",
+                  borderRadius: 10,
+                }}
+              >
+                <TypingDots />
+              </div>
+              <div
+                style={{
+                  fontFamily: "var(--mono)",
+                  fontSize: 9,
+                  color: "var(--text-dim)",
+                  marginTop: 3,
+                }}
+              >
+                thinking...
+              </div>
+            </div>
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* Input — always pinned at bottom */}
+        <div
+          style={{
+            flexShrink: 0,
+            display: "flex",
+            marginTop: 10,
+            borderRadius: 10,
+            overflow: "hidden",
+            border: "1px solid var(--border2)",
+          }}
+        >
+          <textarea
+            ref={inputRef}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            disabled={loading}
+            rows={2}
+            placeholder="Ask the coach... (Enter to send, Shift+Enter for newline)"
+            style={{
+              flex: 1,
+              padding: "12px 14px",
+              background: "var(--surface)",
+              border: "none",
+              color: "var(--text)",
+              outline: "none",
+              fontSize: 13,
+              resize: "none",
+              fontFamily: "var(--sans)",
+              lineHeight: 1.5,
+              minWidth: 0,
+            }}
+          />
+          <button
+            onClick={() => sendMessage(input)}
+            disabled={loading || !input.trim()}
+            style={{
+              padding: "0 20px",
+              background:
+                loading || !input.trim() ? "var(--border2)" : "var(--accent)",
+              color: "#000",
+              fontWeight: 700,
+              fontSize: 20,
+              border: "none",
+              cursor: loading || !input.trim() ? "not-allowed" : "pointer",
+              flexShrink: 0,
+            }}
+          >
+            ↑
+          </button>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
