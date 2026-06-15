@@ -825,7 +825,16 @@ export default function LogPage() {
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            style={{ ...inputStyle, colorScheme: "dark", display: "block" }}
+            style={{
+              ...inputStyle,
+              colorScheme: "dark",
+              display: "block",
+              // MOBILE FIXES: Prevent text clipping in native date pickers
+              minHeight: "48px",
+              lineHeight: "1.5",
+              WebkitAppearance: "none",
+              appearance: "none",
+            }}
           />
         </div>
 
