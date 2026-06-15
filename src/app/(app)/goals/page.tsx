@@ -13,6 +13,7 @@ import {
   EmptyState,
 } from "@/components/ui";
 import type { Goal, TrainingPlan } from "@/types";
+import { Pencil, Trash2, Check, X, CheckCircle2 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +33,15 @@ function getWeekStart() {
   return d.toISOString().split("T")[0];
 }
 
+type EditState = {
+  id: number;
+  title: string;
+  target_value: number;
+  current_value: number;
+  unit: string;
+  deadline: string;
+};
+
 export default function GoalsPage() {
   const sb = createClient();
   const [goals, setGoals] = useState<Goal[]>([]);
@@ -39,12 +49,23 @@ export default function GoalsPage() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // New goal form
   const [goalType, setGoalType] = useState("weight");
   const [title, setTitle] = useState("");
   const [target, setTarget] = useState("");
   const [current, setCurrent] = useState("");
   const [unit, setUnit] = useState("kg");
   const [deadline, setDeadline] = useState("");
+
+  // Edit state
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editState, setEditState] = useState<EditState | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
+
+  // Delete state
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     const {
@@ -94,18 +115,16 @@ export default function GoalsPage() {
       setSaving(false);
       return;
     }
-    await (sb as any)
-      .from("goals")
-      .insert({
-        user_id: user.id,
-        type: goalType,
-        title,
-        target_value: parseFloat(target),
-        current_value: parseFloat(current) || 0,
-        unit,
-        deadline: deadline || null,
-        active: true,
-      });
+    await (sb as any).from("goals").insert({
+      user_id: user.id,
+      type: goalType,
+      title,
+      target_value: parseFloat(target),
+      current_value: parseFloat(current) || 0,
+      unit,
+      deadline: deadline || null,
+      active: true,
+    });
     setSaving(false);
     setShowForm(false);
     setTitle("");
@@ -115,8 +134,80 @@ export default function GoalsPage() {
     load();
   }
 
-  async function archiveGoal(id: number) {
-    await (sb as any).from("goals").update({ active: false }).eq("id", id);
+  function startEdit(g: Goal) {
+    setConfirmDeleteId(null);
+    setEditingId(g.id);
+    setEditState({
+      id: g.id,
+      title: g.title,
+      target_value: g.target_value,
+      current_value: g.current_value,
+      unit: g.unit,
+      deadline: g.deadline ?? "",
+    });
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setEditState(null);
+  }
+
+  async function saveEdit() {
+    if (!editState) return;
+    setEditSaving(true);
+    const {
+      data: { user },
+    } = await sb.auth.getUser();
+    if (!user) {
+      setEditSaving(false);
+      return;
+    }
+    await (sb as any)
+      .from("goals")
+      .update({
+        title: editState.title,
+        target_value: editState.target_value,
+        current_value: editState.current_value,
+        unit: editState.unit,
+        deadline: editState.deadline || null,
+      })
+      .eq("id", editState.id)
+      .eq("user_id", user.id);
+    setEditSaving(false);
+    setEditingId(null);
+    setEditState(null);
+    load();
+  }
+
+  async function completeGoal(id: number) {
+    const {
+      data: { user },
+    } = await sb.auth.getUser();
+    if (!user) return;
+    await (sb as any)
+      .from("goals")
+      .update({ active: false })
+      .eq("id", id)
+      .eq("user_id", user.id);
+    load();
+  }
+
+  async function deleteGoal(id: number) {
+    setDeleting(true);
+    const {
+      data: { user },
+    } = await sb.auth.getUser();
+    if (!user) {
+      setDeleting(false);
+      return;
+    }
+    await (sb as any)
+      .from("goals")
+      .delete()
+      .eq("id", id)
+      .eq("user_id", user.id);
+    setDeleting(false);
+    setConfirmDeleteId(null);
     load();
   }
 
@@ -126,6 +217,19 @@ export default function GoalsPage() {
     study: "var(--yellow)",
     rest: "var(--text-muted)",
     cross: "var(--accent)",
+  };
+
+  const inputStyle: React.CSSProperties = {
+    padding: "8px 10px",
+    background: "var(--surface2)",
+    border: "1px solid var(--border)",
+    borderRadius: 6,
+    color: "var(--text)",
+    outline: "none",
+    fontFamily: "var(--mono)",
+    fontSize: 12,
+    width: "100%",
+    boxSizing: "border-box",
   };
 
   if (loading)
@@ -151,13 +255,14 @@ export default function GoalsPage() {
         subtitle="Set targets · track progress"
         right={
           <Button onClick={() => setShowForm((f) => !f)}>
-            {showForm ? "Cancel" : "+ New"}
+            {showForm ? "Cancel" : "+ New Goal"}
           </Button>
         }
       />
 
+      {/* New Goal Form */}
       {showForm && (
-        <Card style={{ borderColor: "var(--accent)" }}>
+        <Card style={{ borderColor: "var(--accent)", marginBottom: 16 }}>
           <SectionLabel>New Goal</SectionLabel>
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <Field label="Goal Type">
@@ -214,102 +319,508 @@ export default function GoalsPage() {
           <Button
             onClick={saveGoal}
             disabled={saving || !title || !target}
-            style={{ marginTop: 8 }}
+            style={{ marginTop: 12 }}
           >
             {saving ? "Saving..." : "Save Goal"}
           </Button>
         </Card>
       )}
 
+      {/* Active Goals */}
       <Card style={{ marginBottom: 16 }}>
-        <SectionLabel>Active Goals</SectionLabel>
+        <SectionLabel>Active Goals ({goals.length})</SectionLabel>
         {goals.length === 0 ? (
-          <EmptyState message="No active goals — add one above or ask the Coach" />
+          <EmptyState message="No active goals — add one above or ask the Coach to set goals for you" />
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {goals.map((g) => {
               const pct = Math.min(
                 100,
                 Math.round((g.current_value / g.target_value) * 100),
               );
+              const isComplete = pct >= 100;
+              const isEditing = editingId === g.id;
+              const isConfirmingDelete = confirmDeleteId === g.id;
+
+              // Days remaining
+              const daysLeft = g.deadline
+                ? Math.ceil(
+                    (new Date(g.deadline).getTime() - Date.now()) / 86400000,
+                  )
+                : null;
+
               return (
-                <div
-                  key={g.id}
-                  style={{
-                    padding: 16,
-                    background: "var(--surface2)",
-                    border: "1px solid var(--border)",
-                  }}
-                >
+                <div key={g.id}>
+                  {/* Goal card */}
                   <div
                     style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "flex-start",
-                      marginBottom: 10,
-                      gap: 8,
+                      padding: 16,
+                      background: "var(--surface2)",
+                      border: `1px solid ${isEditing ? "rgba(232,255,71,0.3)" : isComplete ? "rgba(0,230,118,0.25)" : "var(--border)"}`,
+                      borderRadius:
+                        isEditing || isConfirmingDelete ? "12px 12px 0 0" : 12,
+                      transition: "all 0.15s",
                     }}
                   >
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: 14, fontWeight: 500 }}>
-                        {g.title}
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "flex-start",
+                        marginBottom: 12,
+                        gap: 8,
+                      }}
+                    >
+                      <div style={{ minWidth: 0 }}>
+                        <div
+                          style={{
+                            fontSize: 14,
+                            fontWeight: 600,
+                            color: "var(--text)",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 8,
+                          }}
+                        >
+                          {isComplete && (
+                            <CheckCircle2
+                              size={15}
+                              color="var(--green)"
+                              strokeWidth={2}
+                            />
+                          )}
+                          {g.title}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: 11,
+                            color: "var(--text-muted)",
+                            marginTop: 3,
+                            fontFamily: "var(--mono)",
+                            display: "flex",
+                            gap: 12,
+                            flexWrap: "wrap",
+                          }}
+                        >
+                          <span>
+                            {g.current_value} / {g.target_value} {g.unit}
+                          </span>
+                          {daysLeft !== null && (
+                            <span
+                              style={{
+                                color:
+                                  daysLeft < 7
+                                    ? "var(--red)"
+                                    : daysLeft < 30
+                                      ? "var(--yellow)"
+                                      : "var(--text-dim)",
+                              }}
+                            >
+                              {daysLeft > 0
+                                ? `${daysLeft}d left`
+                                : daysLeft === 0
+                                  ? "Due today"
+                                  : `${Math.abs(daysLeft)}d overdue`}
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <div
                         style={{
-                          fontSize: 11,
-                          color: "var(--text-muted)",
-                          marginTop: 2,
-                          fontFamily: "var(--mono)",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          flexShrink: 0,
                         }}
                       >
-                        {g.current_value} / {g.target_value} {g.unit}
-                        {g.deadline && ` · by ${g.deadline}`}
+                        <span
+                          style={{
+                            fontFamily: "var(--mono)",
+                            fontSize: 20,
+                            fontWeight: 700,
+                            color: isComplete
+                              ? "var(--green)"
+                              : "var(--accent)",
+                          }}
+                        >
+                          {pct}%
+                        </span>
+                        {/* Action buttons */}
+                        <div style={{ display: "flex", gap: 4 }}>
+                          <button
+                            onClick={() =>
+                              isEditing ? cancelEdit() : startEdit(g)
+                            }
+                            title="Edit goal"
+                            style={{
+                              width: 28,
+                              height: 28,
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              background: isEditing
+                                ? "rgba(232,255,71,0.1)"
+                                : "rgba(255,255,255,0.05)",
+                              border: `1px solid ${isEditing ? "rgba(232,255,71,0.3)" : "var(--border)"}`,
+                              borderRadius: 6,
+                              cursor: "pointer",
+                            }}
+                          >
+                            {isEditing ? (
+                              <X size={12} color="#E8FF47" strokeWidth={2} />
+                            ) : (
+                              <Pencil
+                                size={12}
+                                color="var(--text-muted)"
+                                strokeWidth={1.75}
+                              />
+                            )}
+                          </button>
+                          <button
+                            onClick={() => completeGoal(g.id)}
+                            title="Mark complete"
+                            style={{
+                              width: 28,
+                              height: 28,
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              background: "rgba(0,230,118,0.06)",
+                              border: "1px solid rgba(0,230,118,0.2)",
+                              borderRadius: 6,
+                              cursor: "pointer",
+                            }}
+                          >
+                            <Check
+                              size={12}
+                              color="var(--green)"
+                              strokeWidth={2.5}
+                            />
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (isEditing) cancelEdit();
+                              setConfirmDeleteId(
+                                isConfirmingDelete ? null : g.id,
+                              );
+                            }}
+                            title="Delete goal"
+                            style={{
+                              width: 28,
+                              height: 28,
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              background: isConfirmingDelete
+                                ? "rgba(255,68,68,0.1)"
+                                : "rgba(255,255,255,0.05)",
+                              border: `1px solid ${isConfirmingDelete ? "rgba(255,68,68,0.3)" : "var(--border)"}`,
+                              borderRadius: 6,
+                              cursor: "pointer",
+                            }}
+                          >
+                            <Trash2
+                              size={12}
+                              color={
+                                isConfirmingDelete
+                                  ? "var(--red)"
+                                  : "var(--text-muted)"
+                              }
+                              strokeWidth={1.75}
+                            />
+                          </button>
+                        </div>
                       </div>
                     </div>
+
+                    {/* Progress bar */}
+                    <div
+                      style={{
+                        height: 4,
+                        background: "var(--border2)",
+                        borderRadius: 99,
+                      }}
+                    >
+                      <div
+                        style={{
+                          height: "100%",
+                          width: `${pct}%`,
+                          background: isComplete
+                            ? "var(--green)"
+                            : pct > 66
+                              ? "var(--accent)"
+                              : pct > 33
+                                ? "var(--yellow)"
+                                : "var(--red)",
+                          borderRadius: 99,
+                          transition: "width 0.4s ease, background 0.3s",
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Delete confirmation */}
+                  {isConfirmingDelete && !isEditing && (
                     <div
                       style={{
                         display: "flex",
                         alignItems: "center",
-                        gap: 12,
-                        flexShrink: 0,
+                        justifyContent: "space-between",
+                        padding: "10px 14px",
+                        background: "rgba(255,68,68,0.06)",
+                        border: "1px solid rgba(255,68,68,0.2)",
+                        borderTop: "none",
+                        borderRadius: "0 0 12px 12px",
+                        gap: 8,
+                        animation: "fadeIn 0.15s ease-out",
                       }}
                     >
                       <span
                         style={{
+                          fontSize: 12,
+                          color: "var(--text-muted)",
                           fontFamily: "var(--mono)",
-                          fontSize: 20,
-                          fontWeight: 700,
-                          color: pct >= 100 ? "var(--green)" : "var(--accent)",
                         }}
                       >
-                        {pct}%
+                        Delete this goal permanently?
                       </span>
-                      <button
-                        onClick={() => archiveGoal(g.id)}
-                        style={{
-                          fontSize: 10,
-                          color: "var(--text-dim)",
-                          background: "none",
-                          border: "none",
-                          cursor: "pointer",
-                          textTransform: "uppercase",
-                        }}
-                      >
-                        Done
-                      </button>
+                      <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                        <button
+                          onClick={() => setConfirmDeleteId(null)}
+                          style={{
+                            padding: "5px 12px",
+                            fontSize: 11,
+                            fontFamily: "var(--mono)",
+                            background: "var(--surface2)",
+                            border: "1px solid var(--border)",
+                            color: "var(--text-muted)",
+                            borderRadius: 5,
+                            cursor: "pointer",
+                          }}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={() => deleteGoal(g.id)}
+                          disabled={deleting}
+                          style={{
+                            padding: "5px 12px",
+                            fontSize: 11,
+                            fontFamily: "var(--mono)",
+                            background: "rgba(255,68,68,0.15)",
+                            border: "1px solid rgba(255,68,68,0.35)",
+                            color: "var(--red)",
+                            borderRadius: 5,
+                            cursor: deleting ? "not-allowed" : "pointer",
+                            opacity: deleting ? 0.6 : 1,
+                          }}
+                        >
+                          {deleting ? "..." : "Delete"}
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                  <div style={{ height: 3, background: "var(--border2)" }}>
+                  )}
+
+                  {/* Edit panel */}
+                  {isEditing && editState && (
                     <div
                       style={{
-                        height: "100%",
-                        width: `${pct}%`,
-                        background:
-                          pct >= 100 ? "var(--green)" : "var(--accent)",
-                        transition: "width 0.3s",
+                        padding: "14px",
+                        background: "rgba(232,255,71,0.025)",
+                        border: "1px solid rgba(232,255,71,0.15)",
+                        borderTop: "none",
+                        borderRadius: "0 0 12px 12px",
+                        animation: "fadeIn 0.15s ease-out",
                       }}
-                    />
-                  </div>
+                    >
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "1fr 1fr",
+                          gap: 8,
+                          marginBottom: 8,
+                        }}
+                      >
+                        <div>
+                          <label
+                            style={{
+                              display: "block",
+                              fontSize: 8,
+                              color: "var(--text-dim)",
+                              letterSpacing: "1.5px",
+                              textTransform: "uppercase",
+                              marginBottom: 4,
+                              fontFamily: "var(--mono)",
+                            }}
+                          >
+                            Title
+                          </label>
+                          <input
+                            value={editState.title}
+                            onChange={(e) =>
+                              setEditState({
+                                ...editState,
+                                title: e.target.value,
+                              })
+                            }
+                            style={inputStyle}
+                          />
+                        </div>
+                        <div>
+                          <label
+                            style={{
+                              display: "block",
+                              fontSize: 8,
+                              color: "var(--text-dim)",
+                              letterSpacing: "1.5px",
+                              textTransform: "uppercase",
+                              marginBottom: 4,
+                              fontFamily: "var(--mono)",
+                            }}
+                          >
+                            Unit
+                          </label>
+                          <input
+                            value={editState.unit}
+                            onChange={(e) =>
+                              setEditState({
+                                ...editState,
+                                unit: e.target.value,
+                              })
+                            }
+                            style={inputStyle}
+                          />
+                        </div>
+                      </div>
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "1fr 1fr 1fr",
+                          gap: 8,
+                          marginBottom: 10,
+                        }}
+                      >
+                        <div>
+                          <label
+                            style={{
+                              display: "block",
+                              fontSize: 8,
+                              color: "var(--text-dim)",
+                              letterSpacing: "1.5px",
+                              textTransform: "uppercase",
+                              marginBottom: 4,
+                              fontFamily: "var(--mono)",
+                            }}
+                          >
+                            Current
+                          </label>
+                          <input
+                            type="number"
+                            step={0.1}
+                            value={editState.current_value}
+                            onChange={(e) =>
+                              setEditState({
+                                ...editState,
+                                current_value: parseFloat(e.target.value) || 0,
+                              })
+                            }
+                            style={inputStyle}
+                          />
+                        </div>
+                        <div>
+                          <label
+                            style={{
+                              display: "block",
+                              fontSize: 8,
+                              color: "var(--text-dim)",
+                              letterSpacing: "1.5px",
+                              textTransform: "uppercase",
+                              marginBottom: 4,
+                              fontFamily: "var(--mono)",
+                            }}
+                          >
+                            Target
+                          </label>
+                          <input
+                            type="number"
+                            step={0.1}
+                            value={editState.target_value}
+                            onChange={(e) =>
+                              setEditState({
+                                ...editState,
+                                target_value: parseFloat(e.target.value) || 0,
+                              })
+                            }
+                            style={inputStyle}
+                          />
+                        </div>
+                        <div>
+                          <label
+                            style={{
+                              display: "block",
+                              fontSize: 8,
+                              color: "var(--text-dim)",
+                              letterSpacing: "1.5px",
+                              textTransform: "uppercase",
+                              marginBottom: 4,
+                              fontFamily: "var(--mono)",
+                            }}
+                          >
+                            Deadline
+                          </label>
+                          <input
+                            type="date"
+                            value={editState.deadline}
+                            onChange={(e) =>
+                              setEditState({
+                                ...editState,
+                                deadline: e.target.value,
+                              })
+                            }
+                            style={{ ...inputStyle, colorScheme: "dark" }}
+                          />
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button
+                          onClick={saveEdit}
+                          disabled={editSaving}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 5,
+                            padding: "7px 14px",
+                            background: "rgba(232,255,71,0.15)",
+                            border: "1px solid rgba(232,255,71,0.35)",
+                            color: "#E8FF47",
+                            fontSize: 11,
+                            fontFamily: "var(--mono)",
+                            borderRadius: 6,
+                            cursor: editSaving ? "not-allowed" : "pointer",
+                            opacity: editSaving ? 0.6 : 1,
+                          }}
+                        >
+                          <Check size={11} strokeWidth={2.5} />
+                          {editSaving ? "Saving..." : "Save"}
+                        </button>
+                        <button
+                          onClick={cancelEdit}
+                          style={{
+                            padding: "7px 12px",
+                            background: "var(--surface)",
+                            border: "1px solid var(--border)",
+                            color: "var(--text-muted)",
+                            fontSize: 11,
+                            fontFamily: "var(--mono)",
+                            borderRadius: 6,
+                            cursor: "pointer",
+                          }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -317,10 +828,11 @@ export default function GoalsPage() {
         )}
       </Card>
 
+      {/* Training Plan */}
       <Card>
         <SectionLabel>This Week&apos;s Training Plan</SectionLabel>
         {!plan ? (
-          <EmptyState message="No plan for this week — ask the Coach to generate one" />
+          <EmptyState message="No plan for this week — ask the Coach to generate one for you" />
         ) : (
           <>
             <div
@@ -351,6 +863,7 @@ export default function GoalsPage() {
                       alignItems: "flex-start",
                       gap: 10,
                       flexWrap: "wrap",
+                      borderRadius: 10,
                     }}
                   >
                     <div style={{ minWidth: 80 }}>
@@ -378,13 +891,20 @@ export default function GoalsPage() {
                           textTransform: "uppercase",
                           marginTop: 4,
                           display: "inline-block",
+                          borderRadius: 4,
                         }}
                       >
                         {day.type}
                       </span>
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 500 }}>
+                      <div
+                        style={{
+                          fontSize: 13,
+                          fontWeight: 500,
+                          color: "var(--text)",
+                        }}
+                      >
                         {day.title}
                       </div>
                       <div
