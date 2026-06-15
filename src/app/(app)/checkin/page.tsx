@@ -11,7 +11,7 @@ const SLIDERS = [
     label: "Sleep Quality",
     min: 1,
     max: 10,
-    color: "#E8FF47",
+    color: "var(--accent)",
     dataColor: "yellow",
   },
   {
@@ -19,7 +19,7 @@ const SLIDERS = [
     label: "Soreness",
     min: 1,
     max: 10,
-    color: "#FF6600",
+    color: "var(--yellow)", // Was orange, maps to your var(--yellow)
     dataColor: "orange",
   },
   {
@@ -27,7 +27,7 @@ const SLIDERS = [
     label: "Fatigue",
     min: 1,
     max: 10,
-    color: "#FF4444",
+    color: "var(--red)",
     dataColor: "red",
   },
   {
@@ -35,7 +35,7 @@ const SLIDERS = [
     label: "Mood",
     min: 1,
     max: 10,
-    color: "#00E676",
+    color: "var(--green)",
     dataColor: "green",
   },
   {
@@ -43,7 +43,7 @@ const SLIDERS = [
     label: "Energy",
     min: 1,
     max: 10,
-    color: "#A78BFA",
+    color: "var(--purple)",
     dataColor: "purple",
   },
 ] as const;
@@ -81,6 +81,11 @@ export default function CheckinPage() {
     vals.mood,
     vals.energy,
   );
+
+  // Note: Your calcReadiness likely returns hex codes (#E8FF47).
+  // If it does, you'll want to update that utility function to return CSS variables too
+  // (e.g., 'var(--accent)') so it changes based on theme!
+
   const todayLabel = new Date().toLocaleDateString("en-US", {
     weekday: "long",
     year: "numeric",
@@ -216,34 +221,16 @@ export default function CheckinPage() {
           padding: 28,
           marginBottom: 16,
           overflow: "hidden",
-          background: "var(--surface)",
+          background: "var(--glass-bg)",
           border: "1px solid var(--border)",
           backdropFilter: "blur(60px)",
           WebkitBackdropFilter: "blur(60px)",
           boxShadow:
-            "inset 0 1px 0 rgba(255,255,255,0.12), inset 0 -1px 0 rgba(0,0,0,0.2), 0 20px 60px rgba(0,0,0,0.5)",
+            "inset 0 1px 0 var(--glass-highlight), inset 0 -1px 0 rgba(0,0,0,0.1), 0 20px 60px var(--glass-shadow)",
         }}
       >
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            borderRadius: 24,
-            background:
-              "linear-gradient(180deg, rgba(255,255,255,0.06) 0%, transparent 40%)",
-            pointerEvents: "none",
-          }}
-        />
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            borderRadius: 24,
-            background:
-              "linear-gradient(0deg, rgba(0,0,0,0.15) 0%, transparent 40%)",
-            pointerEvents: "none",
-          }}
-        />
+        <div className="glass-layer glass-layer-top" />
+        <div className="glass-layer glass-layer-bottom" />
         <div
           style={{
             position: "absolute",
@@ -252,21 +239,8 @@ export default function CheckinPage() {
             right: "15%",
             height: 1,
             background:
-              "linear-gradient(90deg, transparent, rgba(255,255,255,0.35), transparent)",
+              "linear-gradient(90deg, transparent, var(--glass-highlight), transparent)",
             pointerEvents: "none",
-          }}
-        />
-        <div
-          style={{
-            position: "absolute",
-            width: 320,
-            height: 320,
-            borderRadius: "50%",
-            background: `radial-gradient(circle, ${readiness.color}20 0%, transparent 70%)`,
-            top: -120,
-            right: -80,
-            pointerEvents: "none",
-            transition: "background 0.5s",
           }}
         />
 
@@ -279,6 +253,8 @@ export default function CheckinPage() {
             marginBottom: 24,
             flexWrap: "wrap",
             gap: 12,
+            position: "relative",
+            zIndex: 10,
           }}
         >
           <div>
@@ -292,7 +268,7 @@ export default function CheckinPage() {
                   color: readiness.color,
                   lineHeight: 1,
                   letterSpacing: "-5px",
-                  textShadow: `0 0 60px ${readiness.color}50, 0 0 120px ${readiness.color}25`,
+                  textShadow: `0 0 60px ${readiness.color}50`,
                   animation: "scoreIn 0.5s cubic-bezier(0.34,1.56,0.64,1)",
                   transition: "color 0.3s",
                 }}
@@ -303,7 +279,7 @@ export default function CheckinPage() {
             <div
               style={{
                 fontSize: 9,
-                color: "rgba(255,255,255,0.35)",
+                color: "var(--text-muted)",
                 letterSpacing: "3px",
                 textTransform: "uppercase",
                 marginTop: 6,
@@ -329,8 +305,8 @@ export default function CheckinPage() {
               padding: "6px 14px",
               borderRadius: 99,
               marginTop: 14,
-              background: `${readiness.color}15`,
-              border: `1px solid ${readiness.color}35`,
+              background: `var(--surface)`,
+              border: `1px solid ${readiness.color}`,
               fontFamily: "var(--mono)",
               fontSize: 10,
               color: readiness.color,
@@ -349,12 +325,14 @@ export default function CheckinPage() {
             alignItems: "center",
             gap: 12,
             marginBottom: 16,
+            position: "relative",
+            zIndex: 10,
           }}
         >
           <span
             style={{
               fontSize: 10,
-              color: "rgba(255,255,255,0.55)",
+              color: "var(--text-muted)",
               width: 90,
               minWidth: 90,
               textTransform: "uppercase",
@@ -382,7 +360,7 @@ export default function CheckinPage() {
               fontWeight: 700,
               width: 28,
               textAlign: "right",
-              color: "#E8FF47",
+              color: "var(--accent)",
               flexShrink: 0,
             }}
           >
@@ -399,12 +377,14 @@ export default function CheckinPage() {
               alignItems: "center",
               gap: 12,
               marginBottom: 16,
+              position: "relative",
+              zIndex: 10,
             }}
           >
             <span
               style={{
                 fontSize: 10,
-                color: "rgba(255,255,255,0.55)",
+                color: "var(--text-muted)",
                 width: 90,
                 minWidth: 90,
                 textTransform: "uppercase",
@@ -446,12 +426,19 @@ export default function CheckinPage() {
         ))}
 
         {/* Notes */}
-        <div style={{ marginBottom: 16, marginTop: 8 }}>
+        <div
+          style={{
+            marginBottom: 16,
+            marginTop: 8,
+            position: "relative",
+            zIndex: 10,
+          }}
+        >
           <label
             style={{
               display: "block",
               fontSize: 9,
-              color: "rgba(255,255,255,0.35)",
+              color: "var(--text-muted)",
               letterSpacing: "1.5px",
               textTransform: "uppercase",
               marginBottom: 8,
@@ -468,10 +455,10 @@ export default function CheckinPage() {
             style={{
               width: "100%",
               padding: "11px 16px",
-              background: "rgba(255,255,255,0.05)",
-              border: "1px solid rgba(255,255,255,0.12)",
+              background: "var(--surface)",
+              border: "1px solid var(--border)",
               borderRadius: 10,
-              color: "rgba(255,255,255,0.8)",
+              color: "var(--text)",
               outline: "none",
               fontFamily: "var(--mono)",
               fontSize: 13,
@@ -487,6 +474,8 @@ export default function CheckinPage() {
             alignItems: "center",
             gap: 16,
             flexWrap: "wrap",
+            position: "relative",
+            zIndex: 10,
           }}
         >
           <button
@@ -496,7 +485,7 @@ export default function CheckinPage() {
               padding: "13px 28px",
               borderRadius: 10,
               background: "var(--accent)",
-              color: "#000",
+              color: "var(--bg)",
               fontSize: 11,
               fontWeight: 700,
               letterSpacing: "1.5px",
@@ -505,7 +494,7 @@ export default function CheckinPage() {
               cursor: saving ? "not-allowed" : "pointer",
               opacity: saving ? 0.6 : 1,
               boxShadow:
-                "0 4px 20px rgba(232,255,71,0.3), 0 0 40px rgba(232,255,71,0.1)",
+                "0 4px 20px var(--accent-dim), 0 0 40px var(--accent-dim)",
               transition: "all 0.2s",
               fontFamily: "var(--sans)",
             }}
@@ -558,7 +547,7 @@ export default function CheckinPage() {
               left: 0,
               right: 0,
               height: 2,
-              background: "linear-gradient(90deg,#E8FF47,#00E676)",
+              background: "var(--accent)",
               borderRadius: "16px 16px 0 0",
             }}
           />
@@ -567,7 +556,7 @@ export default function CheckinPage() {
               fontFamily: "var(--mono)",
               fontSize: 24,
               fontWeight: 700,
-              color: "#E8FF47",
+              color: "var(--accent)",
               marginBottom: 4,
             }}
           >
@@ -576,7 +565,7 @@ export default function CheckinPage() {
           <div
             style={{
               fontSize: 9,
-              color: "rgba(255,255,255,0.4)",
+              color: "var(--text-muted)",
               letterSpacing: "1.5px",
               textTransform: "uppercase",
             }}
@@ -602,7 +591,7 @@ export default function CheckinPage() {
               left: 0,
               right: 0,
               height: 2,
-              background: "linear-gradient(90deg,#00E676,#10B981)",
+              background: "var(--green)",
               borderRadius: "16px 16px 0 0",
             }}
           />
@@ -611,7 +600,7 @@ export default function CheckinPage() {
               fontFamily: "var(--mono)",
               fontSize: 24,
               fontWeight: 700,
-              color: "#00E676",
+              color: "var(--green)",
               marginBottom: 4,
             }}
           >
@@ -620,7 +609,7 @@ export default function CheckinPage() {
           <div
             style={{
               fontSize: 9,
-              color: "rgba(255,255,255,0.4)",
+              color: "var(--text-muted)",
               letterSpacing: "1.5px",
               textTransform: "uppercase",
             }}
@@ -649,7 +638,7 @@ export default function CheckinPage() {
               ))}
             </div>
           ) : (
-            nudge
+            <span style={{ color: "var(--text)" }}>{nudge}</span>
           )}
         </NudgeCard>
       )}
