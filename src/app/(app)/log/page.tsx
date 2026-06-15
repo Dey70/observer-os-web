@@ -205,27 +205,28 @@ export default function LogPage() {
           })}
         </div>
 
-        {/* Date + Duration — stacked on mobile */}
+        {/* Date — full width row */}
+        <div style={{ marginBottom: "12px" }}>
+          <label style={labelStyle}>DATE</label>
+          <input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            style={{ ...inputStyle, colorScheme: "dark" }}
+          />
+        </div>
+
+        {/* Duration — side by side */}
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1fr 80px 80px",
+            gridTemplateColumns: "1fr 1fr",
             gap: "12px",
             marginBottom: "20px",
-            alignItems: "end",
           }}
         >
           <div>
-            <label style={labelStyle}>DATE</label>
-            <input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              style={{ ...inputStyle, colorScheme: "dark" }}
-            />
-          </div>
-          <div>
-            <label style={labelStyle}>HRS</label>
+            <label style={labelStyle}>HOURS</label>
             <input
               type="number"
               min={0}
@@ -236,7 +237,7 @@ export default function LogPage() {
             />
           </div>
           <div>
-            <label style={labelStyle}>MIN</label>
+            <label style={labelStyle}>MINUTES</label>
             <input
               type="number"
               min={0}
@@ -251,13 +252,19 @@ export default function LogPage() {
         {/* Effort */}
         <div style={{ marginBottom: "20px" }}>
           <label style={labelStyle}>EFFORT</label>
-          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: "8px",
+            }}
+          >
             {effortOptions.map(({ key, label }) => (
               <button
                 key={key}
                 onClick={() => setEffort(key)}
                 style={{
-                  padding: "9px 16px",
+                  padding: "10px 8px",
                   borderRadius: "9px",
                   border: `1px solid ${effort === key ? "#E8FF47" : "rgba(255,255,255,0.1)"}`,
                   backgroundColor:
@@ -322,7 +329,13 @@ export default function LogPage() {
         {tab === "lift" && (
           <div style={{ marginBottom: "20px" }}>
             <label style={labelStyle}>SESSION TYPE</label>
-            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: "8px",
+              }}
+            >
               {liftTypes.map((t) => (
                 <button
                   key={t}
@@ -413,8 +426,9 @@ export default function LogPage() {
           style={{
             display: "flex",
             alignItems: "center",
+            justifyContent: "center",
             gap: "8px",
-            padding: "13px 28px",
+            padding: "14px",
             backgroundColor: success ? "rgba(232,255,71,0.15)" : "#E8FF47",
             border: success ? "1px solid #E8FF47" : "none",
             borderRadius: "10px",

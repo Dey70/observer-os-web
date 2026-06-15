@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { formatDuration, rpeToLabel } from "@/lib/utils";
-import { Card, PageHeader, Field, Select, EmptyState } from "@/components/ui";
+import { Card, PageHeader, EmptyState } from "@/components/ui";
 import type { Session } from "@/types";
 import { Pencil, Trash2, Check, X } from "lucide-react";
 
@@ -33,7 +33,6 @@ export default function HistoryPage() {
   const [hasMore, setHasMore] = useState(false);
   const [total, setTotal] = useState(0);
 
-  // Edit/delete state
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editState, setEditState] = useState<EditState | null>(null);
   const [saving, setSaving] = useState(false);
@@ -49,7 +48,6 @@ export default function HistoryPage() {
       if (!user) return;
 
       const currentPage = reset ? 0 : page;
-
       let query = sb
         .from("sessions")
         .select("*", { count: "exact" })
@@ -85,7 +83,6 @@ export default function HistoryPage() {
     setPage(0);
     load(true);
   }, [typeFilter, dateFrom, dateTo]);
-
   useEffect(() => {
     if (page > 0) load();
   }, [page]);
@@ -118,7 +115,6 @@ export default function HistoryPage() {
       setSaving(false);
       return;
     }
-
     await (sb as any)
       .from("sessions")
       .update({
@@ -130,7 +126,6 @@ export default function HistoryPage() {
       })
       .eq("id", editState.id)
       .eq("user_id", user.id);
-
     setSaving(false);
     setEditingId(null);
     setEditState(null);
@@ -146,13 +141,11 @@ export default function HistoryPage() {
       setDeleting(false);
       return;
     }
-
     await (sb as any)
       .from("sessions")
       .delete()
       .eq("id", id)
       .eq("user_id", user.id);
-
     setDeleting(false);
     setConfirmDeleteId(null);
     load(true);
@@ -163,7 +156,6 @@ export default function HistoryPage() {
     lift: "var(--purple)",
     study: "var(--yellow)",
   };
-
   const typeEmoji: Record<string, string> = {
     run: "🏃",
     lift: "🏋",
@@ -171,7 +163,7 @@ export default function HistoryPage() {
   };
 
   const inputStyle: React.CSSProperties = {
-    padding: "7px 10px",
+    padding: "8px 10px",
     background: "rgba(255,255,255,0.06)",
     border: "1px solid rgba(255,255,255,0.15)",
     borderRadius: 6,
@@ -179,6 +171,14 @@ export default function HistoryPage() {
     outline: "none",
     fontFamily: "var(--mono)",
     fontSize: 12,
+    width: "100%",
+    boxSizing: "border-box",
+  };
+
+  const selectStyle: React.CSSProperties = {
+    ...inputStyle,
+    colorScheme: "dark",
+    cursor: "pointer",
   };
 
   return (
@@ -188,88 +188,105 @@ export default function HistoryPage() {
         subtitle={`${total} total sessions`}
       />
 
-      {/* Filters */}
+      {/* Filters — stacked on mobile */}
       <Card style={{ marginBottom: 16 }}>
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-          <div style={{ flex: "1 1 140px" }}>
-            <Field label="Type">
-              <Select
-                value={typeFilter}
-                onChange={(e) => setTypeFilter(e.target.value as any)}
-              >
-                <option value="all">All Types</option>
-                <option value="run">Run</option>
-                <option value="lift">Lift</option>
-                <option value="study">Study</option>
-              </Select>
-            </Field>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {/* Type filter */}
+          <div>
+            <label
+              style={{
+                display: "block",
+                fontSize: 9,
+                color: "var(--text-muted)",
+                letterSpacing: "1.5px",
+                textTransform: "uppercase",
+                marginBottom: 5,
+                fontFamily: "var(--mono)",
+              }}
+            >
+              TYPE
+            </label>
+            <select
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value as any)}
+              style={selectStyle}
+            >
+              <option value="all">All Types</option>
+              <option value="run">Run</option>
+              <option value="lift">Lift</option>
+              <option value="study">Study</option>
+            </select>
           </div>
-          <div style={{ flex: "1 1 140px" }}>
-            <Field label="From">
+
+          {/* Date range — side by side */}
+          <div
+            style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}
+          >
+            <div>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: 9,
+                  color: "var(--text-muted)",
+                  letterSpacing: "1.5px",
+                  textTransform: "uppercase",
+                  marginBottom: 5,
+                  fontFamily: "var(--mono)",
+                }}
+              >
+                FROM
+              </label>
               <input
                 type="date"
                 value={dateFrom}
                 onChange={(e) => setDateFrom(e.target.value)}
-                style={{
-                  width: "100%",
-                  padding: "9px 12px",
-                  background: "var(--bg)",
-                  border: "1px solid var(--border2)",
-                  color: "var(--text)",
-                  outline: "none",
-                  fontFamily: "var(--mono)",
-                  fontSize: 13,
-                }}
+                style={{ ...inputStyle, colorScheme: "dark" }}
               />
-            </Field>
-          </div>
-          <div style={{ flex: "1 1 140px" }}>
-            <Field label="To">
+            </div>
+            <div>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: 9,
+                  color: "var(--text-muted)",
+                  letterSpacing: "1.5px",
+                  textTransform: "uppercase",
+                  marginBottom: 5,
+                  fontFamily: "var(--mono)",
+                }}
+              >
+                TO
+              </label>
               <input
                 type="date"
                 value={dateTo}
                 onChange={(e) => setDateTo(e.target.value)}
-                style={{
-                  width: "100%",
-                  padding: "9px 12px",
-                  background: "var(--bg)",
-                  border: "1px solid var(--border2)",
-                  color: "var(--text)",
-                  outline: "none",
-                  fontFamily: "var(--mono)",
-                  fontSize: 13,
-                }}
+                style={{ ...inputStyle, colorScheme: "dark" }}
               />
-            </Field>
+            </div>
           </div>
-          <div
+
+          {/* Clear */}
+          <button
+            onClick={() => {
+              setTypeFilter("all");
+              setDateFrom("");
+              setDateTo("");
+            }}
             style={{
-              flex: "0 0 auto",
-              display: "flex",
-              alignItems: "flex-end",
-              paddingBottom: 16,
+              padding: "8px",
+              border: "1px solid var(--border2)",
+              fontSize: 11,
+              color: "var(--text-muted)",
+              background: "none",
+              cursor: "pointer",
+              fontFamily: "var(--mono)",
+              letterSpacing: "0.05em",
+              borderRadius: 6,
             }}
           >
-            <button
-              onClick={() => {
-                setTypeFilter("all");
-                setDateFrom("");
-                setDateTo("");
-              }}
-              style={{
-                padding: "9px 16px",
-                border: "1px solid var(--border2)",
-                fontSize: 11,
-                color: "var(--text-muted)",
-                background: "none",
-                cursor: "pointer",
-                fontFamily: "var(--mono)",
-                letterSpacing: "0.05em",
-              }}
-            >
-              Clear
-            </button>
-          </div>
+            Clear Filters
+          </button>
         </div>
       </Card>
 
@@ -303,22 +320,22 @@ export default function HistoryPage() {
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "space-between",
-                        padding: "12px 14px",
+                        padding: "12px 12px",
                         background: isEditing
                           ? "rgba(232,255,71,0.04)"
                           : "var(--surface2)",
                         border: `1px solid ${isEditing ? "rgba(232,255,71,0.2)" : "var(--border)"}`,
                         borderRadius: isEditing ? "10px 10px 0 0" : 8,
-                        gap: 10,
+                        gap: 8,
                         transition: "all 0.15s",
                       }}
                     >
-                      {/* Left: type badge + notes */}
+                      {/* Left */}
                       <div
                         style={{
                           display: "flex",
-                          alignItems: "center",
-                          gap: 10,
+                          alignItems: "flex-start",
+                          gap: 8,
                           flex: 1,
                           minWidth: 0,
                         }}
@@ -326,9 +343,9 @@ export default function HistoryPage() {
                         <span
                           style={{
                             fontFamily: "var(--mono)",
-                            fontSize: 10,
-                            letterSpacing: "0.1em",
-                            padding: "3px 8px",
+                            fontSize: 9,
+                            letterSpacing: "0.08em",
+                            padding: "3px 7px",
                             border: `1px solid ${typeColor[s.type]}`,
                             color: typeColor[s.type],
                             textTransform: "uppercase",
@@ -344,6 +361,7 @@ export default function HistoryPage() {
                               fontSize: 13,
                               color: "var(--text)",
                               wordBreak: "break-word",
+                              lineHeight: 1.3,
                             }}
                           >
                             {s.notes || "—"}
@@ -353,7 +371,7 @@ export default function HistoryPage() {
                               fontSize: 10,
                               color: "var(--text-dim)",
                               fontFamily: "var(--mono)",
-                              marginTop: 1,
+                              marginTop: 2,
                             }}
                           >
                             RPE {s.rpe}/10 · {rpeToLabel(s.rpe)}
@@ -361,12 +379,12 @@ export default function HistoryPage() {
                         </div>
                       </div>
 
-                      {/* Right: duration + date + actions */}
+                      {/* Right */}
                       <div
                         style={{
                           display: "flex",
                           alignItems: "center",
-                          gap: 14,
+                          gap: 8,
                           flexShrink: 0,
                         }}
                       >
@@ -383,24 +401,21 @@ export default function HistoryPage() {
                           <div
                             style={{
                               fontFamily: "var(--mono)",
-                              fontSize: 10,
+                              fontSize: 9,
                               color: "var(--text-muted)",
                             }}
                           >
                             {s.date}
                           </div>
                         </div>
-
-                        {/* Action buttons */}
                         <div style={{ display: "flex", gap: 4 }}>
                           <button
                             onClick={() =>
                               isEditing ? cancelEdit() : startEdit(s)
                             }
-                            title={isEditing ? "Cancel edit" : "Edit session"}
                             style={{
-                              width: 30,
-                              height: 30,
+                              width: 28,
+                              height: 28,
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "center",
@@ -410,18 +425,17 @@ export default function HistoryPage() {
                               border: `1px solid ${isEditing ? "rgba(232,255,71,0.3)" : "rgba(255,255,255,0.08)"}`,
                               borderRadius: 6,
                               cursor: "pointer",
-                              transition: "all 0.15s",
                             }}
                           >
                             {isEditing ? (
                               <X
-                                size={13}
+                                size={12}
                                 color="rgba(232,255,71,0.8)"
                                 strokeWidth={2}
                               />
                             ) : (
                               <Pencil
-                                size={13}
+                                size={12}
                                 color="rgba(255,255,255,0.4)"
                                 strokeWidth={1.75}
                               />
@@ -434,10 +448,9 @@ export default function HistoryPage() {
                                 isConfirmingDelete ? null : s.id,
                               );
                             }}
-                            title="Delete session"
                             style={{
-                              width: 30,
-                              height: 30,
+                              width: 28,
+                              height: 28,
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "center",
@@ -447,11 +460,10 @@ export default function HistoryPage() {
                               border: `1px solid ${isConfirmingDelete ? "rgba(255,68,68,0.3)" : "rgba(255,255,255,0.08)"}`,
                               borderRadius: 6,
                               cursor: "pointer",
-                              transition: "all 0.15s",
                             }}
                           >
                             <Trash2
-                              size={13}
+                              size={12}
                               color={
                                 isConfirmingDelete
                                   ? "var(--red)"
@@ -464,35 +476,36 @@ export default function HistoryPage() {
                       </div>
                     </div>
 
-                    {/* Delete confirmation strip */}
+                    {/* Delete confirmation */}
                     {isConfirmingDelete && !isEditing && (
                       <div
                         style={{
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "space-between",
-                          padding: "10px 14px",
+                          padding: "10px 12px",
                           background: "rgba(255,68,68,0.06)",
                           border: "1px solid rgba(255,68,68,0.2)",
                           borderTop: "none",
                           borderRadius: "0 0 8px 8px",
                           animation: "fadeIn 0.15s ease-out",
+                          gap: 8,
                         }}
                       >
                         <span
                           style={{
-                            fontSize: 12,
+                            fontSize: 11,
                             color: "rgba(255,255,255,0.5)",
                             fontFamily: "var(--mono)",
                           }}
                         >
-                          Delete this session permanently?
+                          Delete permanently?
                         </span>
-                        <div style={{ display: "flex", gap: 8 }}>
+                        <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
                           <button
                             onClick={() => setConfirmDeleteId(null)}
                             style={{
-                              padding: "5px 14px",
+                              padding: "5px 12px",
                               fontSize: 11,
                               fontFamily: "var(--mono)",
                               background: "rgba(255,255,255,0.05)",
@@ -508,7 +521,7 @@ export default function HistoryPage() {
                             onClick={() => deleteSession(s.id)}
                             disabled={deleting}
                             style={{
-                              padding: "5px 14px",
+                              padding: "5px 12px",
                               fontSize: 11,
                               fontFamily: "var(--mono)",
                               background: "rgba(255,68,68,0.15)",
@@ -519,7 +532,7 @@ export default function HistoryPage() {
                               opacity: deleting ? 0.6 : 1,
                             }}
                           >
-                            {deleting ? "Deleting..." : "Delete"}
+                            {deleting ? "..." : "Delete"}
                           </button>
                         </div>
                       </div>
@@ -529,7 +542,7 @@ export default function HistoryPage() {
                     {isEditing && editState && (
                       <div
                         style={{
-                          padding: "16px 14px",
+                          padding: "14px 12px",
                           background: "rgba(232,255,71,0.025)",
                           border: "1px solid rgba(232,255,71,0.15)",
                           borderTop: "none",
@@ -537,20 +550,20 @@ export default function HistoryPage() {
                           animation: "fadeIn 0.15s ease-out",
                         }}
                       >
+                        {/* Row 1: Date + Type */}
                         <div
                           style={{
-                            display: "flex",
-                            gap: 10,
-                            flexWrap: "wrap",
-                            marginBottom: 10,
+                            display: "grid",
+                            gridTemplateColumns: "1fr 1fr",
+                            gap: 8,
+                            marginBottom: 8,
                           }}
                         >
-                          {/* Date */}
-                          <div style={{ flex: "0 0 130px" }}>
+                          <div>
                             <label
                               style={{
                                 display: "block",
-                                fontSize: 9,
+                                fontSize: 8,
                                 color: "var(--text-dim)",
                                 letterSpacing: "1.5px",
                                 textTransform: "uppercase",
@@ -569,20 +582,14 @@ export default function HistoryPage() {
                                   date: e.target.value,
                                 })
                               }
-                              style={{
-                                ...inputStyle,
-                                colorScheme: "dark",
-                                width: "100%",
-                              }}
+                              style={{ ...inputStyle, colorScheme: "dark" }}
                             />
                           </div>
-
-                          {/* Type */}
-                          <div style={{ flex: "0 0 110px" }}>
+                          <div>
                             <label
                               style={{
                                 display: "block",
-                                fontSize: 9,
+                                fontSize: 8,
                                 color: "var(--text-dim)",
                                 letterSpacing: "1.5px",
                                 textTransform: "uppercase",
@@ -600,25 +607,29 @@ export default function HistoryPage() {
                                   type: e.target.value as any,
                                 })
                               }
-                              style={{
-                                ...inputStyle,
-                                width: "100%",
-                                cursor: "pointer",
-                                colorScheme: "dark",
-                              }}
+                              style={selectStyle}
                             >
                               <option value="run">Run</option>
                               <option value="lift">Lift</option>
                               <option value="study">Study</option>
                             </select>
                           </div>
+                        </div>
 
-                          {/* Duration */}
-                          <div style={{ flex: "0 0 100px" }}>
+                        {/* Row 2: Duration + RPE */}
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "1fr 1fr",
+                            gap: 8,
+                            marginBottom: 8,
+                          }}
+                        >
+                          <div>
                             <label
                               style={{
                                 display: "block",
-                                fontSize: 9,
+                                fontSize: 8,
                                 color: "var(--text-dim)",
                                 letterSpacing: "1.5px",
                                 textTransform: "uppercase",
@@ -639,16 +650,14 @@ export default function HistoryPage() {
                                   duration: parseInt(e.target.value) || 0,
                                 })
                               }
-                              style={{ ...inputStyle, width: "100%" }}
+                              style={inputStyle}
                             />
                           </div>
-
-                          {/* RPE */}
-                          <div style={{ flex: "0 0 80px" }}>
+                          <div>
                             <label
                               style={{
                                 display: "block",
-                                fontSize: 9,
+                                fontSize: 8,
                                 color: "var(--text-dim)",
                                 letterSpacing: "1.5px",
                                 textTransform: "uppercase",
@@ -669,41 +678,40 @@ export default function HistoryPage() {
                                   rpe: parseInt(e.target.value) || 5,
                                 })
                               }
-                              style={{ ...inputStyle, width: "100%" }}
-                            />
-                          </div>
-
-                          {/* Notes */}
-                          <div style={{ flex: "1 1 200px" }}>
-                            <label
-                              style={{
-                                display: "block",
-                                fontSize: 9,
-                                color: "var(--text-dim)",
-                                letterSpacing: "1.5px",
-                                textTransform: "uppercase",
-                                marginBottom: 4,
-                                fontFamily: "var(--mono)",
-                              }}
-                            >
-                              Notes
-                            </label>
-                            <input
-                              type="text"
-                              value={editState.notes}
-                              onChange={(e) =>
-                                setEditState({
-                                  ...editState,
-                                  notes: e.target.value,
-                                })
-                              }
-                              placeholder="How did it go?"
-                              style={{ ...inputStyle, width: "100%" }}
+                              style={inputStyle}
                             />
                           </div>
                         </div>
 
-                        {/* Save / Cancel */}
+                        {/* Row 3: Notes */}
+                        <div style={{ marginBottom: 10 }}>
+                          <label
+                            style={{
+                              display: "block",
+                              fontSize: 8,
+                              color: "var(--text-dim)",
+                              letterSpacing: "1.5px",
+                              textTransform: "uppercase",
+                              marginBottom: 4,
+                              fontFamily: "var(--mono)",
+                            }}
+                          >
+                            Notes
+                          </label>
+                          <input
+                            type="text"
+                            value={editState.notes}
+                            onChange={(e) =>
+                              setEditState({
+                                ...editState,
+                                notes: e.target.value,
+                              })
+                            }
+                            placeholder="How did it go?"
+                            style={inputStyle}
+                          />
+                        </div>
+
                         <div style={{ display: "flex", gap: 8 }}>
                           <button
                             onClick={saveEdit}
@@ -711,28 +719,25 @@ export default function HistoryPage() {
                             style={{
                               display: "flex",
                               alignItems: "center",
-                              gap: 6,
-                              padding: "7px 16px",
-                              background: saving
-                                ? "rgba(232,255,71,0.1)"
-                                : "rgba(232,255,71,0.15)",
+                              gap: 5,
+                              padding: "7px 14px",
+                              background: "rgba(232,255,71,0.15)",
                               border: "1px solid rgba(232,255,71,0.35)",
                               color: "#E8FF47",
                               fontSize: 11,
                               fontFamily: "var(--mono)",
-                              letterSpacing: "0.08em",
                               borderRadius: 6,
                               cursor: saving ? "not-allowed" : "pointer",
                               opacity: saving ? 0.6 : 1,
                             }}
                           >
-                            <Check size={12} strokeWidth={2.5} />
-                            {saving ? "Saving..." : "Save changes"}
+                            <Check size={11} strokeWidth={2.5} />
+                            {saving ? "Saving..." : "Save"}
                           </button>
                           <button
                             onClick={cancelEdit}
                             style={{
-                              padding: "7px 14px",
+                              padding: "7px 12px",
                               background: "rgba(255,255,255,0.04)",
                               border: "1px solid rgba(255,255,255,0.08)",
                               color: "rgba(255,255,255,0.4)",
@@ -752,7 +757,6 @@ export default function HistoryPage() {
               })}
             </div>
 
-            {/* Load more */}
             {hasMore && (
               <div style={{ textAlign: "center", marginTop: 16 }}>
                 <button
@@ -766,7 +770,6 @@ export default function HistoryPage() {
                     background: "none",
                     cursor: loading ? "not-allowed" : "pointer",
                     fontFamily: "var(--mono)",
-                    letterSpacing: "0.06em",
                     opacity: loading ? 0.5 : 1,
                   }}
                 >

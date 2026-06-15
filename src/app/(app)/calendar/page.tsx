@@ -16,7 +16,7 @@ import {
 
 export const dynamic = "force-dynamic";
 
-const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const DAYS_SHORT = ["S", "M", "T", "W", "T", "F", "S"];
 const MONTHS = [
   "January",
   "February",
@@ -43,16 +43,13 @@ const TYPE_ICON: Record<string, React.ElementType> = {
   study: BookOpen,
 };
 
-type DayData = {
-  sessions: Session[];
-  log: DailyLog | null;
-};
+type DayData = { sessions: Session[]; log: DailyLog | null };
 
 export default function CalendarPage() {
   const sb = createClient();
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
-  const [month, setMonth] = useState(today.getMonth()); // 0-indexed
+  const [month, setMonth] = useState(today.getMonth());
   const [dayMap, setDayMap] = useState<Record<string, DayData>>({});
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -116,14 +113,12 @@ export default function CalendarPage() {
     setSelectedDate(null);
   }
 
-  // Build calendar grid
-  const firstDayOfMonth = new Date(year, month, 1).getDay(); // 0=Sun
+  const firstDayOfMonth = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const cells: (number | null)[] = [
     ...Array(firstDayOfMonth).fill(null),
     ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
   ];
-  // Pad to complete last row
   while (cells.length % 7 !== 0) cells.push(null);
 
   const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
@@ -135,259 +130,213 @@ export default function CalendarPage() {
   const selectedData = selectedDate ? dayMap[selectedDate] : null;
 
   return (
-    <div
-      style={{ display: "flex", gap: 24, alignItems: "flex-start" }}
-      className="calendar-layout"
-    >
-      {/* Left: calendar */}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <PageHeader title="CALENDAR" subtitle="Sessions and check-ins by day" />
+    <div>
+      <PageHeader title="CALENDAR" subtitle="Sessions and check-ins by day" />
 
-        {/* Month nav */}
+      {/* Month nav */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: 14,
+          background: "rgba(255,255,255,0.04)",
+          border: "1px solid rgba(255,255,255,0.08)",
+          borderRadius: 12,
+          padding: "10px 14px",
+        }}
+      >
+        <button onClick={prevMonth} style={navBtnStyle}>
+          <ChevronLeft size={16} color="rgba(255,255,255,0.6)" />
+        </button>
         <div
           style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            marginBottom: 16,
-            background: "rgba(255,255,255,0.04)",
-            border: "1px solid rgba(255,255,255,0.08)",
-            borderRadius: 12,
-            padding: "12px 16px",
+            fontFamily: "var(--mono)",
+            fontSize: 14,
+            fontWeight: 700,
+            letterSpacing: "0.06em",
           }}
         >
-          <button onClick={prevMonth} style={navBtnStyle}>
-            <ChevronLeft size={16} color="rgba(255,255,255,0.6)" />
-          </button>
+          {MONTHS[month]} {year}
+        </div>
+        <button onClick={nextMonth} style={navBtnStyle}>
+          <ChevronRight size={16} color="rgba(255,255,255,0.6)" />
+        </button>
+      </div>
+
+      {/* Day headers */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(7, 1fr)",
+          gap: 3,
+          marginBottom: 3,
+        }}
+      >
+        {DAYS_SHORT.map((d, i) => (
           <div
+            key={i}
             style={{
+              textAlign: "center",
+              fontSize: 9,
               fontFamily: "var(--mono)",
-              fontSize: 15,
-              fontWeight: 700,
-              letterSpacing: "0.06em",
+              color: "rgba(255,255,255,0.3)",
+              letterSpacing: "0.1em",
+              padding: "3px 0",
             }}
           >
-            {MONTHS[month]} {year}
+            {d}
           </div>
-          <button onClick={nextMonth} style={navBtnStyle}>
-            <ChevronRight size={16} color="rgba(255,255,255,0.6)" />
-          </button>
-        </div>
+        ))}
+      </div>
 
-        {/* Day headers */}
+      {/* Grid — compact, fits screen */}
+      {loading ? (
+        <div
+          style={{
+            color: "var(--text-muted)",
+            fontFamily: "var(--mono)",
+            fontSize: 13,
+            padding: 24,
+            textAlign: "center",
+          }}
+        >
+          Loading...
+        </div>
+      ) : (
         <div
           style={{
             display: "grid",
             gridTemplateColumns: "repeat(7, 1fr)",
-            gap: 4,
-            marginBottom: 4,
+            gap: 3,
           }}
         >
-          {DAYS.map((d) => (
-            <div
-              key={d}
-              style={{
-                textAlign: "center",
-                fontSize: 9,
-                fontFamily: "var(--mono)",
-                color: "rgba(255,255,255,0.3)",
-                letterSpacing: "0.1em",
-                textTransform: "uppercase",
-                padding: "4px 0",
-              }}
-            >
-              {d}
-            </div>
-          ))}
-        </div>
+          {cells.map((day, i) => {
+            if (!day) return <div key={i} style={{ aspectRatio: "1" }} />;
+            const ds = dateStr(day);
+            const data = dayMap[ds];
+            const isToday = ds === todayStr;
+            const isSelected = ds === selectedDate;
+            const hasCheckin = !!data?.log;
+            const sessionTypes = [
+              ...new Set(data?.sessions.map((s) => s.type) ?? []),
+            ];
 
-        {/* Grid */}
-        {loading ? (
-          <div
-            style={{
-              color: "var(--text-muted)",
-              fontFamily: "var(--mono)",
-              fontSize: 13,
-              padding: 24,
-              textAlign: "center",
-            }}
-          >
-            Loading...
-          </div>
-        ) : (
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(7, 1fr)",
-              gap: 4,
-            }}
-          >
-            {cells.map((day, i) => {
-              if (!day) return <div key={i} />;
-              const ds = dateStr(day);
-              const data = dayMap[ds];
-              const isToday = ds === todayStr;
-              const isSelected = ds === selectedDate;
-              const hasCheckin = !!data?.log;
-              const sessionTypes = [
-                ...new Set(data?.sessions.map((s) => s.type) ?? []),
-              ];
-
-              return (
-                <button
-                  key={i}
-                  onClick={() => setSelectedDate(isSelected ? null : ds)}
-                  style={{
-                    position: "relative",
-                    aspectRatio: "1",
-                    borderRadius: 10,
-                    border: isSelected
-                      ? "1.5px solid #E8FF47"
-                      : isToday
-                        ? "1.5px solid rgba(232,255,71,0.4)"
-                        : "1px solid rgba(255,255,255,0.06)",
-                    background: isSelected
-                      ? "rgba(232,255,71,0.08)"
-                      : isToday
-                        ? "rgba(232,255,71,0.04)"
-                        : "rgba(255,255,255,0.03)",
-                    cursor: "pointer",
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    justifyContent: "flex-start",
-                    padding: "8px 4px 6px",
-                    gap: 4,
-                    transition: "all 0.12s",
-                    minHeight: 72,
-                  }}
-                >
-                  {/* Day number */}
-                  <span
-                    style={{
-                      fontFamily: "var(--mono)",
-                      fontSize: 12,
-                      fontWeight: isToday ? 700 : 400,
-                      color: isToday
-                        ? "#E8FF47"
-                        : isSelected
-                          ? "#E8FF47"
-                          : "rgba(255,255,255,0.6)",
-                      lineHeight: 1,
-                    }}
-                  >
-                    {day}
-                  </span>
-
-                  {/* Check-in ring indicator */}
-                  {hasCheckin && (
-                    <div
-                      style={{
-                        width: 6,
-                        height: 6,
-                        borderRadius: "50%",
-                        background: "#E8FF47",
-                        boxShadow: "0 0 6px rgba(232,255,71,0.6)",
-                        flexShrink: 0,
-                      }}
-                    />
-                  )}
-
-                  {/* Session type dots */}
-                  {sessionTypes.length > 0 && (
-                    <div
-                      style={{
-                        display: "flex",
-                        gap: 3,
-                        flexWrap: "wrap",
-                        justifyContent: "center",
-                      }}
-                    >
-                      {sessionTypes.map((t) => (
-                        <div
-                          key={t}
-                          style={{
-                            width: 6,
-                            height: 6,
-                            borderRadius: "50%",
-                            background: TYPE_COLOR[t],
-                            boxShadow: `0 0 5px ${TYPE_COLOR[t]}80`,
-                          }}
-                        />
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Session count badge */}
-                  {(data?.sessions.length ?? 0) > 1 && (
-                    <span
-                      style={{
-                        fontSize: 8,
-                        fontFamily: "var(--mono)",
-                        color: "rgba(255,255,255,0.35)",
-                        lineHeight: 1,
-                      }}
-                    >
-                      ×{data!.sessions.length}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Legend */}
-        <div
-          style={{
-            display: "flex",
-            gap: 16,
-            marginTop: 20,
-            flexWrap: "wrap",
-            padding: "12px 16px",
-            background: "rgba(255,255,255,0.02)",
-            border: "1px solid rgba(255,255,255,0.06)",
-            borderRadius: 10,
-          }}
-        >
-          {[
-            { color: "#E8FF47", label: "Check-in" },
-            { color: "#00E676", label: "Run" },
-            { color: "#A78BFA", label: "Lift" },
-            { color: "#FFB800", label: "Study" },
-          ].map(({ color, label }) => (
-            <div
-              key={label}
-              style={{ display: "flex", alignItems: "center", gap: 6 }}
-            >
-              <div
+            return (
+              <button
+                key={i}
+                onClick={() => setSelectedDate(isSelected ? null : ds)}
                 style={{
-                  width: 7,
-                  height: 7,
-                  borderRadius: "50%",
-                  background: color,
-                  boxShadow: `0 0 6px ${color}80`,
-                }}
-              />
-              <span
-                style={{
-                  fontSize: 10,
-                  color: "rgba(255,255,255,0.4)",
-                  fontFamily: "var(--mono)",
+                  aspectRatio: "1",
+                  borderRadius: 8,
+                  border: isSelected
+                    ? "1.5px solid #E8FF47"
+                    : isToday
+                      ? "1.5px solid rgba(232,255,71,0.4)"
+                      : "1px solid rgba(255,255,255,0.06)",
+                  background: isSelected
+                    ? "rgba(232,255,71,0.08)"
+                    : isToday
+                      ? "rgba(232,255,71,0.04)"
+                      : "rgba(255,255,255,0.03)",
+                  cursor: "pointer",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: "4px 2px",
+                  gap: 2,
+                  transition: "all 0.12s",
+                  minHeight: 0,
                 }}
               >
-                {label}
-              </span>
-            </div>
-          ))}
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span
+                  style={{
+                    fontFamily: "var(--mono)",
+                    fontSize: 11,
+                    fontWeight: isToday ? 700 : 400,
+                    color: isToday
+                      ? "#E8FF47"
+                      : isSelected
+                        ? "#E8FF47"
+                        : "rgba(255,255,255,0.6)",
+                    lineHeight: 1,
+                  }}
+                >
+                  {day}
+                </span>
+
+                {/* Dots row */}
+                {(hasCheckin || sessionTypes.length > 0) && (
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: 2,
+                      alignItems: "center",
+                      flexWrap: "wrap",
+                      justifyContent: "center",
+                    }}
+                  >
+                    {hasCheckin && (
+                      <div
+                        style={{
+                          width: 4,
+                          height: 4,
+                          borderRadius: "50%",
+                          background: "#E8FF47",
+                          flexShrink: 0,
+                        }}
+                      />
+                    )}
+                    {sessionTypes.map((t) => (
+                      <div
+                        key={t}
+                        style={{
+                          width: 4,
+                          height: 4,
+                          borderRadius: "50%",
+                          background: TYPE_COLOR[t],
+                          flexShrink: 0,
+                        }}
+                      />
+                    ))}
+                  </div>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Legend */}
+      <div
+        style={{
+          display: "flex",
+          gap: 12,
+          marginTop: 14,
+          flexWrap: "wrap",
+          padding: "10px 14px",
+          background: "rgba(255,255,255,0.02)",
+          border: "1px solid rgba(255,255,255,0.06)",
+          borderRadius: 10,
+        }}
+      >
+        {[
+          { color: "#E8FF47", label: "Check-in" },
+          { color: "#00E676", label: "Run" },
+          { color: "#A78BFA", label: "Lift" },
+          { color: "#FFB800", label: "Study" },
+        ].map(({ color, label }) => (
+          <div
+            key={label}
+            style={{ display: "flex", alignItems: "center", gap: 5 }}
+          >
             <div
               style={{
-                width: 12,
-                height: 12,
-                borderRadius: 3,
-                border: "1.5px solid rgba(232,255,71,0.4)",
-                background: "rgba(232,255,71,0.04)",
+                width: 6,
+                height: 6,
+                borderRadius: "50%",
+                background: color,
               }}
             />
             <span
@@ -397,49 +346,45 @@ export default function CalendarPage() {
                 fontFamily: "var(--mono)",
               }}
             >
-              Today
+              {label}
             </span>
           </div>
-        </div>
+        ))}
       </div>
 
-      {/* Right: day detail panel */}
-      <div
-        className="calendar-panel"
-        style={{
-          width: 300,
-          flexShrink: 0,
-          position: "sticky",
-          top: 24,
-        }}
-      >
-        {selectedDate && selectedData ? (
-          <DayPanel date={selectedDate} data={selectedData} />
-        ) : selectedDate ? (
-          <EmptyDayPanel date={selectedDate} />
-        ) : (
+      {/* Day detail panel — always below grid on all screen sizes */}
+      {selectedDate && (
+        <div style={{ marginTop: 16 }}>
+          {selectedData ? (
+            <DayPanel date={selectedDate} data={selectedData} />
+          ) : (
+            <EmptyDayPanel date={selectedDate} />
+          )}
+        </div>
+      )}
+
+      {!selectedDate && (
+        <div
+          style={{
+            marginTop: 16,
+            background: "rgba(255,255,255,0.02)",
+            border: "1px solid rgba(255,255,255,0.06)",
+            borderRadius: 14,
+            padding: 20,
+            textAlign: "center",
+          }}
+        >
           <div
             style={{
-              background: "rgba(255,255,255,0.03)",
-              border: "1px solid rgba(255,255,255,0.07)",
-              borderRadius: 16,
-              padding: 24,
-              textAlign: "center",
+              fontSize: 11,
+              color: "rgba(255,255,255,0.25)",
+              fontFamily: "var(--mono)",
             }}
           >
-            <div style={{ fontSize: 28, marginBottom: 12 }}>📅</div>
-            <div
-              style={{
-                fontSize: 12,
-                color: "rgba(255,255,255,0.3)",
-                fontFamily: "var(--mono)",
-              }}
-            >
-              Click any day to see details
-            </div>
+            Tap any day to see details
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -455,7 +400,6 @@ function DayPanel({ date, data }: { date: string; data: DayData }) {
         log.energy,
       )
     : null;
-
   const displayDate = new Date(date + "T12:00:00").toLocaleDateString("en-US", {
     weekday: "long",
     month: "long",
@@ -467,15 +411,14 @@ function DayPanel({ date, data }: { date: string; data: DayData }) {
       style={{
         background: "rgba(255,255,255,0.04)",
         border: "1px solid rgba(255,255,255,0.1)",
-        borderRadius: 16,
+        borderRadius: 14,
         overflow: "hidden",
         animation: "fadeIn 0.2s ease-out",
       }}
     >
-      {/* Header */}
       <div
         style={{
-          padding: "16px 18px",
+          padding: "14px 16px",
           borderBottom: "1px solid rgba(255,255,255,0.07)",
           background: "rgba(255,255,255,0.02)",
         }}
@@ -486,7 +429,6 @@ function DayPanel({ date, data }: { date: string; data: DayData }) {
             fontFamily: "var(--mono)",
             fontWeight: 700,
             color: "#E8FF47",
-            letterSpacing: "0.05em",
           }}
         >
           {displayDate}
@@ -495,10 +437,10 @@ function DayPanel({ date, data }: { date: string; data: DayData }) {
 
       <div
         style={{
-          padding: 18,
+          padding: 16,
           display: "flex",
           flexDirection: "column",
-          gap: 16,
+          gap: 14,
         }}
       >
         {/* Check-in */}
@@ -511,7 +453,7 @@ function DayPanel({ date, data }: { date: string; data: DayData }) {
                 letterSpacing: "2px",
                 textTransform: "uppercase",
                 fontFamily: "var(--mono)",
-                marginBottom: 10,
+                marginBottom: 8,
               }}
             >
               Daily Check-in
@@ -557,51 +499,40 @@ function DayPanel({ date, data }: { date: string; data: DayData }) {
               <div
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: 6,
+                  gridTemplateColumns: "1fr 1fr 1fr",
+                  gap: 8,
                 }}
               >
                 {[
                   {
                     label: "Sleep",
-                    value: `${log.sleep_hours}h · Q${log.sleep_quality}`,
-                    icon: "🌙",
+                    value: `${log.sleep_hours}h Q${log.sleep_quality}`,
                   },
-                  { label: "Mood", value: `${log.mood}/10`, icon: "😊" },
-                  { label: "Energy", value: `${log.energy}/10`, icon: "⚡" },
-                  {
-                    label: "Soreness",
-                    value: `${log.soreness}/10`,
-                    icon: "💪",
-                  },
-                  { label: "Fatigue", value: `${log.fatigue}/10`, icon: "😴" },
-                ].map(({ label, value, icon }) => (
-                  <div
-                    key={label}
-                    style={{ display: "flex", gap: 6, alignItems: "center" }}
-                  >
-                    <span style={{ fontSize: 11 }}>{icon}</span>
-                    <div>
-                      <div
-                        style={{
-                          fontSize: 8,
-                          color: "rgba(255,255,255,0.3)",
-                          fontFamily: "var(--mono)",
-                          letterSpacing: "0.1em",
-                          textTransform: "uppercase",
-                        }}
-                      >
-                        {label}
-                      </div>
-                      <div
-                        style={{
-                          fontSize: 11,
-                          fontFamily: "var(--mono)",
-                          color: "rgba(255,255,255,0.7)",
-                        }}
-                      >
-                        {value}
-                      </div>
+                  { label: "Mood", value: `${log.mood}/10` },
+                  { label: "Energy", value: `${log.energy}/10` },
+                  { label: "Soreness", value: `${log.soreness}/10` },
+                  { label: "Fatigue", value: `${log.fatigue}/10` },
+                ].map(({ label, value }) => (
+                  <div key={label}>
+                    <div
+                      style={{
+                        fontSize: 8,
+                        color: "rgba(255,255,255,0.3)",
+                        fontFamily: "var(--mono)",
+                        textTransform: "uppercase",
+                      }}
+                    >
+                      {label}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 11,
+                        fontFamily: "var(--mono)",
+                        color: "rgba(255,255,255,0.7)",
+                        marginTop: 1,
+                      }}
+                    >
+                      {value}
                     </div>
                   </div>
                 ))}
@@ -656,7 +587,7 @@ function DayPanel({ date, data }: { date: string; data: DayData }) {
               letterSpacing: "2px",
               textTransform: "uppercase",
               fontFamily: "var(--mono)",
-              marginBottom: 10,
+              marginBottom: 8,
             }}
           >
             Sessions ({sessions.length})
@@ -664,24 +595,12 @@ function DayPanel({ date, data }: { date: string; data: DayData }) {
           {sessions.length === 0 ? (
             <div
               style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                padding: "10px 12px",
-                background: "rgba(255,255,255,0.02)",
-                border: "1px dashed rgba(255,255,255,0.07)",
-                borderRadius: 8,
+                fontSize: 11,
+                color: "rgba(255,255,255,0.25)",
+                fontFamily: "var(--mono)",
               }}
             >
-              <span
-                style={{
-                  fontSize: 11,
-                  color: "rgba(255,255,255,0.25)",
-                  fontFamily: "var(--mono)",
-                }}
-              >
-                Rest day
-              </span>
+              Rest day
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -692,7 +611,7 @@ function DayPanel({ date, data }: { date: string; data: DayData }) {
                   <div
                     key={s.id}
                     style={{
-                      padding: "11px 13px",
+                      padding: "10px 12px",
                       background: `${color}08`,
                       border: `1px solid ${color}25`,
                       borderRadius: 10,
@@ -710,17 +629,16 @@ function DayPanel({ date, data }: { date: string; data: DayData }) {
                         style={{
                           display: "flex",
                           alignItems: "center",
-                          gap: 7,
+                          gap: 6,
                         }}
                       >
-                        <Icon size={13} color={color} strokeWidth={2} />
+                        <Icon size={12} color={color} strokeWidth={2} />
                         <span
                           style={{
                             fontFamily: "var(--mono)",
                             fontSize: 10,
                             color,
                             textTransform: "uppercase",
-                            letterSpacing: "0.1em",
                             fontWeight: 700,
                           }}
                         >
@@ -743,7 +661,7 @@ function DayPanel({ date, data }: { date: string; data: DayData }) {
                         style={{
                           fontSize: 12,
                           color: "rgba(255,255,255,0.55)",
-                          marginBottom: 4,
+                          marginBottom: 3,
                         }}
                       >
                         {s.notes}
@@ -780,8 +698,8 @@ function EmptyDayPanel({ date }: { date: string }) {
       style={{
         background: "rgba(255,255,255,0.03)",
         border: "1px solid rgba(255,255,255,0.07)",
-        borderRadius: 16,
-        padding: 24,
+        borderRadius: 14,
+        padding: 20,
         animation: "fadeIn 0.2s ease-out",
       }}
     >
@@ -791,7 +709,7 @@ function EmptyDayPanel({ date }: { date: string }) {
           fontFamily: "var(--mono)",
           fontWeight: 700,
           color: "#E8FF47",
-          marginBottom: 16,
+          marginBottom: 10,
         }}
       >
         {displayDate}
@@ -801,8 +719,6 @@ function EmptyDayPanel({ date }: { date: string }) {
           fontSize: 12,
           color: "rgba(255,255,255,0.25)",
           fontFamily: "var(--mono)",
-          textAlign: "center",
-          paddingTop: 8,
         }}
       >
         No activity on this day

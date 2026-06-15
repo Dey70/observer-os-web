@@ -153,21 +153,23 @@ export default function CoachPage() {
 
   return (
     <div
-      className="coach-layout"
       style={{
         display: "flex",
         flexDirection: "column",
-        height: "calc(100vh - 64px)",
+        height: "calc(100dvh - 160px)",
+        minHeight: 400,
       }}
     >
       {/* Header */}
-      <div style={{ marginBottom: 12 }}>
+      <div style={{ marginBottom: 10, flexShrink: 0 }}>
         <div
           style={{
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            marginBottom: 4,
+            marginBottom: 2,
+            flexWrap: "wrap",
+            gap: 8,
           }}
         >
           <div
@@ -175,80 +177,83 @@ export default function CoachPage() {
           >
             AI COACH
           </div>
-          {isSunday && (
-            <Badge color="var(--accent)">📊 Weekly Review Day</Badge>
-          )}
+          {isSunday && <Badge color="var(--accent)">📊 Weekly Review</Badge>}
         </div>
         <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
           Groq · llama-3.3-70b · Tool-calling enabled
         </div>
       </div>
 
-      {/* Quick prompts — scrollable row on mobile */}
+      {/* Quick prompts — horizontal scroll */}
       <div
         style={{
-          display: "flex",
-          gap: 6,
-          marginBottom: 10,
+          flexShrink: 0,
           overflowX: "auto",
-          paddingBottom: 4,
           WebkitOverflowScrolling: "touch" as any,
+          marginBottom: 10,
+          paddingBottom: 4,
         }}
       >
-        {QUICK_PROMPTS.map((qp) => (
-          <button
-            key={qp.label}
-            onClick={() => sendMessage(qp.msg)}
-            disabled={loading}
-            style={{
-              padding: "5px 12px",
-              border: "1px solid var(--border2)",
-              fontSize: 11,
-              color: loading ? "var(--text-dim)" : "var(--text-muted)",
-              background: "none",
-              cursor: loading ? "not-allowed" : "pointer",
-              letterSpacing: "0.03em",
-              whiteSpace: "nowrap",
-              flexShrink: 0,
-            }}
-          >
-            {qp.label}
-          </button>
-        ))}
+        <div style={{ display: "flex", gap: 6, width: "max-content" }}>
+          {QUICK_PROMPTS.map((qp) => (
+            <button
+              key={qp.label}
+              onClick={() => sendMessage(qp.msg)}
+              disabled={loading}
+              style={{
+                padding: "6px 14px",
+                border: "1px solid var(--border2)",
+                fontSize: 12,
+                color: loading ? "var(--text-dim)" : "var(--text-muted)",
+                background: "rgba(255,255,255,0.03)",
+                cursor: loading ? "not-allowed" : "pointer",
+                letterSpacing: "0.03em",
+                whiteSpace: "nowrap",
+                borderRadius: 6,
+                flexShrink: 0,
+              }}
+            >
+              {qp.label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Messages */}
+      {/* Messages — flex 1 scrollable */}
       <div
         style={{
           flex: 1,
           overflowY: "auto",
           border: "1px solid var(--border)",
           background: "var(--surface)",
-          padding: 16,
+          padding: 14,
           display: "flex",
           flexDirection: "column",
-          gap: 14,
+          gap: 12,
           WebkitOverflowScrolling: "touch" as any,
+          borderRadius: 10,
         }}
       >
         {messages.map((msg, i) => (
           <div
             key={i}
             style={{
-              maxWidth: "85%",
+              maxWidth: "88%",
               alignSelf: msg.role === "user" ? "flex-end" : "flex-start",
               animation: "fadeIn 0.2s ease-out",
             }}
           >
             <div
               style={{
-                padding: "10px 14px",
+                padding: "10px 13px",
                 fontSize: 13,
-                lineHeight: 1.7,
+                lineHeight: 1.65,
                 background:
                   msg.role === "user" ? "var(--accent-dim)" : "var(--surface2)",
                 border: `1px solid ${msg.role === "user" ? "var(--accent)" : "var(--border)"}`,
                 color: "var(--text)",
+                borderRadius: 10,
+                wordBreak: "break-word",
               }}
               dangerouslySetInnerHTML={{ __html: formatContent(msg.content) }}
             />
@@ -257,7 +262,7 @@ export default function CoachPage() {
                 fontFamily: "var(--mono)",
                 fontSize: 9,
                 color: "var(--text-dim)",
-                marginTop: 4,
+                marginTop: 3,
                 textAlign: msg.role === "user" ? "right" : "left",
               }}
             >
@@ -266,11 +271,12 @@ export default function CoachPage() {
           </div>
         ))}
         {loading && (
-          <div style={{ alignSelf: "flex-start", maxWidth: "85%" }}>
+          <div style={{ alignSelf: "flex-start", maxWidth: "88%" }}>
             <div
               style={{
                 background: "var(--surface2)",
                 border: "1px solid var(--border)",
+                borderRadius: 10,
               }}
             >
               <TypingDots />
@@ -280,7 +286,7 @@ export default function CoachPage() {
                 fontFamily: "var(--mono)",
                 fontSize: 9,
                 color: "var(--text-dim)",
-                marginTop: 4,
+                marginTop: 3,
               }}
             >
               thinking...
@@ -290,25 +296,33 @@ export default function CoachPage() {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input */}
-      <div style={{ display: "flex", marginTop: 10 }}>
+      {/* Input — fixed at bottom of flex column */}
+      <div
+        style={{
+          display: "flex",
+          marginTop: 10,
+          flexShrink: 0,
+          borderRadius: 10,
+          overflow: "hidden",
+          border: "1px solid var(--border2)",
+        }}
+      >
         <textarea
           ref={inputRef}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           disabled={loading}
-          rows={1}
-          placeholder="Ask the coach... (Enter to send)"
+          rows={2}
+          placeholder="Ask the coach..."
           style={{
             flex: 1,
             padding: "12px 14px",
             background: "var(--surface)",
-            border: "1px solid var(--border2)",
-            borderRight: "none",
+            border: "none",
             color: "var(--text)",
             outline: "none",
-            fontSize: 13,
+            fontSize: 14,
             resize: "none",
             fontFamily: "var(--sans)",
             lineHeight: 1.5,
@@ -318,14 +332,15 @@ export default function CoachPage() {
           onClick={() => sendMessage(input)}
           disabled={loading || !input.trim()}
           style={{
-            padding: "0 18px",
+            padding: "0 20px",
             background:
               loading || !input.trim() ? "var(--border2)" : "var(--accent)",
             color: "#000",
             fontWeight: 700,
-            fontSize: 18,
+            fontSize: 20,
             border: "none",
             cursor: loading || !input.trim() ? "not-allowed" : "pointer",
+            flexShrink: 0,
           }}
         >
           ↑
