@@ -218,52 +218,58 @@ export default function HistoryPage() {
             </select>
           </div>
 
-          {/* Date range — side by side */}
-          <div
-            style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}
-          >
-            <div>
-              <label
-                style={{
-                  display: "block",
-                  fontSize: 9,
-                  color: "var(--text-muted)",
-                  letterSpacing: "1.5px",
-                  textTransform: "uppercase",
-                  marginBottom: 5,
-                  fontFamily: "var(--mono)",
-                }}
-              >
-                FROM
-              </label>
-              <input
-                type="date"
-                value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
-                style={{ ...inputStyle, colorScheme: "dark" }}
-              />
-            </div>
-            <div>
-              <label
-                style={{
-                  display: "block",
-                  fontSize: 9,
-                  color: "var(--text-muted)",
-                  letterSpacing: "1.5px",
-                  textTransform: "uppercase",
-                  marginBottom: 5,
-                  fontFamily: "var(--mono)",
-                }}
-              >
-                TO
-              </label>
-              <input
-                type="date"
-                value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
-                style={{ ...inputStyle, colorScheme: "dark" }}
-              />
-            </div>
+          {/* Date range — stacked, each full width */}
+          <div>
+            <label
+              style={{
+                display: "block",
+                fontSize: 9,
+                color: "var(--text-muted)",
+                letterSpacing: "1.5px",
+                textTransform: "uppercase",
+                marginBottom: 5,
+                fontFamily: "var(--mono)",
+              }}
+            >
+              FROM
+            </label>
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              style={{
+                ...inputStyle,
+                colorScheme: "dark",
+                display: "block",
+                width: "100%",
+              }}
+            />
+          </div>
+          <div>
+            <label
+              style={{
+                display: "block",
+                fontSize: 9,
+                color: "var(--text-muted)",
+                letterSpacing: "1.5px",
+                textTransform: "uppercase",
+                marginBottom: 5,
+                fontFamily: "var(--mono)",
+              }}
+            >
+              TO
+            </label>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              style={{
+                ...inputStyle,
+                colorScheme: "dark",
+                display: "block",
+                width: "100%",
+              }}
+            />
           </div>
 
           {/* Clear */}

@@ -152,16 +152,35 @@ export default function CoachPage() {
   }
 
   return (
+    /*
+      Key insight: we use a fixed-height flex column.
+      On desktop: height = calc(100vh - 120px) — sidebar + padding
+      On mobile:  height = calc(100dvh - 160px) — bottom nav + padding
+      The middle messages div gets flex:1 and overflows-y scroll.
+      Input is always at the bottom of the flex column, never pushed off screen.
+    */
     <div
+      className="coach-root"
       style={{
         display: "flex",
         flexDirection: "column",
-        height: "calc(100dvh - 160px)",
-        minHeight: 400,
+        /* desktop height */
+        height: "calc(100vh - 120px)",
+        maxHeight: "calc(100vh - 120px)",
       }}
     >
+      {/* Inject mobile override via a style tag */}
+      <style>{`
+        @media (max-width: 768px) {
+          .coach-root {
+            height: calc(100dvh - 160px) !important;
+            max-height: calc(100dvh - 160px) !important;
+          }
+        }
+      `}</style>
+
       {/* Header */}
-      <div style={{ marginBottom: 10, flexShrink: 0 }}>
+      <div style={{ flexShrink: 0, marginBottom: 10 }}>
         <div
           style={{
             display: "flex",
@@ -184,17 +203,23 @@ export default function CoachPage() {
         </div>
       </div>
 
-      {/* Quick prompts — horizontal scroll */}
+      {/* Quick prompts — horizontal scroll, never wraps */}
       <div
         style={{
           flexShrink: 0,
           overflowX: "auto",
-          WebkitOverflowScrolling: "touch" as any,
           marginBottom: 10,
-          paddingBottom: 4,
+          paddingBottom: 2,
         }}
       >
-        <div style={{ display: "flex", gap: 6, width: "max-content" }}>
+        <div
+          style={{
+            display: "flex",
+            gap: 6,
+            width: "max-content",
+            paddingRight: 4,
+          }}
+        >
           {QUICK_PROMPTS.map((qp) => (
             <button
               key={qp.label}
@@ -207,9 +232,8 @@ export default function CoachPage() {
                 color: loading ? "var(--text-dim)" : "var(--text-muted)",
                 background: "rgba(255,255,255,0.03)",
                 cursor: loading ? "not-allowed" : "pointer",
-                letterSpacing: "0.03em",
                 whiteSpace: "nowrap",
-                borderRadius: 6,
+                borderRadius: 8,
                 flexShrink: 0,
               }}
             >
@@ -219,33 +243,34 @@ export default function CoachPage() {
         </div>
       </div>
 
-      {/* Messages — flex 1 scrollable */}
+      {/* Messages — takes all remaining space, scrolls internally */}
       <div
         style={{
           flex: 1,
           overflowY: "auto",
+          overflowX: "hidden",
           border: "1px solid var(--border)",
           background: "var(--surface)",
-          padding: 14,
+          padding: 16,
           display: "flex",
           flexDirection: "column",
           gap: 12,
-          WebkitOverflowScrolling: "touch" as any,
-          borderRadius: 10,
+          borderRadius: 12,
+          minHeight: 0 /* critical — prevents flex child from overflowing */,
         }}
       >
         {messages.map((msg, i) => (
           <div
             key={i}
             style={{
-              maxWidth: "88%",
+              maxWidth: "85%",
               alignSelf: msg.role === "user" ? "flex-end" : "flex-start",
               animation: "fadeIn 0.2s ease-out",
             }}
           >
             <div
               style={{
-                padding: "10px 13px",
+                padding: "10px 14px",
                 fontSize: 13,
                 lineHeight: 1.65,
                 background:
@@ -270,8 +295,9 @@ export default function CoachPage() {
             </div>
           </div>
         ))}
+
         {loading && (
-          <div style={{ alignSelf: "flex-start", maxWidth: "88%" }}>
+          <div style={{ alignSelf: "flex-start", maxWidth: "85%" }}>
             <div
               style={{
                 background: "var(--surface2)",
@@ -296,12 +322,12 @@ export default function CoachPage() {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input — fixed at bottom of flex column */}
+      {/* Input — always at bottom, never scrolls away */}
       <div
         style={{
+          flexShrink: 0,
           display: "flex",
           marginTop: 10,
-          flexShrink: 0,
           borderRadius: 10,
           overflow: "hidden",
           border: "1px solid var(--border2)",
@@ -314,7 +340,7 @@ export default function CoachPage() {
           onKeyDown={handleKeyDown}
           disabled={loading}
           rows={2}
-          placeholder="Ask the coach..."
+          placeholder="Ask the coach... (Enter to send, Shift+Enter for newline)"
           style={{
             flex: 1,
             padding: "12px 14px",
@@ -322,10 +348,11 @@ export default function CoachPage() {
             border: "none",
             color: "var(--text)",
             outline: "none",
-            fontSize: 14,
+            fontSize: 13,
             resize: "none",
             fontFamily: "var(--sans)",
             lineHeight: 1.5,
+            minWidth: 0,
           }}
         />
         <button

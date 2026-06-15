@@ -96,7 +96,7 @@ export default function LogPage() {
 
   const inputStyle: React.CSSProperties = {
     width: "100%",
-    padding: "12px 16px",
+    padding: "12px 14px",
     backgroundColor: "rgba(255,255,255,0.04)",
     border: "1px solid rgba(255,255,255,0.08)",
     borderRadius: "10px",
@@ -105,6 +105,7 @@ export default function LogPage() {
     fontSize: "14px",
     outline: "none",
     boxSizing: "border-box",
+    minWidth: 0,
   };
 
   const labelStyle: React.CSSProperties = {
@@ -117,7 +118,7 @@ export default function LogPage() {
   };
 
   return (
-    <div>
+    <div style={{ maxWidth: 600 }}>
       <div style={{ marginBottom: "24px" }}>
         <h1
           style={{
@@ -143,12 +144,16 @@ export default function LogPage() {
         </p>
       </div>
 
+      {/* Card — overflow hidden to clip children */}
       <div
         style={{
           backgroundColor: "rgba(255,255,255,0.03)",
           border: "1px solid rgba(255,255,255,0.07)",
           borderRadius: "20px",
           padding: "24px 20px",
+          overflow: "hidden",
+          boxSizing: "border-box",
+          width: "100%",
         }}
       >
         {/* Tab switcher */}
@@ -174,7 +179,7 @@ export default function LogPage() {
                   alignItems: "center",
                   justifyContent: "center",
                   gap: "6px",
-                  padding: "10px 8px",
+                  padding: "10px 4px",
                   borderRadius: "9px",
                   border: "none",
                   cursor: "pointer",
@@ -187,6 +192,7 @@ export default function LogPage() {
                   letterSpacing: "0.08em",
                   color: isActive ? "#E8FF47" : "rgba(255,255,255,0.35)",
                   transition: "all 0.15s ease",
+                  minWidth: 0,
                 }}
               >
                 <Icon
@@ -197,6 +203,7 @@ export default function LogPage() {
                     filter: isActive
                       ? "drop-shadow(0 0 4px rgba(232,255,71,0.6))"
                       : "none",
+                    flexShrink: 0,
                   }}
                 />
                 {label}
@@ -205,18 +212,18 @@ export default function LogPage() {
           })}
         </div>
 
-        {/* Date — full width row */}
-        <div style={{ marginBottom: "12px" }}>
+        {/* Date — full width, contained */}
+        <div style={{ marginBottom: "16px", width: "100%" }}>
           <label style={labelStyle}>DATE</label>
           <input
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            style={{ ...inputStyle, colorScheme: "dark" }}
+            style={{ ...inputStyle, colorScheme: "dark", display: "block" }}
           />
         </div>
 
-        {/* Duration — side by side */}
+        {/* Duration */}
         <div
           style={{
             display: "grid",
@@ -441,6 +448,7 @@ export default function LogPage() {
             opacity: loading ? 0.7 : 1,
             transition: "all 0.2s ease",
             width: "100%",
+            boxSizing: "border-box",
           }}
         >
           {success ? (
