@@ -19,6 +19,7 @@ import {
   HeartPulse,
   Trophy,
   Apple,
+  Settings,
 } from "lucide-react";
 
 const navItems = [
@@ -34,6 +35,7 @@ const navItems = [
   { href: "/goals", label: "Goals", icon: Target },
   { href: "/coach", label: "Coach", icon: Bot },
   { href: "/profile", label: "Profile", icon: User },
+  { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 const mobileNavItems = [
@@ -378,6 +380,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   { href: "/records", label: "Records", icon: Trophy },
                   { href: "/load", label: "Load", icon: BarChart2 },
                   { href: "/goals", label: "Goals", icon: Target },
+                  { href: "/settings", label: "Settings", icon: Settings },
                 ].map(({ href, label, icon: Icon }) => {
                   const isActive = pathname === href;
                   return (
