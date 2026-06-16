@@ -37,14 +37,6 @@ function normalizeQuery(q: string): string {
 }
 
 // ── Known supplements lookup ──
-// AI estimation hallucinates plausible-looking macros for things that
-// aren't really "food" in the per-100g sense (creatine has zero calories;
-// a multivitamin has none; a protein scoop is brand-dependent but has a
-// well-known typical range). Checking this table first avoids those errors
-// and skips an unnecessary AI call for the most common logged supplements.
-// Values are per-100g equivalent EXCEPT note: these are matched and
-// returned directly as absolute per-serving values (grams field below),
-// not scaled by portion size, since "1 serving" is the only sensible unit.
 interface SupplementMatch {
   match: (q: string) => boolean;
   perServing: {
@@ -54,7 +46,7 @@ interface SupplementMatch {
     fat: number;
     fiber: number;
   };
-  servingGrams: number; // nominal, only used for display
+  servingGrams: number;
   label: string;
 }
 
@@ -103,7 +95,6 @@ const SUPPLEMENTS: SupplementMatch[] = [
   },
   {
     match: (q) => /\b(pre.?workout)\b/.test(q),
-    // Caffeine + beta-alanine etc; effectively no macros, small calorie trace
     perServing: { calories: 5, protein: 0, carbs: 1, fat: 0, fiber: 0 },
     servingGrams: 8,
     label: "Pre-workout",
@@ -111,9 +102,6 @@ const SUPPLEMENTS: SupplementMatch[] = [
   {
     match: (q) =>
       /\b(whey protein|protein powder|protein scoop|protein shake)\b/.test(q),
-    // Typical whey scoop ~30g serving, ~120kcal, 24g protein. This is the
-    // one "supplement" with real macros, included so it doesn't bounce to
-    // a less-accurate AI guess or an irrelevant USDA "whey" food match.
     perServing: { calories: 120, protein: 24, carbs: 3, fat: 1.5, fiber: 0 },
     servingGrams: 30,
     label: "Whey protein",
@@ -143,7 +131,6 @@ async function getPer100g(
 }> {
   const normalized = normalizeQuery(foodName);
 
-  // 1. Cache
   const { data: cached } = await (supabase as any)
     .from("food_cache")
     .select("*")
@@ -151,7 +138,6 @@ async function getPer100g(
     .maybeSingle();
 
   if (cached) {
-    // fire-and-forget last_used_at bump
     (supabase as any)
       .from("food_cache")
       .update({ last_used_at: new Date().toISOString() })
@@ -170,7 +156,6 @@ async function getPer100g(
     };
   }
 
-  // 2. Open Food Facts (best for branded/packaged items)
   try {
     const offRes = await fetch(
       `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(
@@ -197,7 +182,6 @@ async function getPer100g(
     // fall through to next source
   }
 
-  // 3. USDA FoodData Central (best for generic whole foods)
   const usdaKey = process.env.USDA_API_KEY;
   if (usdaKey) {
     try {
@@ -232,7 +216,6 @@ async function getPer100g(
     }
   }
 
-  // 4. AI estimation fallback (Groq)
   const aiResult = await estimateWithAI(foodName, groqApiKey);
   await cacheResult(supabase, normalized, "ai", aiResult);
   return { source: "ai", confidence: "medium", per100g: aiResult };
@@ -270,6 +253,10 @@ async function cacheResult(
   }
 }
 
+// Grounding the AI with known reference points measurably reduces wild
+// hallucinations for common foods — without this, a small model has no
+// anchor and can guess protein density that's off by 5x for something as
+// basic as rice.
 async function estimateWithAI(
   foodName: string,
   groqApiKey: string,
@@ -280,7 +267,7 @@ async function estimateWithAI(
   fat: number;
   fiber: number;
 }> {
-  const prompt = `Estimate the nutrition for "${foodName}" per 100g of the prepared food. Respond with ONLY a JSON object, no markdown, no explanation, in this exact shape: {"calories": number, "protein": number, "carbs": number, "fat": number, "fiber": number}. Use realistic values for a typical home/restaurant preparation.`;
+  const prompt = `Estimate the nutrition for "${foodName}" per 100g of the prepared food. Be realistic and grounded in known nutrition data — for reference, cooked white rice is about 130 kcal and 2.7g protein per 100g, plain non-starchy vegetables are about 20-40 kcal and 1-3g protein per 100g, cooked lentils/dal are about 115 kcal and 9g protein per 100g, and cooked lean meat is about 150-200 kcal and 20-30g protein per 100g. Don't overestimate protein for plant foods. Respond with ONLY a JSON object, no markdown, no explanation, in this exact shape: {"calories": number, "protein": number, "carbs": number, "fat": number, "fiber": number}. Use realistic values for a typical home/restaurant preparation.`;
 
   try {
     const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -309,14 +296,11 @@ async function estimateWithAI(
       fiber: Number(parsed.fiber) || 2,
     };
   } catch {
-    // Generic fallback if even the AI call fails — flagged low-confidence
-    // by the caller never trusting "ai" blindly without this catch existing.
     return { calories: 200, protein: 5, carbs: 25, fat: 8, fiber: 2 };
   }
 }
 
 // ── Split a multi-item input into discrete food strings ──
-// "chicken sandwich, apple, and a coffee with milk" → 3 items
 function splitItems(input: string): string[] {
   return input
     .split(/,| and |\+/i)
@@ -324,30 +308,80 @@ function splitItems(input: string): string[] {
     .filter((s) => s.length > 0);
 }
 
+// ── Strip filler/connector words ("had", "a little bit of", "of") from the
+// front of a food name. Runs in a loop so combos like "had a little bit of"
+// get fully cleaned, not just the first phrase matched. This also matters
+// for lookup quality — a messy name like "had half a of rice" won't match
+// well in OFF/USDA, forcing a worse AI fallback; a clean "rice" will.
+const FILLER_PREFIXES = [
+  /^i\s+had\s+/i,
+  /^i\s+ate\s+/i,
+  /^had\s+/i,
+  /^ate\s+/i,
+  /^a\s+little\s+bit\s+of\s+/i,
+  /^a\s+little\s+of\s+/i,
+  /^a\s+bit\s+of\s+/i,
+  /^a\s+small\s+amount\s+of\s+/i,
+  /^some\s+/i,
+  /^a\s+/i,
+  /^an\s+/i,
+  /^the\s+/i,
+  /^of\s+/i,
+];
+
+function cleanFoodName(raw: string): string {
+  let text = raw.trim();
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const pattern of FILLER_PREFIXES) {
+      if (pattern.test(text)) {
+        text = text.replace(pattern, "").trim();
+        changed = true;
+      }
+    }
+  }
+  return text.replace(/\s{2,}/g, " ").trim();
+}
+
+// ── Fraction modifiers ("half a plate", "quarter bowl") ──
+function detectFractionMultiplier(text: string): number {
+  const lower = text.toLowerCase();
+  if (/\bone and a half\b/.test(lower)) return 1.5;
+  if (/\bhalf\b/.test(lower)) return 0.5;
+  if (/\bquarter\b/.test(lower)) return 0.25;
+  return 1;
+}
+
+// ── Diminutive language ("a little bit of papad") — clearly small, should
+// never fall through to the generic "unspecified serving" default.
+const DIMINUTIVE_PATTERN =
+  /\b(a\s+little\s+bit\s+of|a\s+little\s+of|a\s+bit\s+of|a\s+small\s+amount\s+of|a\s+pinch\s+of|a\s+dash\s+of)\b/i;
+const DIMINUTIVE_GRAMS = 40;
+
 // ── Extract an explicit gram/portion qualifier from an item string ──
-// Returns the cleaned food name and a portion description for lookup.
 function extractPortion(itemText: string): {
   name: string;
   portionDesc: string;
   explicitGrams: number | null;
+  isApproximate: boolean;
 } {
-  // "200g chicken breast" / "150 g rice" / "5gm of creatine" / "5 g of creatine"
   const gramMatch = itemText.match(/(\d+(?:\.\d+)?)\s*gm?\b/i);
   if (gramMatch) {
     const grams = parseFloat(gramMatch[1]);
-    const name = itemText
-      .replace(gramMatch[0], "")
-      .replace(/^\s*(of|a|some)\s+/i, "") // strip leading filler word left behind
-      .trim();
-    return { name, portionDesc: `${grams}g`, explicitGrams: grams };
+    const name = cleanFoodName(itemText.replace(gramMatch[0], ""));
+    return {
+      name,
+      portionDesc: `${grams}g`,
+      explicitGrams: grams,
+      isApproximate: false,
+    };
   }
 
-  // "2 eggs" / "3 rotis" — countable units, approximate unit weight
   const countMatch = itemText.match(/^(\d+)\s+(.+)$/);
   if (countMatch) {
     const count = parseInt(countMatch[1], 10);
-    const name = countMatch[2].trim();
-    // rough unit-weight heuristics for common countables
+    const name = cleanFoodName(countMatch[2]);
     const unitWeights: Record<string, number> = {
       egg: 50,
       eggs: 50,
@@ -358,13 +392,29 @@ function extractPortion(itemText: string): {
       apple: 180,
       slice: 35,
       slices: 35,
+      piece: 100,
+      pieces: 100,
     };
     const matchedUnit = Object.keys(unitWeights).find((u) => name.includes(u));
     const grams = matchedUnit ? unitWeights[matchedUnit] * count : 100 * count;
-    return { name, portionDesc: `${count}x (${grams}g)`, explicitGrams: grams };
+    return {
+      name,
+      portionDesc: `${count}x (${grams}g)`,
+      explicitGrams: grams,
+      isApproximate: false,
+    };
   }
 
-  // size-word portions ("medium bowl of dal rice")
+  if (DIMINUTIVE_PATTERN.test(itemText)) {
+    const name = cleanFoodName(itemText.replace(DIMINUTIVE_PATTERN, ""));
+    return {
+      name,
+      portionDesc: `a little (≈${DIMINUTIVE_GRAMS}g, estimated)`,
+      explicitGrams: DIMINUTIVE_GRAMS,
+      isApproximate: true,
+    };
+  }
+
   const sizeWords = [
     "small bowl",
     "medium bowl",
@@ -380,16 +430,33 @@ function extractPortion(itemText: string): {
   const lower = itemText.toLowerCase();
   const matchedSize = sizeWords.find((w) => lower.includes(w));
   if (matchedSize) {
-    const grams = estimatePortionGrams(matchedSize);
-    const name = itemText.replace(new RegExp(matchedSize, "i"), "").trim();
-    return { name, portionDesc: matchedSize, explicitGrams: grams };
+    const fraction = detectFractionMultiplier(itemText);
+    const baseGrams = estimatePortionGrams(matchedSize);
+    const grams = Math.round(baseGrams * fraction);
+    const name = cleanFoodName(
+      itemText.replace(new RegExp(matchedSize, "i"), ""),
+    );
+    const fractionLabel =
+      fraction === 0.5
+        ? " (half)"
+        : fraction === 0.25
+          ? " (quarter)"
+          : fraction === 1.5
+            ? " (1.5x)"
+            : "";
+    return {
+      name,
+      portionDesc: `${matchedSize}${fractionLabel}`,
+      explicitGrams: grams,
+      isApproximate: fraction !== 1,
+    };
   }
 
-  // no quantity at all — flagged low-confidence by caller via the null name
   return {
-    name: itemText.trim(),
+    name: cleanFoodName(itemText),
     portionDesc: "~1 serving (assumed)",
     explicitGrams: null,
+    isApproximate: true,
   };
 }
 
@@ -402,14 +469,10 @@ export async function parseMeal(
   const items: ParsedFoodItem[] = [];
 
   for (const itemText of itemTexts) {
-    const { name, portionDesc, explicitGrams } = extractPortion(itemText);
+    const { name, portionDesc, explicitGrams, isApproximate } =
+      extractPortion(itemText);
     if (!name) continue;
 
-    // Known supplements bypass the per-100g pipeline entirely — they're
-    // counted per-serving, not scaled by an assumed gram weight, since a
-    // "5g of creatine" and "1 scoop of creatine" mean the same thing.
-    // Checked against both the cleaned name and the raw text, since
-    // portion-stripping can occasionally leave an awkward remainder.
     const supplement = matchSupplement(name) ?? matchSupplement(itemText);
     if (supplement) {
       items.push({
@@ -432,15 +495,16 @@ export async function parseMeal(
       supabase,
       groqApiKey,
     );
-    const grams = explicitGrams ?? 250; // default single-serving if totally unspecified
+    // Lowered from 250 — most unquantified mentions in a multi-item meal
+    // description are sides/accompaniments, not full standalone servings.
+    const grams = explicitGrams ?? 100;
 
-    // Confidence downgrade: explicit grams stated by user → high regardless
-    // of source; no quantity given at all → never above medium.
-    const finalConfidence: FoodConfidence = explicitGrams
-      ? confidence
-      : confidence === "high"
-        ? "medium"
-        : confidence;
+    const finalConfidence: FoodConfidence =
+      explicitGrams && !isApproximate
+        ? confidence
+        : confidence === "high"
+          ? "medium"
+          : confidence;
 
     const factor = grams / 100;
     items.push({
