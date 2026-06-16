@@ -1,3 +1,4 @@
+// src/lib/supabase/database.types.ts
 export type Json =
   | string
   | number
@@ -86,6 +87,25 @@ export interface Database {
         };
         Update: {
           weight?: number;
+        };
+      };
+      water_logs: {
+        Row: {
+          id: number;
+          user_id: string;
+          date: string;
+          amount_ml: number;
+          logged_at: string;
+          created_at: string;
+        };
+        Insert: {
+          user_id: string;
+          date: string;
+          amount_ml: number;
+          logged_at?: string;
+        };
+        Update: {
+          amount_ml?: number;
         };
       };
       goals: {
