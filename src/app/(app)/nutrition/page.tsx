@@ -12,6 +12,7 @@ import {
   Beef,
   Wheat,
   Droplet,
+  Droplets,
   Leaf,
   AlertCircle,
   Check,
@@ -118,6 +119,11 @@ const MEAL_TYPES: {
 ];
 
 const MEAL_ORDER: MealType[] = ["breakfast", "lunch", "dinner", "snack"];
+
+// No CSS theme var fits water cleanly (accent/red/yellow/purple/green are
+// already claimed by the macro rings), so this one's a literal hex —
+// consistent with how records/page.tsx does the same thing for PR colors.
+const WATER_COLOR = "#4FC3F7";
 
 function recomputeTotals(items: ParsedFoodItem[]) {
   return items.reduce(
@@ -240,6 +246,65 @@ function MacroRing({
           }}
         >
           {label} ({unit})
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Water has a computed target but no logged-intake tracking yet, so this is
+// deliberately NOT a progress ring (that would always read 0% and look
+// broken) — just a target display, visually matched to MacroRing but with
+// a plain colored border instead of an SVG progress arc.
+function WaterTargetCard({ liters }: { liters: number }) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: 8,
+        background: "var(--surface)",
+        border: "1px solid var(--border)",
+        borderRadius: 16,
+        padding: "16px 10px",
+      }}
+    >
+      <div
+        style={{
+          width: 68,
+          height: 68,
+          borderRadius: "50%",
+          border: `2px solid ${WATER_COLOR}`,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <Droplets size={18} color={WATER_COLOR} strokeWidth={1.75} />
+      </div>
+      <div style={{ textAlign: "center" }}>
+        <div
+          style={{
+            fontFamily: "var(--mono)",
+            fontSize: 13,
+            fontWeight: 700,
+            color: "var(--text)",
+          }}
+        >
+          {liters.toFixed(2)}
+          <span style={{ color: "var(--text-dim)", fontWeight: 400 }}> L</span>
+        </div>
+        <div
+          style={{
+            fontSize: 8,
+            color: "var(--text-muted)",
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            marginTop: 2,
+          }}
+        >
+          Water Target
         </div>
       </div>
     </div>
@@ -536,10 +601,10 @@ export default function NutritionPage() {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(5, 1fr)",
+                gridTemplateColumns: "repeat(6, 1fr)",
                 gap: 8,
               }}
-              className="grid-5-nutrition"
+              className="grid-nutrition-rings"
             >
               {RING_METRICS.map(({ key, label, unit, icon, color }) => (
                 <MacroRing
@@ -552,6 +617,7 @@ export default function NutritionPage() {
                   Icon={icon}
                 />
               ))}
+              <WaterTargetCard liters={targets.water / 1000} />
             </div>
             <div
               style={{
@@ -567,7 +633,6 @@ export default function NutritionPage() {
             >
               <span>BMR {targets.bmr}</span>
               <span>TDEE {targets.tdee}</span>
-              <span>Water target {targets.water}ml</span>
               {bmiInfo && (
                 <span
                   style={{
@@ -1175,7 +1240,7 @@ export default function NutritionPage() {
 
       <style>{`
         @media (max-width: 768px) {
-          .grid-5-nutrition { grid-template-columns: repeat(3, 1fr) !important; }
+          .grid-nutrition-rings { grid-template-columns: repeat(3, 1fr) !important; }
         }
       `}</style>
     </div>
