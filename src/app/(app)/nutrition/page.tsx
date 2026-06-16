@@ -1286,10 +1286,11 @@ export default function NutritionPage() {
               borderTop: "1px solid var(--border2)",
             }}
           >
-            <span>Total: {pending.totals.calories} kcal</span>
+            <span>Total: {Math.round(pending.totals.calories)} kcal</span>
             <span>
-              P{pending.totals.protein} C{pending.totals.carbs} F
-              {pending.totals.fat} Fi{pending.totals.fiber}
+              P{pending.totals.protein.toFixed(1)} C
+              {pending.totals.carbs.toFixed(1)} F{pending.totals.fat.toFixed(1)}{" "}
+              Fi{pending.totals.fiber.toFixed(1)}
             </span>
           </div>
           <div style={{ display: "flex", gap: 8 }}>

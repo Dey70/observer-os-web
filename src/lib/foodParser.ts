@@ -433,9 +433,12 @@ function extractPortion(itemText: string): {
     const fraction = detectFractionMultiplier(itemText);
     const baseGrams = estimatePortionGrams(matchedSize);
     const grams = Math.round(baseGrams * fraction);
-    const name = cleanFoodName(
-      itemText.replace(new RegExp(matchedSize, "i"), ""),
-    );
+    const withoutSize = itemText.replace(new RegExp(matchedSize, "i"), "");
+    const withoutFraction =
+      fraction !== 1
+        ? withoutSize.replace(/\b(one and a half|half|quarter)\b/gi, " ")
+        : withoutSize;
+    const name = cleanFoodName(withoutFraction);
     const fractionLabel =
       fraction === 0.5
         ? " (half)"
