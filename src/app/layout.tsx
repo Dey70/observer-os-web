@@ -1,9 +1,17 @@
-import type { Metadata } from "next";
+// src/app/layout.tsx
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Observer OS",
   description: "Personal AI performance coach — training, sleep, study",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
 };
 
 export default function RootLayout({
