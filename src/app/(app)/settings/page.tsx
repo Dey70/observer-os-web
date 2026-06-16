@@ -472,7 +472,7 @@ export default function SettingsPage() {
           <div
             onClick={(e) => e.stopPropagation()}
             style={{
-              background: "var(--surface)",
+              background: "var(--select-bg)",
               border: "1px solid var(--border)",
               borderRadius: 16,
               padding: "24px 24px 20px",
