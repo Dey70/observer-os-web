@@ -396,7 +396,19 @@ function extractPortion(itemText: string): {
       pieces: 100,
     };
     const matchedUnit = Object.keys(unitWeights).find((u) => name.includes(u));
-    const grams = matchedUnit ? unitWeights[matchedUnit] * count : 100 * count;
+    // "pieces" of meat in a curry/gravy are bite-sized chunks (~20-30g
+    // each), not a 100g cut — keep the larger default for bread/fruit-style
+    // units, but shrink it specifically for meat-in-curry context.
+    const isCurryContext = /\b(curry|gravy|sabzi|sabji|stew|masala)\b/i.test(
+      itemText,
+    );
+    const unitWeight =
+      (matchedUnit === "piece" || matchedUnit === "pieces") && isCurryContext
+        ? 25
+        : matchedUnit
+          ? unitWeights[matchedUnit]
+          : 100;
+    const grams = unitWeight * count;
     return {
       name,
       portionDesc: `${count}x (${grams}g)`,
