@@ -1,3 +1,4 @@
+// src/lib/utils.ts
 import type {
   DailyLog,
   ReadinessScore,
@@ -159,4 +160,15 @@ export function rpeToLabel(rpe: number): string {
   if (rpe <= 5) return "Medium";
   if (rpe <= 7) return "Hard";
   return "Very Hard";
+}
+
+// ── Nutrition: meal type helpers ──
+export type MealType = "breakfast" | "lunch" | "dinner" | "snack";
+
+export function guessMealType(): MealType {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 11) return "breakfast";
+  if (hour >= 11 && hour < 15) return "lunch";
+  if (hour >= 17 && hour < 21) return "dinner";
+  return "snack";
 }

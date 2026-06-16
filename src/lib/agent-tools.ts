@@ -307,7 +307,7 @@ export async function executeTool(
           byDate[r.date].carbs += r.carbs;
           byDate[r.date].fat += r.fat;
           byDate[r.date].fiber += r.fiber;
-          byDate[r.date].items.push(r.item_name);
+          byDate[r.date].items.push(`${r.meal_type}: ${r.item_name}`);
         }
 
         // Today's targets for comparison

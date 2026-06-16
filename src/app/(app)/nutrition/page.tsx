@@ -1,3 +1,4 @@
+// src/app/(app)/nutrition/page.tsx
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -5,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { PageHeader, Card, SectionLabel, EmptyState } from "@/components/ui";
 import type { DailyTargets } from "@/lib/nutritionEngine";
 import type { ParsedFoodItem } from "@/lib/foodParser";
+import { guessMealType, type MealType } from "@/lib/utils";
 import {
   Flame,
   Beef,
@@ -16,6 +18,10 @@ import {
   Trash2,
   Pencil,
   X,
+  Coffee,
+  Sun,
+  Moon,
+  Cookie,
 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +30,7 @@ type NutritionLogRow = {
   id: number;
   meal_group_id: string;
   date: string;
-  meal_type: string;
+  meal_type: MealType;
   item_name: string;
   portion_desc: string | null;
   source: string;
@@ -46,6 +52,7 @@ type PendingMeal = {
     fiber: number;
   };
   raw_input: string;
+  meal_type: MealType;
 };
 
 const RING_METRICS = [
@@ -93,6 +100,25 @@ const BMI_CATEGORY_LABEL: Record<string, { label: string; color: string }> = {
   obese: { label: "Obese", color: "var(--red)" },
 };
 
+const MEAL_TYPES: {
+  value: MealType;
+  label: string;
+  icon: React.ElementType;
+  color: string;
+}[] = [
+  {
+    value: "breakfast",
+    label: "Breakfast",
+    icon: Coffee,
+    color: "var(--yellow)",
+  },
+  { value: "lunch", label: "Lunch", icon: Sun, color: "var(--accent)" },
+  { value: "dinner", label: "Dinner", icon: Moon, color: "var(--purple)" },
+  { value: "snack", label: "Snack", icon: Cookie, color: "var(--green)" },
+];
+
+const MEAL_ORDER: MealType[] = ["breakfast", "lunch", "dinner", "snack"];
+
 function recomputeTotals(items: ParsedFoodItem[]) {
   return items.reduce(
     (acc, item) => ({
@@ -104,6 +130,22 @@ function recomputeTotals(items: ParsedFoodItem[]) {
     }),
     { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 },
   );
+}
+
+function groupLogsByMeal(
+  logs: NutritionLogRow[],
+): Record<MealType, NutritionLogRow[]> {
+  const groups: Record<MealType, NutritionLogRow[]> = {
+    breakfast: [],
+    lunch: [],
+    dinner: [],
+    snack: [],
+  };
+  for (const l of logs) {
+    const key: MealType = groups[l.meal_type] ? l.meal_type : "snack";
+    groups[key].push(l);
+  }
+  return groups;
 }
 
 function MacroRing({
@@ -213,6 +255,7 @@ export default function NutritionPage() {
   const [loading, setLoading] = useState(true);
 
   const [input, setInput] = useState("");
+  const [mealType, setMealType] = useState<MealType>(() => guessMealType());
   const [parsing, setParsing] = useState(false);
   const [pending, setPending] = useState<PendingMeal | null>(null);
   const [parseError, setParseError] = useState<string | null>(null);
@@ -263,6 +306,8 @@ export default function NutritionPage() {
     { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 },
   );
 
+  const groupedLogs = groupLogsByMeal(logs);
+
   async function handleParse() {
     if (!input.trim() || parsing) return;
     setParsing(true);
@@ -273,7 +318,11 @@ export default function NutritionPage() {
       const res = await fetch("/api/nutrition/parse", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ input: input.trim(), date }),
+        body: JSON.stringify({
+          input: input.trim(),
+          date,
+          meal_type: mealType,
+        }),
       });
       const data = await res.json();
       if (data.error && !data.items) {
@@ -285,6 +334,7 @@ export default function NutritionPage() {
           items: data.items,
           totals: data.totals,
           raw_input: data.raw_input,
+          meal_type: (data.meal_type as MealType) ?? mealType,
         });
       }
     } catch {
@@ -306,7 +356,7 @@ export default function NutritionPage() {
       user_id: user.id,
       meal_group_id: mealGroupId,
       date,
-      meal_type: "snack",
+      meal_type: pending.meal_type,
       item_name: item.name,
       portion_desc: item.portion_desc,
       raw_input: pending.raw_input,
@@ -332,6 +382,11 @@ export default function NutritionPage() {
     setEditingIndex(null);
   }
 
+  function changePendingMealType(newType: MealType) {
+    if (!pending) return;
+    setPending({ ...pending, meal_type: newType });
+  }
+
   function startEditItem(index: number) {
     if (!pending) return;
     setEditingIndex(index);
@@ -355,6 +410,7 @@ export default function NutritionPage() {
       items: newItems,
       totals: recomputeTotals(newItems),
       raw_input: pending.raw_input,
+      meal_type: pending.meal_type,
     });
     setEditingIndex(null);
     setEditDraft(null);
@@ -372,6 +428,7 @@ export default function NutritionPage() {
       items: newItems,
       totals: recomputeTotals(newItems),
       raw_input: pending.raw_input,
+      meal_type: pending.meal_type,
     });
     if (editingIndex === index) {
       setEditingIndex(null);
@@ -531,96 +588,146 @@ export default function NutritionPage() {
         )
       )}
 
-      {/* Meal log */}
+      {/* Meal log — grouped by meal type */}
       <Card style={{ marginBottom: 16 }}>
         <SectionLabel>Today's Log ({logs.length} items)</SectionLabel>
         {logs.length === 0 ? (
           <EmptyState message="Nothing logged yet — tell the coach what you ate below" />
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {logs.map((l) => (
-              <div
-                key={l.id}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  padding: "10px 12px",
-                  background: "var(--surface2)",
-                  border: "1px solid var(--border2)",
-                  borderRadius: 8,
-                  gap: 8,
-                }}
-              >
-                <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+            {MEAL_ORDER.map((mt) => {
+              const items = groupedLogs[mt];
+              if (!items.length) return null;
+              const meta = MEAL_TYPES.find((m) => m.value === mt)!;
+              const subtotal = items.reduce((s, l) => s + l.calories, 0);
+              const Icon = meta.icon;
+              return (
+                <div key={mt}>
                   <div
                     style={{
                       display: "flex",
                       alignItems: "center",
-                      gap: 8,
-                      flexWrap: "wrap",
+                      justifyContent: "space-between",
+                      marginBottom: 8,
                     }}
                   >
-                    <span
-                      style={{
-                        fontSize: 13,
-                        color: "var(--text)",
-                        textTransform: "capitalize",
-                      }}
+                    <div
+                      style={{ display: "flex", alignItems: "center", gap: 6 }}
                     >
-                      {l.item_name}
-                    </span>
+                      <Icon size={13} color={meta.color} strokeWidth={1.75} />
+                      <span
+                        style={{
+                          fontFamily: "var(--mono)",
+                          fontSize: 10,
+                          color: meta.color,
+                          textTransform: "uppercase",
+                          letterSpacing: "0.08em",
+                        }}
+                      >
+                        {meta.label}
+                      </span>
+                    </div>
                     <span
                       style={{
-                        fontSize: 9,
                         fontFamily: "var(--mono)",
-                        color:
-                          confidenceColor[l.confidence] ?? "var(--text-dim)",
-                        border: `1px solid ${confidenceColor[l.confidence] ?? "var(--border)"}`,
-                        borderRadius: 4,
-                        padding: "1px 5px",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.05em",
+                        fontSize: 11,
+                        color: "var(--text-dim)",
                       }}
                     >
-                      {l.confidence}
+                      {Math.round(subtotal)} kcal
                     </span>
                   </div>
                   <div
-                    style={{
-                      fontSize: 10,
-                      color: "var(--text-dim)",
-                      fontFamily: "var(--mono)",
-                      marginTop: 2,
-                    }}
+                    style={{ display: "flex", flexDirection: "column", gap: 6 }}
                   >
-                    {l.portion_desc} · {l.calories} kcal · P{l.protein} C
-                    {l.carbs} F{l.fat}
+                    {items.map((l) => (
+                      <div
+                        key={l.id}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          padding: "10px 12px",
+                          background: "var(--surface2)",
+                          border: "1px solid var(--border2)",
+                          borderRadius: 8,
+                          gap: 8,
+                        }}
+                      >
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 8,
+                              flexWrap: "wrap",
+                            }}
+                          >
+                            <span
+                              style={{
+                                fontSize: 13,
+                                color: "var(--text)",
+                                textTransform: "capitalize",
+                              }}
+                            >
+                              {l.item_name}
+                            </span>
+                            <span
+                              style={{
+                                fontSize: 9,
+                                fontFamily: "var(--mono)",
+                                color:
+                                  confidenceColor[l.confidence] ??
+                                  "var(--text-dim)",
+                                border: `1px solid ${confidenceColor[l.confidence] ?? "var(--border)"}`,
+                                borderRadius: 4,
+                                padding: "1px 5px",
+                                textTransform: "uppercase",
+                                letterSpacing: "0.05em",
+                              }}
+                            >
+                              {l.confidence}
+                            </span>
+                          </div>
+                          <div
+                            style={{
+                              fontSize: 10,
+                              color: "var(--text-dim)",
+                              fontFamily: "var(--mono)",
+                              marginTop: 2,
+                            }}
+                          >
+                            {l.portion_desc} · {l.calories} kcal · P{l.protein}{" "}
+                            C{l.carbs} F{l.fat}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => deleteLogItem(l.id)}
+                          style={{
+                            width: 26,
+                            height: 26,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            background: "transparent",
+                            border: "1px solid var(--border2)",
+                            borderRadius: 6,
+                            cursor: "pointer",
+                            flexShrink: 0,
+                          }}
+                        >
+                          <Trash2
+                            size={11}
+                            color="var(--text-dim)"
+                            strokeWidth={1.75}
+                          />
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 </div>
-                <button
-                  onClick={() => deleteLogItem(l.id)}
-                  style={{
-                    width: 26,
-                    height: 26,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    background: "transparent",
-                    border: "1px solid var(--border2)",
-                    borderRadius: 6,
-                    cursor: "pointer",
-                    flexShrink: 0,
-                  }}
-                >
-                  <Trash2
-                    size={11}
-                    color="var(--text-dim)"
-                    strokeWidth={1.75}
-                  />
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </Card>
@@ -629,6 +736,43 @@ export default function NutritionPage() {
       {pending && (
         <Card style={{ borderColor: "var(--accent)", marginBottom: 16 }}>
           <SectionLabel>Confirm This Meal</SectionLabel>
+
+          <div
+            style={{
+              display: "flex",
+              gap: 6,
+              marginBottom: 14,
+              flexWrap: "wrap",
+            }}
+          >
+            {MEAL_TYPES.map(({ value, label, icon: Icon, color }) => {
+              const isActive = pending.meal_type === value;
+              return (
+                <button
+                  key={value}
+                  onClick={() => changePendingMealType(value)}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 5,
+                    padding: "5px 10px",
+                    borderRadius: 99,
+                    border: `1px solid ${isActive ? color : "var(--border2)"}`,
+                    background: isActive ? "var(--surface2)" : "transparent",
+                    color: isActive ? color : "var(--text-dim)",
+                    fontFamily: "var(--mono)",
+                    fontSize: 10,
+                    cursor: "pointer",
+                    transition: "all 0.15s",
+                  }}
+                >
+                  <Icon size={11} strokeWidth={isActive ? 2.25 : 1.75} />
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+
           <div
             style={{
               display: "flex",
@@ -943,6 +1087,39 @@ export default function NutritionPage() {
         </Card>
       )}
 
+      {/* Meal type selector */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+        {MEAL_TYPES.map(({ value, label, icon: Icon, color }) => {
+          const isActive = mealType === value;
+          return (
+            <button
+              key={value}
+              onClick={() => setMealType(value)}
+              style={{
+                flex: 1,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 6,
+                padding: "9px 6px",
+                borderRadius: 10,
+                border: `1px solid ${isActive ? color : "var(--border)"}`,
+                background: isActive ? "var(--surface2)" : "var(--surface)",
+                color: isActive ? color : "var(--text-muted)",
+                fontFamily: "var(--mono)",
+                fontSize: 11,
+                fontWeight: isActive ? 700 : 400,
+                cursor: "pointer",
+                transition: "all 0.15s",
+              }}
+            >
+              <Icon size={13} strokeWidth={isActive ? 2.25 : 1.75} />
+              {label}
+            </button>
+          );
+        })}
+      </div>
+
       {/* AI input bar */}
       <div
         style={{
@@ -959,7 +1136,9 @@ export default function NutritionPage() {
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           disabled={parsing}
-          placeholder="What did you eat? e.g. 2 eggs, oats with banana, black coffee"
+          placeholder={`What did you have for ${
+            mealType === "snack" ? "your snack" : mealType
+          }? e.g. 2 eggs, oats with banana, black coffee`}
           style={{
             flex: 1,
             padding: "13px 16px",

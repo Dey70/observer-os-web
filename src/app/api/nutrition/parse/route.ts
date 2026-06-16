@@ -1,6 +1,21 @@
+// src/app/api/nutrition/parse/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { parseMeal } from "@/lib/foodParser";
+import type { MealType } from "@/lib/utils";
+
+const VALID_MEAL_TYPES: readonly MealType[] = [
+  "breakfast",
+  "lunch",
+  "dinner",
+  "snack",
+];
+
+function normalizeMealType(value: unknown): MealType {
+  return (VALID_MEAL_TYPES as readonly string[]).includes(value as string)
+    ? (value as MealType)
+    : "snack";
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -40,7 +55,7 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({
-      meal_type: meal_type || "snack",
+      meal_type: normalizeMealType(meal_type),
       date: date || new Date().toISOString().split("T")[0],
       items: result.items,
       totals: result.totals,
