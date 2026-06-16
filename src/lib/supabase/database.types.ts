@@ -183,6 +183,16 @@ export interface Database {
           weekly_goal: number;
           target_weight: number | null;
           notes: string | null;
+          sex: "male" | "female" | null;
+          height_cm: number | null;
+          nutrition_goal_type:
+            | "bulk"
+            | "cut"
+            | "maintain"
+            | "recomp"
+            | "endurance"
+            | null;
+          auto_adjust_macros: boolean | null;
           updated_at: string;
         };
         Insert: {
@@ -194,6 +204,16 @@ export interface Database {
           weekly_goal?: number;
           target_weight?: number | null;
           notes?: string | null;
+          sex?: "male" | "female" | null;
+          height_cm?: number | null;
+          nutrition_goal_type?:
+            | "bulk"
+            | "cut"
+            | "maintain"
+            | "recomp"
+            | "endurance"
+            | null;
+          auto_adjust_macros?: boolean | null;
         };
         Update: {
           name?: string | null;
@@ -203,6 +223,96 @@ export interface Database {
           weekly_goal?: number;
           target_weight?: number | null;
           notes?: string | null;
+          sex?: "male" | "female" | null;
+          height_cm?: number | null;
+          nutrition_goal_type?:
+            | "bulk"
+            | "cut"
+            | "maintain"
+            | "recomp"
+            | "endurance"
+            | null;
+          auto_adjust_macros?: boolean | null;
+        };
+      };
+      nutrition_logs: {
+        Row: {
+          id: number;
+          user_id: string;
+          meal_group_id: string;
+          date: string;
+          logged_at: string;
+          meal_type: "breakfast" | "lunch" | "dinner" | "snack";
+          item_name: string;
+          portion_desc: string | null;
+          raw_input: string | null;
+          source: "off" | "usda" | "ai" | "manual";
+          confidence: "high" | "medium" | "low";
+          calories: number;
+          protein: number;
+          carbs: number;
+          fat: number;
+          fiber: number;
+          created_at: string;
+        };
+        Insert: {
+          user_id: string;
+          meal_group_id?: string;
+          date: string;
+          meal_type?: "breakfast" | "lunch" | "dinner" | "snack";
+          item_name: string;
+          portion_desc?: string | null;
+          raw_input?: string | null;
+          source?: "off" | "usda" | "ai" | "manual";
+          confidence?: "high" | "medium" | "low";
+          calories?: number;
+          protein?: number;
+          carbs?: number;
+          fat?: number;
+          fiber?: number;
+        };
+        Update: {
+          meal_type?: "breakfast" | "lunch" | "dinner" | "snack";
+          item_name?: string;
+          portion_desc?: string | null;
+          calories?: number;
+          protein?: number;
+          carbs?: number;
+          fat?: number;
+          fiber?: number;
+        };
+      };
+      food_cache: {
+        Row: {
+          id: number;
+          query_normalized: string;
+          source: "off" | "usda" | "ai";
+          calories_per_100g: number;
+          protein_per_100g: number;
+          carbs_per_100g: number;
+          fat_per_100g: number;
+          fiber_per_100g: number;
+          last_used_at: string;
+          created_at: string;
+        };
+        Insert: {
+          query_normalized: string;
+          source: "off" | "usda" | "ai";
+          calories_per_100g: number;
+          protein_per_100g?: number;
+          carbs_per_100g?: number;
+          fat_per_100g?: number;
+          fiber_per_100g?: number;
+          last_used_at?: string;
+        };
+        Update: {
+          source?: "off" | "usda" | "ai";
+          calories_per_100g?: number;
+          protein_per_100g?: number;
+          carbs_per_100g?: number;
+          fat_per_100g?: number;
+          fiber_per_100g?: number;
+          last_used_at?: string;
         };
       };
     };

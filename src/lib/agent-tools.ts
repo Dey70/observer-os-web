@@ -72,6 +72,24 @@ export const AGENT_TOOLS = [
   {
     type: "function" as const,
     function: {
+      name: "get_nutrition",
+      description:
+        "Retrieve logged nutrition (calories, protein, carbs, fat, fiber) for recent days, plus today's calculated macro targets. Use when asked about diet, eating enough, macros, or whether nutrition matches training load.",
+      parameters: {
+        type: "object",
+        properties: {
+          days: {
+            type: "number",
+            description: "How many days back to fetch. Default 7.",
+          },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
       name: "generate_training_plan",
       description:
         "Generate a personalized weekly training plan based on current fitness data, goals, and readiness trends.",
@@ -245,6 +263,109 @@ export async function executeTool(
           average: avg?.toFixed(1),
           trend,
           count: weights.length,
+        });
+      }
+
+      case "get_nutrition": {
+        const days = (args.days as number) || 7;
+        const since = new Date(Date.now() - days * 86400000)
+          .toISOString()
+          .split("T")[0];
+        const { data, error } = await (supabase as any)
+          .from("nutrition_logs")
+          .select("*")
+          .eq("user_id", userId)
+          .gte("date", since)
+          .order("date", { ascending: false });
+        if (error) return `Error: ${error.message}`;
+
+        const rows = (data ?? []) as any[];
+        const byDate: Record<
+          string,
+          {
+            calories: number;
+            protein: number;
+            carbs: number;
+            fat: number;
+            fiber: number;
+            items: string[];
+          }
+        > = {};
+        for (const r of rows) {
+          if (!byDate[r.date]) {
+            byDate[r.date] = {
+              calories: 0,
+              protein: 0,
+              carbs: 0,
+              fat: 0,
+              fiber: 0,
+              items: [],
+            };
+          }
+          byDate[r.date].calories += r.calories;
+          byDate[r.date].protein += r.protein;
+          byDate[r.date].carbs += r.carbs;
+          byDate[r.date].fat += r.fat;
+          byDate[r.date].fiber += r.fiber;
+          byDate[r.date].items.push(r.item_name);
+        }
+
+        // Today's targets for comparison
+        const today = new Date().toISOString().split("T")[0];
+        const [
+          { data: profile },
+          { data: weights },
+          { data: todaySessions },
+          { data: todayLog },
+        ] = await Promise.all([
+          supabase
+            .from("profiles")
+            .select("*")
+            .eq("user_id", userId)
+            .maybeSingle(),
+          supabase
+            .from("weight_logs")
+            .select("*")
+            .eq("user_id", userId)
+            .order("date", { ascending: false })
+            .limit(1),
+          supabase
+            .from("sessions")
+            .select("*")
+            .eq("user_id", userId)
+            .eq("date", today),
+          supabase
+            .from("daily_logs")
+            .select("*")
+            .eq("user_id", userId)
+            .eq("date", today)
+            .maybeSingle(),
+        ]);
+
+        let todaysTargets = null;
+        const p = profile as any;
+        if (p?.age && p?.height_cm && weights?.length) {
+          const { calculateDailyTargets, readinessFromLog } =
+            await import("./nutritionEngine");
+          todaysTargets = calculateDailyTargets(
+            {
+              sex: p.sex || "male",
+              age: p.age,
+              height_cm: p.height_cm,
+              weight_kg: (weights as any[])[0].weight,
+              goal_type: p.nutrition_goal_type || "maintain",
+              target_weight_kg: p.target_weight,
+              goal_deadline: null,
+            },
+            (todaySessions ?? []) as any[],
+            readinessFromLog(todayLog as any),
+          );
+        }
+
+        return JSON.stringify({
+          count: rows.length,
+          by_date: byDate,
+          todays_targets: todaysTargets,
         });
       }
 

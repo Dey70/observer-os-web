@@ -22,6 +22,14 @@ const SPLITS = [
   { value: "deload", label: "Deload / Recovery" },
 ];
 
+const NUTRITION_GOALS = [
+  { value: "maintain", label: "Maintain weight" },
+  { value: "bulk", label: "Build muscle (surplus)" },
+  { value: "cut", label: "Fat loss (deficit)" },
+  { value: "recomp", label: "Recomposition" },
+  { value: "endurance", label: "Endurance performance" },
+];
+
 export default function ProfilePage() {
   const sb = createClient();
   const {
@@ -40,6 +48,9 @@ export default function ProfilePage() {
   const [targetWeight, setTargetWeight] = useState("");
   const [notes, setNotes] = useState("");
   const [email, setEmail] = useState("");
+  const [sex, setSex] = useState<"male" | "female">("male");
+  const [heightCm, setHeightCm] = useState("");
+  const [nutritionGoalType, setNutritionGoalType] = useState("maintain");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -63,6 +74,9 @@ export default function ProfilePage() {
       weekly_goal: number;
       target_weight: number | null;
       notes: string | null;
+      sex: "male" | "female" | null;
+      height_cm: number | null;
+      nutrition_goal_type: string | null;
     } | null;
     if (data) {
       setName(data.name ?? "");
@@ -71,6 +85,9 @@ export default function ProfilePage() {
       setWeeklyGoal(data.weekly_goal?.toString() ?? "4");
       setTargetWeight(data.target_weight?.toString() ?? "");
       setNotes(data.notes ?? "");
+      setSex(data.sex ?? "male");
+      setHeightCm(data.height_cm?.toString() ?? "");
+      setNutritionGoalType(data.nutrition_goal_type ?? "maintain");
     }
     setLoading(false);
   }, []);
@@ -88,21 +105,22 @@ export default function ProfilePage() {
       setSaving(false);
       return;
     }
-    await (sb as any)
-      .from("profiles")
-      .upsert(
-        {
-          user_id: user.id,
-          name: name.trim() || null,
-          age: age ? parseInt(age) : null,
-          split,
-          weekly_goal: parseInt(weeklyGoal) || 4,
-          target_weight: targetWeight ? parseFloat(targetWeight) : null,
-          notes: notes.trim() || null,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "user_id" },
-      );
+    await (sb as any).from("profiles").upsert(
+      {
+        user_id: user.id,
+        name: name.trim() || null,
+        age: age ? parseInt(age) : null,
+        split,
+        weekly_goal: parseInt(weeklyGoal) || 4,
+        target_weight: targetWeight ? parseFloat(targetWeight) : null,
+        notes: notes.trim() || null,
+        sex,
+        height_cm: heightCm ? parseFloat(heightCm) : null,
+        nutrition_goal_type: nutritionGoalType,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id" },
+    );
     setSaving(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
@@ -204,6 +222,29 @@ export default function ProfilePage() {
             </Field>
           </div>
         </div>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+          <div style={{ flex: "1 1 120px" }}>
+            <Field label="Sex (for BMR calc)">
+              <Select
+                value={sex}
+                onChange={(e) => setSex(e.target.value as "male" | "female")}
+              >
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+              </Select>
+            </Field>
+          </div>
+          <div style={{ flex: "1 1 120px" }}>
+            <Field label="Height (cm)">
+              <Input
+                type="number"
+                placeholder="178"
+                value={heightCm}
+                onChange={(e) => setHeightCm(e.target.value)}
+              />
+            </Field>
+          </div>
+        </div>
 
         <div
           style={{
@@ -260,6 +301,42 @@ export default function ProfilePage() {
             textTransform: "uppercase",
             marginBottom: 16,
             marginTop: 8,
+          }}
+        >
+          Nutrition
+        </div>
+        <Field label="Nutrition Goal">
+          <Select
+            value={nutritionGoalType}
+            onChange={(e) => setNutritionGoalType(e.target.value)}
+          >
+            {NUTRITION_GOALS.map((g) => (
+              <option key={g.value} value={g.value}>
+                {g.label}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <div
+          style={{
+            fontSize: 11,
+            color: "var(--text-dim)",
+            marginBottom: 4,
+            fontFamily: "var(--mono)",
+          }}
+        >
+          Used with your weight, height, and today's sessions to calculate daily
+          calorie and macro targets on the Nutrition page.
+        </div>
+
+        <div
+          style={{
+            fontSize: 10,
+            color: "var(--text-muted)",
+            letterSpacing: "0.12em",
+            textTransform: "uppercase",
+            marginBottom: 16,
+            marginTop: 24,
           }}
         >
           Notes for the Coach

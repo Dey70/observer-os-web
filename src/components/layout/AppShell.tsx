@@ -18,12 +18,14 @@ import {
   CalendarDays,
   HeartPulse,
   Trophy,
+  Apple,
 } from "lucide-react";
 
 const navItems = [
   { href: "/checkin", label: "Check-in", icon: Activity },
   { href: "/log", label: "Log Session", icon: Dumbbell },
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/nutrition", label: "Nutrition", icon: Apple },
   { href: "/history", label: "History", icon: Clock },
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
   { href: "/metrics", label: "Metrics", icon: HeartPulse },
@@ -37,7 +39,7 @@ const navItems = [
 const mobileNavItems = [
   { href: "/checkin", label: "Check-in", icon: Activity },
   { href: "/log", label: "Log", icon: Dumbbell },
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/nutrition", label: "Nutrition", icon: Apple },
   { href: "/coach", label: "Coach", icon: Bot },
   { href: "/profile", label: "Profile", icon: User },
 ];
@@ -365,6 +367,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 }}
               >
                 {[
+                  {
+                    href: "/dashboard",
+                    label: "Dashboard",
+                    icon: LayoutDashboard,
+                  },
                   { href: "/history", label: "History", icon: Clock },
                   { href: "/calendar", label: "Calendar", icon: CalendarDays },
                   { href: "/metrics", label: "Metrics", icon: HeartPulse },
