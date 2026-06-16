@@ -23,6 +23,7 @@ import {
   Sun,
   Moon,
   Cookie,
+  Undo2,
 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -41,6 +42,11 @@ type NutritionLogRow = {
   carbs: number;
   fat: number;
   fiber: number;
+};
+
+type WaterLogRow = {
+  id: number;
+  amount_ml: number;
 };
 
 type PendingMeal = {
@@ -124,6 +130,8 @@ const MEAL_ORDER: MealType[] = ["breakfast", "lunch", "dinner", "snack"];
 // already claimed by the macro rings), so this one's a literal hex —
 // consistent with how records/page.tsx does the same thing for PR colors.
 const WATER_COLOR = "#4FC3F7";
+
+const WATER_QUICK_AMOUNTS = [250, 500, 1000];
 
 function recomputeTotals(items: ParsedFoodItem[]) {
   return items.reduce(
@@ -252,11 +260,21 @@ function MacroRing({
   );
 }
 
-// Water has a computed target but no logged-intake tracking yet, so this is
-// deliberately NOT a progress ring (that would always read 0% and look
-// broken) — just a target display, visually matched to MacroRing but with
-// a plain colored border instead of an SVG progress arc.
-function WaterTargetCard({ liters }: { liters: number }) {
+// Same visual shell as MacroRing but values are in liters, since 1900/3500
+// reads worse than 1.9/3.5 — the underlying numbers stay in ml everywhere
+// else (DB, target calc), this is purely a display conversion.
+function WaterRing({
+  consumedMl,
+  targetMl,
+}: {
+  consumedMl: number;
+  targetMl: number;
+}) {
+  const pct =
+    targetMl > 0 ? Math.min(100, Math.round((consumedMl / targetMl) * 100)) : 0;
+  const circumference = 2 * Math.PI * 28;
+  const offset = circumference - (pct / 100) * circumference;
+
   return (
     <div
       style={{
@@ -270,18 +288,40 @@ function WaterTargetCard({ liters }: { liters: number }) {
         padding: "16px 10px",
       }}
     >
-      <div
-        style={{
-          width: 68,
-          height: 68,
-          borderRadius: "50%",
-          border: `2px solid ${WATER_COLOR}`,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <Droplets size={18} color={WATER_COLOR} strokeWidth={1.75} />
+      <div style={{ position: "relative", width: 68, height: 68 }}>
+        <svg width="68" height="68" style={{ transform: "rotate(-90deg)" }}>
+          <circle
+            cx="34"
+            cy="34"
+            r="28"
+            fill="none"
+            stroke="var(--border2)"
+            strokeWidth="6"
+          />
+          <circle
+            cx="34"
+            cy="34"
+            r="28"
+            fill="none"
+            stroke={WATER_COLOR}
+            strokeWidth="6"
+            strokeDasharray={circumference}
+            strokeDashoffset={offset}
+            strokeLinecap="round"
+            style={{ transition: "stroke-dashoffset 0.4s ease" }}
+          />
+        </svg>
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Droplets size={16} color={WATER_COLOR} strokeWidth={1.75} />
+        </div>
       </div>
       <div style={{ textAlign: "center" }}>
         <div
@@ -292,8 +332,10 @@ function WaterTargetCard({ liters }: { liters: number }) {
             color: "var(--text)",
           }}
         >
-          {liters.toFixed(2)}
-          <span style={{ color: "var(--text-dim)", fontWeight: 400 }}> L</span>
+          {(consumedMl / 1000).toFixed(1)}
+          <span style={{ color: "var(--text-dim)", fontWeight: 400 }}>
+            /{(targetMl / 1000).toFixed(1)}
+          </span>
         </div>
         <div
           style={{
@@ -304,7 +346,7 @@ function WaterTargetCard({ liters }: { liters: number }) {
             marginTop: 2,
           }}
         >
-          Water Target
+          Water (L)
         </div>
       </div>
     </div>
@@ -317,6 +359,7 @@ export default function NutritionPage() {
   const [targets, setTargets] = useState<DailyTargets | null>(null);
   const [targetsError, setTargetsError] = useState<string[] | null>(null);
   const [logs, setLogs] = useState<NutritionLogRow[]>([]);
+  const [waterLogs, setWaterLogs] = useState<WaterLogRow[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [input, setInput] = useState("");
@@ -326,6 +369,8 @@ export default function NutritionPage() {
   const [parseError, setParseError] = useState<string | null>(null);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editDraft, setEditDraft] = useState<ParsedFoodItem | null>(null);
+  const [customWaterAmount, setCustomWaterAmount] = useState("");
+  const [loggingWater, setLoggingWater] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
@@ -334,11 +379,17 @@ export default function NutritionPage() {
     } = await sb.auth.getUser();
     if (!user) return;
 
-    const [targetsRes, logsRes] = await Promise.all([
+    const [targetsRes, logsRes, waterRes] = await Promise.all([
       fetch(`/api/nutrition/targets?date=${date}`).then((r) => r.json()),
       (sb as any)
         .from("nutrition_logs")
         .select("*")
+        .eq("user_id", user.id)
+        .eq("date", date)
+        .order("logged_at", { ascending: true }),
+      (sb as any)
+        .from("water_logs")
+        .select("id, amount_ml")
         .eq("user_id", user.id)
         .eq("date", date)
         .order("logged_at", { ascending: true }),
@@ -353,6 +404,7 @@ export default function NutritionPage() {
     }
 
     setLogs((logsRes.data ?? []) as NutritionLogRow[]);
+    setWaterLogs((waterRes.data ?? []) as WaterLogRow[]);
     setLoading(false);
   }, [date]);
 
@@ -370,6 +422,8 @@ export default function NutritionPage() {
     }),
     { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 },
   );
+
+  const consumedWaterMl = waterLogs.reduce((s, w) => s + w.amount_ml, 0);
 
   const groupedLogs = groupLogsByMeal(logs);
 
@@ -514,8 +568,39 @@ export default function NutritionPage() {
     load();
   }
 
+  async function logWater(amountMl: number) {
+    const {
+      data: { user },
+    } = await sb.auth.getUser();
+    if (!user) return;
+    setLoggingWater(true);
+    await (sb as any)
+      .from("water_logs")
+      .insert({ user_id: user.id, date, amount_ml: amountMl });
+    await load();
+    setLoggingWater(false);
+  }
+
+  async function logCustomWater() {
+    const ml = Math.round(parseFloat(customWaterAmount));
+    if (!ml || ml <= 0) return;
+    await logWater(ml);
+    setCustomWaterAmount("");
+  }
+
+  async function undoLastWater() {
+    if (!waterLogs.length) return;
+    const last = waterLogs[waterLogs.length - 1];
+    await (sb as any).from("water_logs").delete().eq("id", last.id);
+    load();
+  }
+
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === "Enter") handleParse();
+  }
+
+  function handleWaterKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter") logCustomWater();
   }
 
   const confidenceColor: Record<string, string> = {
@@ -617,7 +702,10 @@ export default function NutritionPage() {
                   Icon={icon}
                 />
               ))}
-              <WaterTargetCard liters={targets.water / 1000} />
+              <WaterRing
+                consumedMl={consumedWaterMl}
+                targetMl={targets.water}
+              />
             </div>
             <div
               style={{
@@ -648,6 +736,116 @@ export default function NutritionPage() {
                   BMI {targets.bmi} · {bmiInfo.label}
                 </span>
               )}
+            </div>
+
+            {/* Water quick-log */}
+            <div
+              style={{
+                marginTop: 14,
+                paddingTop: 14,
+                borderTop: "1px solid var(--border2)",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 9,
+                  color: "var(--text-muted)",
+                  letterSpacing: "0.1em",
+                  textTransform: "uppercase",
+                  marginBottom: 8,
+                  fontFamily: "var(--mono)",
+                }}
+              >
+                Log Water
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  gap: 6,
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                }}
+              >
+                {WATER_QUICK_AMOUNTS.map((amt) => (
+                  <button
+                    key={amt}
+                    onClick={() => logWater(amt)}
+                    disabled={loggingWater}
+                    style={{
+                      padding: "6px 14px",
+                      borderRadius: 99,
+                      border: `1px solid ${WATER_COLOR}40`,
+                      background: `${WATER_COLOR}15`,
+                      color: WATER_COLOR,
+                      fontFamily: "var(--mono)",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: loggingWater ? "not-allowed" : "pointer",
+                      opacity: loggingWater ? 0.6 : 1,
+                    }}
+                  >
+                    +{amt >= 1000 ? `${amt / 1000}L` : `${amt}ml`}
+                  </button>
+                ))}
+                <input
+                  type="number"
+                  value={customWaterAmount}
+                  onChange={(e) => setCustomWaterAmount(e.target.value)}
+                  onKeyDown={handleWaterKeyDown}
+                  placeholder="Custom ml"
+                  style={{
+                    width: 90,
+                    padding: "6px 10px",
+                    background: "var(--surface2)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 8,
+                    color: "var(--text)",
+                    outline: "none",
+                    fontFamily: "var(--mono)",
+                    fontSize: 12,
+                  }}
+                />
+                <button
+                  onClick={logCustomWater}
+                  disabled={!customWaterAmount || loggingWater}
+                  style={{
+                    padding: "6px 12px",
+                    borderRadius: 8,
+                    border: "1px solid var(--border)",
+                    background: "var(--surface2)",
+                    color: "var(--text-muted)",
+                    fontFamily: "var(--mono)",
+                    fontSize: 12,
+                    cursor:
+                      !customWaterAmount || loggingWater
+                        ? "not-allowed"
+                        : "pointer",
+                  }}
+                >
+                  Add
+                </button>
+                {waterLogs.length > 0 && (
+                  <button
+                    onClick={undoLastWater}
+                    title="Undo last water entry"
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 5,
+                      padding: "6px 10px",
+                      background: "transparent",
+                      border: "none",
+                      color: "var(--text-dim)",
+                      fontFamily: "var(--mono)",
+                      fontSize: 11,
+                      cursor: "pointer",
+                    }}
+                  >
+                    <Undo2 size={11} strokeWidth={1.75} />
+                    Undo last (+{waterLogs[waterLogs.length - 1].amount_ml}ml)
+                  </button>
+                )}
+              </div>
             </div>
           </Card>
         )
