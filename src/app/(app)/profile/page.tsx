@@ -1,3 +1,4 @@
+// src/app/(app)/profile/page.tsx
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
@@ -38,6 +39,28 @@ const BMI_CATEGORY_LABEL: Record<string, { label: string; color: string }> = {
   obese: { label: "Obese", color: "var(--red)" },
 };
 
+async function geocodeCity(
+  cityQuery: string,
+): Promise<{ lat: number; lon: number; name: string } | null> {
+  try {
+    const res = await fetch(
+      `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(cityQuery)}&count=1`,
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    const result = data?.results?.[0];
+    if (!result) return null;
+    const parts = [result.name, result.admin1, result.country].filter(Boolean);
+    return {
+      lat: result.latitude,
+      lon: result.longitude,
+      name: parts.join(", "),
+    };
+  } catch {
+    return null;
+  }
+}
+
 export default function ProfilePage() {
   const sb = createClient();
   const {
@@ -60,6 +83,11 @@ export default function ProfilePage() {
   const [heightCm, setHeightCm] = useState("");
   const [nutritionGoalType, setNutritionGoalType] = useState("maintain");
   const [currentWeight, setCurrentWeight] = useState<number | null>(null);
+  const [city, setCity] = useState("");
+  const [storedLat, setStoredLat] = useState<number | null>(null);
+  const [storedLon, setStoredLon] = useState<number | null>(null);
+  const [resolvedLocation, setResolvedLocation] = useState<string | null>(null);
+  const [geocodeError, setGeocodeError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -92,6 +120,9 @@ export default function ProfilePage() {
       sex: "male" | "female" | null;
       height_cm: number | null;
       nutrition_goal_type: string | null;
+      latitude: number | null;
+      longitude: number | null;
+      city_name: string | null;
     } | null;
     if (data) {
       setName(data.name ?? "");
@@ -103,6 +134,10 @@ export default function ProfilePage() {
       setSex(data.sex ?? "male");
       setHeightCm(data.height_cm?.toString() ?? "");
       setNutritionGoalType(data.nutrition_goal_type ?? "maintain");
+      setCity(data.city_name ?? "");
+      setStoredLat(data.latitude ?? null);
+      setStoredLon(data.longitude ?? null);
+      setResolvedLocation(data.city_name ?? null);
     }
 
     const weights = (rawWeights ?? []) as { weight: number }[];
@@ -117,6 +152,7 @@ export default function ProfilePage() {
 
   async function handleSave() {
     setSaving(true);
+    setGeocodeError(null);
     const {
       data: { user },
     } = await sb.auth.getUser();
@@ -124,6 +160,28 @@ export default function ProfilePage() {
       setSaving(false);
       return;
     }
+
+    let latitude = storedLat;
+    let longitude = storedLon;
+    let cityName: string | null = resolvedLocation;
+
+    if (!city.trim()) {
+      latitude = null;
+      longitude = null;
+      cityName = null;
+    } else {
+      const geo = await geocodeCity(city.trim());
+      if (geo) {
+        latitude = geo.lat;
+        longitude = geo.lon;
+        cityName = geo.name;
+      } else {
+        setGeocodeError(
+          "Couldn't resolve that location just now — keeping your previously saved location (if any) for weather-adjusted hydration.",
+        );
+      }
+    }
+
     await (sb as any).from("profiles").upsert(
       {
         user_id: user.id,
@@ -136,10 +194,19 @@ export default function ProfilePage() {
         sex,
         height_cm: heightCm ? parseFloat(heightCm) : null,
         nutrition_goal_type: nutritionGoalType,
+        latitude,
+        longitude,
+        city_name: cityName,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "user_id" },
     );
+
+    setStoredLat(latitude);
+    setStoredLon(longitude);
+    setResolvedLocation(cityName);
+    setCity(cityName ?? "");
+
     setSaving(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
@@ -270,7 +337,6 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* Current weight + BMI — read-only, sourced from weight_logs */}
         <div
           style={{
             marginTop: 4,
@@ -468,6 +534,63 @@ export default function ProfilePage() {
             marginTop: 24,
           }}
         >
+          Location
+        </div>
+        <Field label="City (for weather-adjusted hydration)">
+          <Input
+            placeholder="e.g. Bengaluru"
+            value={city}
+            onChange={(e) => setCity(e.target.value)}
+          />
+        </Field>
+        <div
+          style={{
+            fontSize: 11,
+            color: "var(--text-dim)",
+            marginBottom: 8,
+            fontFamily: "var(--mono)",
+            lineHeight: 1.5,
+          }}
+        >
+          On hot days your water target gets bumped up automatically (+250 to
+          +750ml depending on temperature). Leave this blank to skip the weather
+          adjustment entirely.
+        </div>
+        {resolvedLocation && (
+          <div
+            style={{
+              fontSize: 11,
+              color: "var(--green)",
+              marginBottom: 4,
+              fontFamily: "var(--mono)",
+            }}
+          >
+            Currently resolved to: {resolvedLocation}
+          </div>
+        )}
+        {geocodeError && (
+          <div
+            style={{
+              fontSize: 11,
+              color: "var(--yellow)",
+              marginBottom: 4,
+              fontFamily: "var(--mono)",
+            }}
+          >
+            {geocodeError}
+          </div>
+        )}
+
+        <div
+          style={{
+            fontSize: 10,
+            color: "var(--text-muted)",
+            letterSpacing: "0.12em",
+            textTransform: "uppercase",
+            marginBottom: 16,
+            marginTop: 24,
+          }}
+        >
           Notes for the Coach
         </div>
         <Field label="Anything the coach should always know">
@@ -518,7 +641,6 @@ export default function ProfilePage() {
         </div>
       </Card>
 
-      {/* Notifications */}
       <Card>
         <div
           style={{

@@ -1,7 +1,4 @@
-// Nutrition Engine — TDEE, macro target calculation, daily breakdown.
-// Pure functions only; no Supabase calls here (keeps this testable / reusable
-// on both client and server).
-
+// src/lib/nutritionEngine.ts
 import type { Session, DailyLog } from "@/types";
 
 export type Sex = "male" | "female";
@@ -39,11 +36,6 @@ export interface DailyTargets {
 
 export type BMICategory = "underweight" | "normal" | "overweight" | "obese";
 
-// ── BMI — standard formula, WHO category bands ──
-// Note: BMI is a crude population-level screening metric. It doesn't
-// distinguish muscle from fat, so it under/overstates risk for very
-// muscular or very sedentary people. Always pair with body fat % if
-// available rather than treating BMI as a target to optimize.
 export function calcBMI(weightKg: number, heightCm: number): number {
   const heightM = heightCm / 100;
   return Math.round((weightKg / (heightM * heightM)) * 10) / 10;
@@ -57,9 +49,8 @@ export function bmiCategory(bmi: number): BMICategory {
 }
 
 const KCAL_PER_KG_FAT = 7700;
-const MAX_DAILY_ADJUSTMENT = 500; // safety cap, kcal/day surplus or deficit
+const MAX_DAILY_ADJUSTMENT = 500;
 
-// ── 1. BMR — Mifflin-St Jeor ──
 export function calcBMR(
   sex: Sex,
   weightKg: number,
@@ -70,9 +61,6 @@ export function calcBMR(
   return sex === "male" ? base + 5 : base - 161;
 }
 
-// ── 2. Activity add-on from today's actual sessions ──
-// Returns extra kcal burned today based on logged sessions, plus a tier label
-// used later for protein/carb multipliers.
 function calcActivityAddOn(
   sessions: Session[],
   weightKg: number,
@@ -86,28 +74,21 @@ function calcActivityAddOn(
     if (s.type === "run") {
       hasRun = true;
       longestRunMin = Math.max(longestRunMin, s.duration);
-      // MET-based estimate; ~8 MET for moderate running.
-      // kcal = MET * weight(kg) * duration(hr)
       addOn += 8 * weightKg * (s.duration / 60);
     } else if (s.type === "lift") {
       hasLift = true;
-      // Flat-ish range depending on duration; ~5 kcal/min as a reasonable estimate
       addOn += Math.min(450, s.duration * 5);
     }
-    // study sessions: no calorie add-on, sedentary
   }
 
   return { addOn: Math.round(addOn), hasLift, hasRun, longestRunMin };
 }
 
-// ── 3. Calorie target from goal type ──
 function calorieAdjustmentForGoal(
   goalType: NutritionGoalType,
   inputs: NutritionProfileInputs,
   tdee: number,
 ): { adjustment: number; reason: string } {
-  // If we have a target weight and deadline, compute a required rate,
-  // but always cap it at the safety limit.
   if (
     (goalType === "bulk" || goalType === "cut") &&
     inputs.target_weight_kg &&
@@ -149,7 +130,6 @@ function calorieAdjustmentForGoal(
   }
 }
 
-// ── 4. Protein tier (g/kg bodyweight) ──
 function proteinPerKg(
   goalType: NutritionGoalType,
   hasLift: boolean,
@@ -159,46 +139,58 @@ function proteinPerKg(
   if (hasLift && hasRun) base = 2.2;
   else if (hasLift) base = 2.0;
   else if (hasRun) base = 1.5;
-  else base = 1.3; // rest / sedentary day
+  else base = 1.3;
 
-  if (goalType === "cut") base += 0.2; // spare muscle in a deficit
+  if (goalType === "cut") base += 0.2;
   return base;
 }
 
-// ── 5. Carb tier (g/kg bodyweight) ──
 function carbsPerKg(
   hasLift: boolean,
   hasRun: boolean,
   longestRunMin: number,
 ): number {
-  if (hasRun && longestRunMin >= 60) return 7; // heavy/long endurance day
+  if (hasRun && longestRunMin >= 60) return 7;
   if (hasLift && hasRun) return 5.5;
   if (hasLift || hasRun) return 4.5;
-  return 2.5; // rest day
+  return 2.5;
 }
 
-// ── 6. Fiber & water ──
 function calcFiber(calories: number): number {
   return Math.round((calories / 1000) * 14);
+}
+
+// Tiered (not continuous) on purpose, to match the rest of this file's
+// style, and capped at +750ml so an extreme heat reading can't push the
+// target into unreasonable territory. Worst-case stack (heavy session day
+// + creatine + heatwave) still lands ~5-6L/day — normal sports-science
+// range for heavy exercisers in heat, not hyponatremia risk.
+function calcHeatAddOn(tempC: number | null): number {
+  if (tempC === null) return 0;
+  if (tempC >= 35) return 750;
+  if (tempC >= 30) return 500;
+  if (tempC >= 25) return 250;
+  return 0;
 }
 
 function calcWater(
   weightKg: number,
   sessionCount: number,
   tookCreatine: boolean,
+  currentTempC: number | null = null,
 ): number {
   const base = Math.round(weightKg * 35 + sessionCount * 300);
-  // Creatine draws water into muscle cells; standard guidance is to
-  // increase fluid intake to compensate and avoid cramping/dehydration.
-  return tookCreatine ? base + 750 : base;
+  const creatineAddOn = tookCreatine ? 750 : 0;
+  const heatAddOn = calcHeatAddOn(currentTempC);
+  return base + creatineAddOn + heatAddOn;
 }
 
-// ── Main entry point ──
 export function calculateDailyTargets(
   inputs: NutritionProfileInputs,
   todaysSessions: Session[],
   todaysReadinessScore: number | null,
   tookCreatine: boolean = false,
+  currentTempC: number | null = null,
 ): DailyTargets {
   const bmr = calcBMR(
     inputs.sex,
@@ -219,7 +211,6 @@ export function calculateDailyTargets(
     inputs,
     tdee,
   );
-  // Never let calories drop below 1.1x BMR even in an aggressive cut
   const floor = Math.round(bmr * 1.1);
   const calories = Math.max(floor, tdee + adjustment);
 
@@ -230,11 +221,10 @@ export function calculateDailyTargets(
   let carbs = Math.round(inputs.weight_kg * carbTier);
   let readinessNote = "";
   if (todaysReadinessScore !== null && todaysReadinessScore < 5) {
-    carbs += 18; // glycogen replenishment priority on low-readiness days
+    carbs += 18;
     readinessNote = ", carbs raised for low readiness";
   }
 
-  // Fat: floor of 0.6g/kg, then fill remaining calories after protein+carbs
   const fatFloor = Math.round(inputs.weight_kg * 0.6);
   const remainingKcalForFat = calories - protein * 4 - carbs * 4;
   const fat = Math.max(fatFloor, Math.round(remainingKcalForFat / 9));
@@ -244,6 +234,7 @@ export function calculateDailyTargets(
     inputs.weight_kg,
     todaysSessions.length,
     tookCreatine,
+    currentTempC,
   );
 
   const bmi = calcBMI(inputs.weight_kg, inputs.height_cm);
@@ -263,7 +254,11 @@ export function calculateDailyTargets(
           : "rest day";
 
   const creatineNote = tookCreatine ? ", water raised for creatine intake" : "";
-  const breakdown_reason = `${activityDesc} (${reason}): protein ${protein}g, carbs ${carbs}g${readinessNote}, fat ${fat}g floor-adjusted${creatineNote}`;
+  const heatNote =
+    currentTempC !== null && currentTempC >= 25
+      ? `, water raised for hot weather (${Math.round(currentTempC)}°C)`
+      : "";
+  const breakdown_reason = `${activityDesc} (${reason}): protein ${protein}g, carbs ${carbs}g${readinessNote}, fat ${fat}g floor-adjusted${creatineNote}${heatNote}`;
 
   return {
     calories,
@@ -281,11 +276,8 @@ export function calculateDailyTargets(
   };
 }
 
-// ── Helper: derive today's readiness score from a DailyLog, if present ──
 export function readinessFromLog(log: DailyLog | null): number | null {
   if (!log) return null;
-  // Mirrors calcReadiness in utils.ts without importing it (avoids coupling
-  // this pure module to UI color/label concerns).
   const score =
     log.sleep_quality * 0.3 +
     log.mood * 0.2 +
@@ -295,7 +287,6 @@ export function readinessFromLog(log: DailyLog | null): number | null {
   return Math.round(score * 10) / 10;
 }
 
-// ── Portion-size lookup table (flat, cuisine-agnostic v1) ──
 export const PORTION_SIZE_GRAMS: Record<string, number> = {
   "small bowl": 175,
   "medium bowl": 275,
@@ -317,5 +308,5 @@ export function estimatePortionGrams(description: string): number {
   for (const [key, grams] of Object.entries(PORTION_SIZE_GRAMS)) {
     if (normalized.includes(key)) return grams;
   }
-  return 250; // generic single-serving fallback
+  return 250;
 }

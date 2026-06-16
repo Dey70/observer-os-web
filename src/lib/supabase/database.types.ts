@@ -213,6 +213,9 @@ export interface Database {
             | "endurance"
             | null;
           auto_adjust_macros: boolean | null;
+          latitude: number | null;
+          longitude: number | null;
+          city_name: string | null;
           updated_at: string;
         };
         Insert: {
@@ -234,6 +237,9 @@ export interface Database {
             | "endurance"
             | null;
           auto_adjust_macros?: boolean | null;
+          latitude?: number | null;
+          longitude?: number | null;
+          city_name?: string | null;
         };
         Update: {
           name?: string | null;
@@ -253,6 +259,9 @@ export interface Database {
             | "endurance"
             | null;
           auto_adjust_macros?: boolean | null;
+          latitude?: number | null;
+          longitude?: number | null;
+          city_name?: string | null;
         };
       };
       nutrition_logs: {
