@@ -114,7 +114,12 @@ export default function GoalsPage() {
   useEffect(() => {
     load();
   }, [load]);
-
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("new") === "1") setShowForm(true);
+    }
+  }, []);
   function onTypeChange(val: string) {
     setGoalType(val);
     const preset = GOAL_TYPES.find((t) => t.value === val);
