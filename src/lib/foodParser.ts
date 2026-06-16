@@ -1,7 +1,4 @@
-// Food parsing pipeline — resolves free-text food descriptions into macro
-// data. Strategy: food_cache → Open Food Facts → USDA → AI estimation.
-// Used server-side only (calls external APIs + Groq).
-
+// src/lib/foodParser.ts
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { estimatePortionGrams } from "./nutritionEngine";
 
@@ -36,7 +33,6 @@ function normalizeQuery(q: string): string {
   return q.toLowerCase().trim().replace(/\s+/g, " ");
 }
 
-// ── Known supplements lookup ──
 interface SupplementMatch {
   match: (q: string) => boolean;
   perServing: {
@@ -113,7 +109,42 @@ function matchSupplement(foodName: string): SupplementMatch | null {
   return SUPPLEMENTS.find((s) => s.match(normalized)) ?? null;
 }
 
-// ── Per-100g macro lookup, tried in order: cache → OFF → USDA → AI ──
+interface GenericFoodMatch {
+  match: (q: string) => boolean;
+  per100g: {
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+    fiber: number;
+  };
+  label: string;
+}
+
+const GENERIC_FOODS: GenericFoodMatch[] = [
+  {
+    match: (q) =>
+      /\b(mixed\s+)?(veggies|vegetables|greens)\b/.test(q) &&
+      !/\b(curry|fry|fried|gravy|stir.?fry|sabzi|sabji|roasted|grilled)\b/.test(
+        q,
+      ),
+    per100g: { calories: 35, protein: 2, carbs: 6, fat: 0.4, fiber: 2.5 },
+    label: "Mixed vegetables",
+  },
+  {
+    match: (q) =>
+      /\bsalad\b/.test(q) &&
+      !/\b(dressing|mayo|cheese|chicken|tuna|egg|paneer)\b/.test(q),
+    per100g: { calories: 25, protein: 1.5, carbs: 4, fat: 0.3, fiber: 2 },
+    label: "Plain salad",
+  },
+];
+
+function matchGenericFood(foodName: string): GenericFoodMatch | null {
+  const normalized = normalizeQuery(foodName);
+  return GENERIC_FOODS.find((g) => g.match(normalized)) ?? null;
+}
+
 async function getPer100g(
   foodName: string,
   supabase: SupabaseClient,
@@ -253,10 +284,6 @@ async function cacheResult(
   }
 }
 
-// Grounding the AI with known reference points measurably reduces wild
-// hallucinations for common foods — without this, a small model has no
-// anchor and can guess protein density that's off by 5x for something as
-// basic as rice.
 async function estimateWithAI(
   foodName: string,
   groqApiKey: string,
@@ -300,7 +327,6 @@ async function estimateWithAI(
   }
 }
 
-// ── Split a multi-item input into discrete food strings ──
 function splitItems(input: string): string[] {
   return input
     .split(/,| and |\+/i)
@@ -308,11 +334,6 @@ function splitItems(input: string): string[] {
     .filter((s) => s.length > 0);
 }
 
-// ── Strip filler/connector words ("had", "a little bit of", "of") from the
-// front of a food name. Runs in a loop so combos like "had a little bit of"
-// get fully cleaned, not just the first phrase matched. This also matters
-// for lookup quality — a messy name like "had half a of rice" won't match
-// well in OFF/USDA, forcing a worse AI fallback; a clean "rice" will.
 const FILLER_PREFIXES = [
   /^i\s+had\s+/i,
   /^i\s+ate\s+/i,
@@ -344,7 +365,6 @@ function cleanFoodName(raw: string): string {
   return text.replace(/\s{2,}/g, " ").trim();
 }
 
-// ── Fraction modifiers ("half a plate", "quarter bowl") ──
 function detectFractionMultiplier(text: string): number {
   const lower = text.toLowerCase();
   if (/\bone and a half\b/.test(lower)) return 1.5;
@@ -353,13 +373,28 @@ function detectFractionMultiplier(text: string): number {
   return 1;
 }
 
-// ── Diminutive language ("a little bit of papad") — clearly small, should
-// never fall through to the generic "unspecified serving" default.
+// Leading "a" is now optional, so "small amount of X" matches the same as
+// "a small amount of X" — both should get the small diminutive default,
+// not the generic no-quantity fallback.
 const DIMINUTIVE_PATTERN =
-  /\b(a\s+little\s+bit\s+of|a\s+little\s+of|a\s+bit\s+of|a\s+small\s+amount\s+of|a\s+pinch\s+of|a\s+dash\s+of)\b/i;
+  /\b(?:a\s+)?(little\s+bit\s+of|little\s+of|bit\s+of|small\s+amount\s+of|pinch\s+of|dash\s+of)\b/i;
 const DIMINUTIVE_GRAMS = 40;
 
-// ── Extract an explicit gram/portion qualifier from an item string ──
+// Shared between the count-match branch (for "1 small bowl of X") and the
+// size-word branch (for "a small bowl of X" with no leading number).
+const SIZE_WORDS = [
+  "small bowl",
+  "medium bowl",
+  "large bowl",
+  "small plate",
+  "large plate",
+  "plate",
+  "bowl",
+  "handful",
+  "cup",
+  "glass",
+];
+
 function extractPortion(itemText: string): {
   name: string;
   portionDesc: string;
@@ -381,7 +416,16 @@ function extractPortion(itemText: string): {
   const countMatch = itemText.match(/^(\d+)\s+(.+)$/);
   if (countMatch) {
     const count = parseInt(countMatch[1], 10);
-    const name = cleanFoodName(countMatch[2]);
+    const restText = countMatch[2];
+    const name = cleanFoodName(restText);
+
+    // A leading number can be qualifying a container/size word ("1 small
+    // bowl of daal") rather than a discrete countable unit ("2 eggs") —
+    // check for that first, since treating "small bowl" as just another
+    // noun and defaulting to a flat 100g badly underestimates a real bowl.
+    const lowerRest = restText.toLowerCase();
+    const matchedContainerSize = SIZE_WORDS.find((w) => lowerRest.includes(w));
+
     const unitWeights: Record<string, number> = {
       egg: 50,
       eggs: 50,
@@ -396,6 +440,21 @@ function extractPortion(itemText: string): {
       pieces: 100,
     };
     const matchedUnit = Object.keys(unitWeights).find((u) => name.includes(u));
+
+    if (matchedContainerSize && !matchedUnit) {
+      const baseGrams = estimatePortionGrams(matchedContainerSize);
+      const grams = Math.round(baseGrams * count);
+      const containerName = cleanFoodName(
+        restText.replace(new RegExp(matchedContainerSize, "i"), ""),
+      );
+      return {
+        name: containerName,
+        portionDesc: `${count}x ${matchedContainerSize} (${grams}g)`,
+        explicitGrams: grams,
+        isApproximate: false,
+      };
+    }
+
     // "pieces" of meat in a curry/gravy are bite-sized chunks (~20-30g
     // each), not a 100g cut — keep the larger default for bread/fruit-style
     // units, but shrink it specifically for meat-in-curry context.
@@ -427,20 +486,8 @@ function extractPortion(itemText: string): {
     };
   }
 
-  const sizeWords = [
-    "small bowl",
-    "medium bowl",
-    "large bowl",
-    "small plate",
-    "large plate",
-    "plate",
-    "bowl",
-    "handful",
-    "cup",
-    "glass",
-  ];
   const lower = itemText.toLowerCase();
-  const matchedSize = sizeWords.find((w) => lower.includes(w));
+  const matchedSize = SIZE_WORDS.find((w) => lower.includes(w));
   if (matchedSize) {
     const fraction = detectFractionMultiplier(itemText);
     const baseGrams = estimatePortionGrams(matchedSize);
@@ -505,13 +552,30 @@ export async function parseMeal(
       continue;
     }
 
+    const generic = matchGenericFood(name) ?? matchGenericFood(itemText);
+    if (generic) {
+      const grams = explicitGrams ?? 100;
+      const factor = grams / 100;
+      items.push({
+        name: generic.label,
+        portion_desc: portionDesc,
+        grams,
+        confidence: "medium",
+        source: "manual",
+        calories: Math.round(generic.per100g.calories * factor),
+        protein: Math.round(generic.per100g.protein * factor * 10) / 10,
+        carbs: Math.round(generic.per100g.carbs * factor * 10) / 10,
+        fat: Math.round(generic.per100g.fat * factor * 10) / 10,
+        fiber: Math.round(generic.per100g.fiber * factor * 10) / 10,
+      });
+      continue;
+    }
+
     const { source, confidence, per100g } = await getPer100g(
       name,
       supabase,
       groqApiKey,
     );
-    // Lowered from 250 — most unquantified mentions in a multi-item meal
-    // description are sides/accompaniments, not full standalone servings.
     const grams = explicitGrams ?? 100;
 
     const finalConfidence: FoodConfidence =
