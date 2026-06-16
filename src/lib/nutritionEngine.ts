@@ -33,6 +33,27 @@ export interface DailyTargets {
   tdee: number;
   activity_label: "rest" | "moderate" | "heavy";
   breakdown_reason: string;
+  bmi: number;
+  bmi_category: BMICategory;
+}
+
+export type BMICategory = "underweight" | "normal" | "overweight" | "obese";
+
+// ── BMI — standard formula, WHO category bands ──
+// Note: BMI is a crude population-level screening metric. It doesn't
+// distinguish muscle from fat, so it under/overstates risk for very
+// muscular or very sedentary people. Always pair with body fat % if
+// available rather than treating BMI as a target to optimize.
+export function calcBMI(weightKg: number, heightCm: number): number {
+  const heightM = heightCm / 100;
+  return Math.round((weightKg / (heightM * heightM)) * 10) / 10;
+}
+
+export function bmiCategory(bmi: number): BMICategory {
+  if (bmi < 18.5) return "underweight";
+  if (bmi < 25) return "normal";
+  if (bmi < 30) return "overweight";
+  return "obese";
 }
 
 const KCAL_PER_KG_FAT = 7700;
@@ -161,8 +182,15 @@ function calcFiber(calories: number): number {
   return Math.round((calories / 1000) * 14);
 }
 
-function calcWater(weightKg: number, sessionCount: number): number {
-  return Math.round(weightKg * 35 + sessionCount * 300);
+function calcWater(
+  weightKg: number,
+  sessionCount: number,
+  tookCreatine: boolean,
+): number {
+  const base = Math.round(weightKg * 35 + sessionCount * 300);
+  // Creatine draws water into muscle cells; standard guidance is to
+  // increase fluid intake to compensate and avoid cramping/dehydration.
+  return tookCreatine ? base + 750 : base;
 }
 
 // ── Main entry point ──
@@ -170,6 +198,7 @@ export function calculateDailyTargets(
   inputs: NutritionProfileInputs,
   todaysSessions: Session[],
   todaysReadinessScore: number | null,
+  tookCreatine: boolean = false,
 ): DailyTargets {
   const bmr = calcBMR(
     inputs.sex,
@@ -211,7 +240,13 @@ export function calculateDailyTargets(
   const fat = Math.max(fatFloor, Math.round(remainingKcalForFat / 9));
 
   const fiber = calcFiber(calories);
-  const water = calcWater(inputs.weight_kg, todaysSessions.length);
+  const water = calcWater(
+    inputs.weight_kg,
+    todaysSessions.length,
+    tookCreatine,
+  );
+
+  const bmi = calcBMI(inputs.weight_kg, inputs.height_cm);
 
   const activityLabel: DailyTargets["activity_label"] =
     hasLift && hasRun ? "heavy" : hasLift || hasRun ? "moderate" : "rest";
@@ -227,7 +262,8 @@ export function calculateDailyTargets(
             : "run day"
           : "rest day";
 
-  const breakdown_reason = `${activityDesc} (${reason}): protein ${protein}g, carbs ${carbs}g${readinessNote}, fat ${fat}g floor-adjusted`;
+  const creatineNote = tookCreatine ? ", water raised for creatine intake" : "";
+  const breakdown_reason = `${activityDesc} (${reason}): protein ${protein}g, carbs ${carbs}g${readinessNote}, fat ${fat}g floor-adjusted${creatineNote}`;
 
   return {
     calories,
@@ -240,6 +276,8 @@ export function calculateDailyTargets(
     tdee,
     activity_label: activityLabel,
     breakdown_reason,
+    bmi,
+    bmi_category: bmiCategory(bmi),
   };
 }
 

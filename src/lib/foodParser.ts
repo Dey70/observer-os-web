@@ -36,6 +36,95 @@ function normalizeQuery(q: string): string {
   return q.toLowerCase().trim().replace(/\s+/g, " ");
 }
 
+// ── Known supplements lookup ──
+// AI estimation hallucinates plausible-looking macros for things that
+// aren't really "food" in the per-100g sense (creatine has zero calories;
+// a multivitamin has none; a protein scoop is brand-dependent but has a
+// well-known typical range). Checking this table first avoids those errors
+// and skips an unnecessary AI call for the most common logged supplements.
+// Values are per-100g equivalent EXCEPT note: these are matched and
+// returned directly as absolute per-serving values (grams field below),
+// not scaled by portion size, since "1 serving" is the only sensible unit.
+interface SupplementMatch {
+  match: (q: string) => boolean;
+  perServing: {
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+    fiber: number;
+  };
+  servingGrams: number; // nominal, only used for display
+  label: string;
+}
+
+const SUPPLEMENTS: SupplementMatch[] = [
+  {
+    match: (q) => /\bcreatine\b/.test(q),
+    perServing: { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 },
+    servingGrams: 5,
+    label: "Creatine",
+  },
+  {
+    match: (q) => /\b(bcaa|branch chain amino)/.test(q),
+    perServing: { calories: 10, protein: 2.5, carbs: 0, fat: 0, fiber: 0 },
+    servingGrams: 7,
+    label: "BCAA",
+  },
+  {
+    match: (q) => /\b(eaa|essential amino)/.test(q),
+    perServing: { calories: 15, protein: 4, carbs: 0, fat: 0, fiber: 0 },
+    servingGrams: 10,
+    label: "EAA",
+  },
+  {
+    match: (q) => /\b(electrolyte|ors|hydration salt|rehydration)/.test(q),
+    perServing: { calories: 5, protein: 0, carbs: 1, fat: 0, fiber: 0 },
+    servingGrams: 5,
+    label: "Electrolytes",
+  },
+  {
+    match: (q) => /\b(multivitamin|multi-vitamin|daily vitamin)/.test(q),
+    perServing: { calories: 5, protein: 0, carbs: 1, fat: 0, fiber: 0 },
+    servingGrams: 1,
+    label: "Multivitamin",
+  },
+  {
+    match: (q) => /\b(fish oil|omega.?3)/.test(q),
+    perServing: { calories: 9, protein: 0, carbs: 0, fat: 1, fiber: 0 },
+    servingGrams: 1,
+    label: "Fish oil",
+  },
+  {
+    match: (q) => /\bglutamine\b/.test(q),
+    perServing: { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 },
+    servingGrams: 5,
+    label: "Glutamine",
+  },
+  {
+    match: (q) => /\b(pre.?workout)\b/.test(q),
+    // Caffeine + beta-alanine etc; effectively no macros, small calorie trace
+    perServing: { calories: 5, protein: 0, carbs: 1, fat: 0, fiber: 0 },
+    servingGrams: 8,
+    label: "Pre-workout",
+  },
+  {
+    match: (q) =>
+      /\b(whey protein|protein powder|protein scoop|protein shake)\b/.test(q),
+    // Typical whey scoop ~30g serving, ~120kcal, 24g protein. This is the
+    // one "supplement" with real macros, included so it doesn't bounce to
+    // a less-accurate AI guess or an irrelevant USDA "whey" food match.
+    perServing: { calories: 120, protein: 24, carbs: 3, fat: 1.5, fiber: 0 },
+    servingGrams: 30,
+    label: "Whey protein",
+  },
+];
+
+function matchSupplement(foodName: string): SupplementMatch | null {
+  const normalized = normalizeQuery(foodName);
+  return SUPPLEMENTS.find((s) => s.match(normalized)) ?? null;
+}
+
 // ── Per-100g macro lookup, tried in order: cache → OFF → USDA → AI ──
 async function getPer100g(
   foodName: string,
@@ -242,11 +331,14 @@ function extractPortion(itemText: string): {
   portionDesc: string;
   explicitGrams: number | null;
 } {
-  // "200g chicken breast" / "150 g rice"
-  const gramMatch = itemText.match(/(\d+(?:\.\d+)?)\s*g\b/i);
+  // "200g chicken breast" / "150 g rice" / "5gm of creatine" / "5 g of creatine"
+  const gramMatch = itemText.match(/(\d+(?:\.\d+)?)\s*gm?\b/i);
   if (gramMatch) {
     const grams = parseFloat(gramMatch[1]);
-    const name = itemText.replace(gramMatch[0], "").trim();
+    const name = itemText
+      .replace(gramMatch[0], "")
+      .replace(/^\s*(of|a|some)\s+/i, "") // strip leading filler word left behind
+      .trim();
     return { name, portionDesc: `${grams}g`, explicitGrams: grams };
   }
 
@@ -312,6 +404,28 @@ export async function parseMeal(
   for (const itemText of itemTexts) {
     const { name, portionDesc, explicitGrams } = extractPortion(itemText);
     if (!name) continue;
+
+    // Known supplements bypass the per-100g pipeline entirely — they're
+    // counted per-serving, not scaled by an assumed gram weight, since a
+    // "5g of creatine" and "1 scoop of creatine" mean the same thing.
+    // Checked against both the cleaned name and the raw text, since
+    // portion-stripping can occasionally leave an awkward remainder.
+    const supplement = matchSupplement(name) ?? matchSupplement(itemText);
+    if (supplement) {
+      items.push({
+        name: supplement.label,
+        portion_desc: explicitGrams ? `${explicitGrams}g` : "1 serving",
+        grams: explicitGrams ?? supplement.servingGrams,
+        confidence: "high",
+        source: "manual",
+        calories: supplement.perServing.calories,
+        protein: supplement.perServing.protein,
+        carbs: supplement.perServing.carbs,
+        fat: supplement.perServing.fat,
+        fiber: supplement.perServing.fiber,
+      });
+      continue;
+    }
 
     const { source, confidence, per100g } = await getPer100g(
       name,

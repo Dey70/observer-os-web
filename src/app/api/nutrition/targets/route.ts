@@ -23,6 +23,7 @@ export async function GET(req: NextRequest) {
       { data: rawWeights },
       { data: rawSessions },
       { data: rawLog },
+      { data: rawNutritionLogs },
     ] = await Promise.all([
       supabase
         .from("profiles")
@@ -46,12 +47,21 @@ export async function GET(req: NextRequest) {
         .eq("user_id", user.id)
         .eq("date", date)
         .maybeSingle(),
+      (supabase as any)
+        .from("nutrition_logs")
+        .select("item_name")
+        .eq("user_id", user.id)
+        .eq("date", date),
     ]);
 
     const profile = rawProfile as any;
     const weights = (rawWeights ?? []) as any[];
     const sessions = (rawSessions ?? []) as Session[];
     const log = rawLog as DailyLog | null;
+    const nutritionLogs = (rawNutritionLogs ?? []) as { item_name: string }[];
+    const tookCreatine = nutritionLogs.some((l) =>
+      /\bcreatine\b/i.test(l.item_name),
+    );
 
     const missing: string[] = [];
     if (!profile?.age) missing.push("age");
@@ -80,6 +90,7 @@ export async function GET(req: NextRequest) {
       },
       sessions,
       readinessFromLog(log),
+      tookCreatine,
     );
 
     return NextResponse.json({ date, targets });

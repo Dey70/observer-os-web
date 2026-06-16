@@ -11,6 +11,7 @@ import {
   Select,
 } from "@/components/ui";
 import { useNotifications } from "@/hooks/useNotifications";
+import { calcBMI, bmiCategory } from "@/lib/nutritionEngine";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +30,13 @@ const NUTRITION_GOALS = [
   { value: "recomp", label: "Recomposition" },
   { value: "endurance", label: "Endurance performance" },
 ];
+
+const BMI_CATEGORY_LABEL: Record<string, { label: string; color: string }> = {
+  underweight: { label: "Underweight", color: "var(--yellow)" },
+  normal: { label: "Normal", color: "var(--green)" },
+  overweight: { label: "Overweight", color: "var(--yellow)" },
+  obese: { label: "Obese", color: "var(--red)" },
+};
 
 export default function ProfilePage() {
   const sb = createClient();
@@ -51,6 +59,7 @@ export default function ProfilePage() {
   const [sex, setSex] = useState<"male" | "female">("male");
   const [heightCm, setHeightCm] = useState("");
   const [nutritionGoalType, setNutritionGoalType] = useState("maintain");
+  const [currentWeight, setCurrentWeight] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -62,11 +71,17 @@ export default function ProfilePage() {
     } = await sb.auth.getUser();
     if (!user) return;
     setEmail(user.email ?? "");
-    const { data: raw } = await sb
-      .from("profiles")
-      .select("*")
-      .eq("user_id", user.id)
-      .maybeSingle();
+
+    const [{ data: raw }, { data: rawWeights }] = await Promise.all([
+      sb.from("profiles").select("*").eq("user_id", user.id).maybeSingle(),
+      sb
+        .from("weight_logs")
+        .select("weight")
+        .eq("user_id", user.id)
+        .order("date", { ascending: false })
+        .limit(1),
+    ]);
+
     const data = raw as {
       name: string | null;
       age: number | null;
@@ -89,6 +104,10 @@ export default function ProfilePage() {
       setHeightCm(data.height_cm?.toString() ?? "");
       setNutritionGoalType(data.nutrition_goal_type ?? "maintain");
     }
+
+    const weights = (rawWeights ?? []) as { weight: number }[];
+    setCurrentWeight(weights.length ? weights[0].weight : null);
+
     setLoading(false);
   }, []);
 
@@ -148,6 +167,11 @@ export default function ProfilePage() {
         </div>
       </div>
     );
+
+  const heightNum = heightCm ? parseFloat(heightCm) : null;
+  const bmi =
+    heightNum && currentWeight ? calcBMI(currentWeight, heightNum) : null;
+  const bmiInfo = bmi !== null ? BMI_CATEGORY_LABEL[bmiCategory(bmi)] : null;
 
   return (
     <div>
@@ -246,6 +270,110 @@ export default function ProfilePage() {
           </div>
         </div>
 
+        {/* Current weight + BMI — read-only, sourced from weight_logs */}
+        <div
+          style={{
+            marginTop: 4,
+            marginBottom: 8,
+            padding: "12px 14px",
+            background: "var(--surface2)",
+            border: "1px solid var(--border2)",
+            borderRadius: 10,
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: 10,
+          }}
+        >
+          <div>
+            <div
+              style={{
+                fontSize: 9,
+                color: "var(--text-dim)",
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                fontFamily: "var(--mono)",
+                marginBottom: 4,
+              }}
+            >
+              Current Weight
+            </div>
+            <div
+              style={{
+                fontFamily: "var(--mono)",
+                fontSize: 18,
+                fontWeight: 700,
+                color: currentWeight ? "var(--text)" : "var(--text-dim)",
+              }}
+            >
+              {currentWeight ? `${currentWeight} kg` : "Not logged yet"}
+            </div>
+            <div
+              style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 2 }}
+            >
+              Logged on the Dashboard — most recent entry shown here
+            </div>
+          </div>
+          {bmi !== null && bmiInfo ? (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "6px 12px",
+                borderRadius: 99,
+                border: `1px solid ${bmiInfo.color}`,
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: "var(--mono)",
+                  fontSize: 14,
+                  fontWeight: 700,
+                  color: bmiInfo.color,
+                }}
+              >
+                BMI {bmi}
+              </span>
+              <span
+                style={{
+                  fontSize: 10,
+                  color: bmiInfo.color,
+                  fontFamily: "var(--mono)",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.05em",
+                }}
+              >
+                {bmiInfo.label}
+              </span>
+            </div>
+          ) : (
+            <div
+              style={{
+                fontSize: 11,
+                color: "var(--text-dim)",
+                fontFamily: "var(--mono)",
+              }}
+            >
+              Add height + log weight to see BMI
+            </div>
+          )}
+        </div>
+        <div
+          style={{
+            fontSize: 10,
+            color: "var(--text-dim)",
+            marginBottom: 8,
+            fontFamily: "var(--mono)",
+            lineHeight: 1.5,
+          }}
+        >
+          BMI is a rough screening number — it doesn't separate muscle from fat,
+          so it can read high for muscular athletes. Treat it as a reference
+          point, not a target.
+        </div>
+
         <div
           style={{
             fontSize: 10,
@@ -325,8 +453,9 @@ export default function ProfilePage() {
             fontFamily: "var(--mono)",
           }}
         >
-          Used with your weight, height, and today's sessions to calculate daily
-          calorie and macro targets on the Nutrition page.
+          Used with your current weight, height, and today's sessions to
+          calculate daily calorie, macro, and water targets on the Nutrition
+          page.
         </div>
 
         <div

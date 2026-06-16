@@ -14,6 +14,8 @@ import {
   AlertCircle,
   Check,
   Trash2,
+  Pencil,
+  X,
 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -83,6 +85,26 @@ const RING_METRICS = [
     color: "var(--green)",
   },
 ];
+
+const BMI_CATEGORY_LABEL: Record<string, { label: string; color: string }> = {
+  underweight: { label: "Underweight", color: "var(--yellow)" },
+  normal: { label: "Normal", color: "var(--green)" },
+  overweight: { label: "Overweight", color: "var(--yellow)" },
+  obese: { label: "Obese", color: "var(--red)" },
+};
+
+function recomputeTotals(items: ParsedFoodItem[]) {
+  return items.reduce(
+    (acc, item) => ({
+      calories: acc.calories + item.calories,
+      protein: acc.protein + item.protein,
+      carbs: acc.carbs + item.carbs,
+      fat: acc.fat + item.fat,
+      fiber: acc.fiber + item.fiber,
+    }),
+    { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 },
+  );
+}
 
 function MacroRing({
   label,
@@ -194,6 +216,8 @@ export default function NutritionPage() {
   const [parsing, setParsing] = useState(false);
   const [pending, setPending] = useState<PendingMeal | null>(null);
   const [parseError, setParseError] = useState<string | null>(null);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [editDraft, setEditDraft] = useState<ParsedFoodItem | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
@@ -244,6 +268,7 @@ export default function NutritionPage() {
     setParsing(true);
     setParseError(null);
     setPending(null);
+    setEditingIndex(null);
     try {
       const res = await fetch("/api/nutrition/parse", {
         method: "POST",
@@ -296,6 +321,7 @@ export default function NutritionPage() {
 
     await (sb as any).from("nutrition_logs").insert(rows);
     setPending(null);
+    setEditingIndex(null);
     setInput("");
     load();
     inputRef.current?.focus();
@@ -303,6 +329,54 @@ export default function NutritionPage() {
 
   function discardPending() {
     setPending(null);
+    setEditingIndex(null);
+  }
+
+  function startEditItem(index: number) {
+    if (!pending) return;
+    setEditingIndex(index);
+    setEditDraft({ ...pending.items[index] });
+  }
+
+  function cancelEditItem() {
+    setEditingIndex(null);
+    setEditDraft(null);
+  }
+
+  function saveEditItem() {
+    if (!pending || editingIndex === null || !editDraft) return;
+    const newItems = [...pending.items];
+    newItems[editingIndex] = {
+      ...editDraft,
+      confidence: "high",
+      source: "manual",
+    };
+    setPending({
+      items: newItems,
+      totals: recomputeTotals(newItems),
+      raw_input: pending.raw_input,
+    });
+    setEditingIndex(null);
+    setEditDraft(null);
+  }
+
+  function removePendingItem(index: number) {
+    if (!pending) return;
+    const newItems = pending.items.filter((_, i) => i !== index);
+    if (newItems.length === 0) {
+      setPending(null);
+      setEditingIndex(null);
+      return;
+    }
+    setPending({
+      items: newItems,
+      totals: recomputeTotals(newItems),
+      raw_input: pending.raw_input,
+    });
+    if (editingIndex === index) {
+      setEditingIndex(null);
+      setEditDraft(null);
+    }
   }
 
   async function deleteLogItem(id: number) {
@@ -328,6 +402,19 @@ export default function NutritionPage() {
     low: "var(--red)",
   };
 
+  const editFieldStyle: React.CSSProperties = {
+    width: "100%",
+    padding: "6px 8px",
+    background: "var(--surface)",
+    border: "1px solid var(--border)",
+    borderRadius: 6,
+    color: "var(--text)",
+    outline: "none",
+    fontFamily: "var(--mono)",
+    fontSize: 12,
+    boxSizing: "border-box",
+  };
+
   if (loading)
     return (
       <div>
@@ -343,6 +430,8 @@ export default function NutritionPage() {
         </div>
       </div>
     );
+
+  const bmiInfo = targets ? BMI_CATEGORY_LABEL[targets.bmi_category] : null;
 
   return (
     <div style={{ maxWidth: 760 }}>
@@ -416,11 +505,27 @@ export default function NutritionPage() {
                 display: "flex",
                 gap: 16,
                 flexWrap: "wrap",
+                alignItems: "center",
               }}
             >
               <span>BMR {targets.bmr}</span>
               <span>TDEE {targets.tdee}</span>
               <span>Water target {targets.water}ml</span>
+              {bmiInfo && (
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 5,
+                    padding: "2px 8px",
+                    borderRadius: 99,
+                    border: `1px solid ${bmiInfo.color}`,
+                    color: bmiInfo.color,
+                  }}
+                >
+                  BMI {targets.bmi} · {bmiInfo.label}
+                </span>
+              )}
             </div>
           </Card>
         )
@@ -532,72 +637,235 @@ export default function NutritionPage() {
               marginBottom: 14,
             }}
           >
-            {pending.items.map((item, i) => (
-              <div
-                key={i}
-                style={{
-                  padding: "10px 12px",
-                  background: "var(--surface2)",
-                  border: "1px solid var(--border2)",
-                  borderRadius: 8,
-                }}
-              >
+            {pending.items.map((item, i) => {
+              const isEditing = editingIndex === i;
+              return (
                 <div
+                  key={i}
                   style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "flex-start",
-                    gap: 8,
+                    padding: "10px 12px",
+                    background: "var(--surface2)",
+                    border: `1px solid ${isEditing ? "var(--accent)" : "var(--border2)"}`,
+                    borderRadius: 8,
                   }}
                 >
-                  <div style={{ minWidth: 0 }}>
-                    <span
-                      style={{
-                        fontSize: 13,
-                        color: "var(--text)",
-                        textTransform: "capitalize",
-                      }}
-                    >
-                      {item.name}
-                    </span>
+                  {isEditing && editDraft ? (
+                    <div>
+                      <div style={{ marginBottom: 8 }}>
+                        <label
+                          style={{
+                            fontSize: 9,
+                            color: "var(--text-dim)",
+                            letterSpacing: "0.08em",
+                            textTransform: "uppercase",
+                            fontFamily: "var(--mono)",
+                          }}
+                        >
+                          Item name
+                        </label>
+                        <input
+                          value={editDraft.name}
+                          onChange={(e) =>
+                            setEditDraft({ ...editDraft, name: e.target.value })
+                          }
+                          style={{ ...editFieldStyle, marginTop: 4 }}
+                        />
+                      </div>
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "repeat(5, 1fr)",
+                          gap: 6,
+                          marginBottom: 10,
+                        }}
+                      >
+                        {(
+                          [
+                            "calories",
+                            "protein",
+                            "carbs",
+                            "fat",
+                            "fiber",
+                          ] as const
+                        ).map((field) => (
+                          <div key={field}>
+                            <label
+                              style={{
+                                fontSize: 8,
+                                color: "var(--text-dim)",
+                                letterSpacing: "0.06em",
+                                textTransform: "uppercase",
+                                fontFamily: "var(--mono)",
+                              }}
+                            >
+                              {field === "calories"
+                                ? "kcal"
+                                : field.slice(0, 1).toUpperCase()}
+                            </label>
+                            <input
+                              type="number"
+                              value={editDraft[field]}
+                              onChange={(e) =>
+                                setEditDraft({
+                                  ...editDraft,
+                                  [field]: parseFloat(e.target.value) || 0,
+                                })
+                              }
+                              style={{ ...editFieldStyle, marginTop: 4 }}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button
+                          onClick={saveEditItem}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 5,
+                            padding: "6px 12px",
+                            background: "var(--accent-dim)",
+                            border: "1px solid var(--accent)",
+                            borderRadius: 6,
+                            color: "var(--accent)",
+                            fontFamily: "var(--mono)",
+                            fontSize: 11,
+                            cursor: "pointer",
+                          }}
+                        >
+                          <Check size={11} strokeWidth={2.5} /> Save
+                        </button>
+                        <button
+                          onClick={cancelEditItem}
+                          style={{
+                            padding: "6px 12px",
+                            background: "var(--surface)",
+                            border: "1px solid var(--border)",
+                            borderRadius: 6,
+                            color: "var(--text-muted)",
+                            fontFamily: "var(--mono)",
+                            fontSize: 11,
+                            cursor: "pointer",
+                          }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
                     <div
                       style={{
-                        fontSize: 10,
-                        color: "var(--text-dim)",
-                        fontFamily: "var(--mono)",
-                        marginTop: 2,
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "flex-start",
+                        gap: 8,
                       }}
                     >
-                      {item.portion_desc} ·{" "}
-                      <span style={{ color: confidenceColor[item.confidence] }}>
-                        {item.confidence} confidence
-                      </span>
+                      <div style={{ minWidth: 0 }}>
+                        <span
+                          style={{
+                            fontSize: 13,
+                            color: "var(--text)",
+                            textTransform: "capitalize",
+                          }}
+                        >
+                          {item.name}
+                        </span>
+                        <div
+                          style={{
+                            fontSize: 10,
+                            color: "var(--text-dim)",
+                            fontFamily: "var(--mono)",
+                            marginTop: 2,
+                          }}
+                        >
+                          {item.portion_desc} ·{" "}
+                          <span
+                            style={{ color: confidenceColor[item.confidence] }}
+                          >
+                            {item.confidence} confidence
+                          </span>
+                        </div>
+                      </div>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "flex-start",
+                          gap: 10,
+                          flexShrink: 0,
+                        }}
+                      >
+                        <div style={{ textAlign: "right" }}>
+                          <div
+                            style={{
+                              fontFamily: "var(--mono)",
+                              fontSize: 13,
+                              fontWeight: 700,
+                              color: "var(--accent)",
+                            }}
+                          >
+                            {item.calories} kcal
+                          </div>
+                          <div
+                            style={{
+                              fontSize: 10,
+                              color: "var(--text-dim)",
+                              fontFamily: "var(--mono)",
+                            }}
+                          >
+                            P{item.protein} C{item.carbs} F{item.fat}
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", gap: 4 }}>
+                          <button
+                            onClick={() => startEditItem(i)}
+                            title="Edit"
+                            style={{
+                              width: 24,
+                              height: 24,
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              background: "transparent",
+                              border: "1px solid var(--border2)",
+                              borderRadius: 6,
+                              cursor: "pointer",
+                            }}
+                          >
+                            <Pencil
+                              size={11}
+                              color="var(--text-muted)"
+                              strokeWidth={1.75}
+                            />
+                          </button>
+                          <button
+                            onClick={() => removePendingItem(i)}
+                            title="Remove from this meal"
+                            style={{
+                              width: 24,
+                              height: 24,
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              background: "transparent",
+                              border: "1px solid var(--border2)",
+                              borderRadius: 6,
+                              cursor: "pointer",
+                            }}
+                          >
+                            <X
+                              size={11}
+                              color="var(--text-dim)"
+                              strokeWidth={1.75}
+                            />
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                  <div style={{ textAlign: "right", flexShrink: 0 }}>
-                    <div
-                      style={{
-                        fontFamily: "var(--mono)",
-                        fontSize: 13,
-                        fontWeight: 700,
-                        color: "var(--accent)",
-                      }}
-                    >
-                      {item.calories} kcal
-                    </div>
-                    <div
-                      style={{
-                        fontSize: 10,
-                        color: "var(--text-dim)",
-                        fontFamily: "var(--mono)",
-                      }}
-                    >
-                      P{item.protein} C{item.carbs} F{item.fat}
-                    </div>
-                  </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
           <div
             style={{
@@ -620,6 +888,7 @@ export default function NutritionPage() {
           <div style={{ display: "flex", gap: 8 }}>
             <button
               onClick={confirmMeal}
+              disabled={editingIndex !== null}
               style={{
                 flex: 1,
                 display: "flex",
@@ -627,15 +896,16 @@ export default function NutritionPage() {
                 justifyContent: "center",
                 gap: 6,
                 padding: "11px",
-                background: "var(--accent)",
+                background:
+                  editingIndex !== null ? "var(--surface2)" : "var(--accent)",
                 border: "none",
                 borderRadius: 8,
-                color: "var(--bg)",
+                color: editingIndex !== null ? "var(--text-dim)" : "var(--bg)",
                 fontFamily: "var(--mono)",
                 fontSize: 12,
                 fontWeight: 700,
                 letterSpacing: "0.06em",
-                cursor: "pointer",
+                cursor: editingIndex !== null ? "not-allowed" : "pointer",
               }}
             >
               <Check size={13} strokeWidth={2.5} /> ADD TO LOG
