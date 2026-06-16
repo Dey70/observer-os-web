@@ -1,3 +1,4 @@
+// src/app/page.tsx
 import { redirect } from "next/navigation";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -10,6 +11,6 @@ export default async function RootPage() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (user) redirect("/checkin");
+  if (user) redirect("/home");
   redirect("/auth");
 }

@@ -25,7 +25,7 @@ export default function AuthPage() {
     const { error } = await sb.auth.signInWithPassword({ email, password });
     setLoading(false);
     if (error) setMessage({ text: error.message, error: true });
-    else router.push("/checkin");
+    else router.push("/home");
   }
 
   async function handleSignUp(e: React.FormEvent) {

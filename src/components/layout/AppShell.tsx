@@ -20,9 +20,11 @@ import {
   Trophy,
   Apple,
   Settings,
+  Home,
 } from "lucide-react";
 
 const navItems = [
+  { href: "/home", label: "Home", icon: Home },
   { href: "/checkin", label: "Check-in", icon: Activity },
   { href: "/log", label: "Log Session", icon: Dumbbell },
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -369,6 +371,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 }}
               >
                 {[
+                  { href: "/home", label: "Home", icon: Home },
                   {
                     href: "/dashboard",
                     label: "Dashboard",
