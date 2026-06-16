@@ -64,6 +64,15 @@ const liftTypes = [
   "Core",
 ];
 
+function sanitizeNumericInput(raw: string, max: number): string {
+  if (raw === "") return "";
+  const stripped = raw.replace(/^0+(?=\d)/, "");
+  const num = parseInt(stripped, 10);
+  if (isNaN(num)) return "";
+  if (num > max) return String(max);
+  return stripped;
+}
+
 type LoggedSession = {
   type: Tab;
   duration: number; // minutes
@@ -82,8 +91,8 @@ export default function LogPage() {
   const [date, setDate] = useState(
     () => new Date().toISOString().split("T")[0],
   );
-  const [hours, setHours] = useState(0);
-  const [minutes, setMinutes] = useState(30);
+  const [hours, setHours] = useState("0");
+  const [minutes, setMinutes] = useState("30");
   const [effort, setEffort] = useState<Effort>("medium");
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
@@ -107,8 +116,8 @@ export default function LogPage() {
     setNudge(null);
     setNewPRs([]);
     setNotes("");
-    setHours(0);
-    setMinutes(30);
+    setHours("0");
+    setMinutes("30");
     setEffort("medium");
     setDistance(5.0);
     setTerrain("Road");
@@ -126,7 +135,8 @@ export default function LogPage() {
       } = await supabase.auth.getUser();
       if (!user) return;
 
-      const durationMinutes = hours * 60 + minutes;
+      const durationMinutes =
+        (parseInt(hours, 10) || 0) * 60 + (parseInt(minutes, 10) || 0);
       const rpe = effortToRpe[effort];
       const load = durationMinutes * rpe;
 
@@ -214,7 +224,7 @@ export default function LogPage() {
     width: "100%",
     padding: "12px 14px",
     backgroundColor: "var(--surface2)",
-    border: "1px solid var(--border2)", // Softer border!
+    border: "1px solid var(--border2)",
     borderRadius: "10px",
     color: "var(--text)",
     fontFamily: "var(--mono)",
@@ -744,7 +754,7 @@ export default function LogPage() {
       <div
         style={{
           backgroundColor: "var(--surface)",
-          border: "1px solid var(--border2)", // Softer container border
+          border: "1px solid var(--border2)",
           borderRadius: "20px",
           padding: "24px 20px",
           overflow: "hidden",
@@ -843,7 +853,9 @@ export default function LogPage() {
               min={0}
               max={24}
               value={hours}
-              onChange={(e) => setHours(Number(e.target.value))}
+              onChange={(e) =>
+                setHours(sanitizeNumericInput(e.target.value, 24))
+              }
               style={inputStyle}
             />
           </div>
@@ -854,7 +866,9 @@ export default function LogPage() {
               min={0}
               max={59}
               value={minutes}
-              onChange={(e) => setMinutes(Number(e.target.value))}
+              onChange={(e) =>
+                setMinutes(sanitizeNumericInput(e.target.value, 59))
+              }
               style={inputStyle}
             />
           </div>
@@ -877,9 +891,9 @@ export default function LogPage() {
                 style={{
                   padding: "10px 8px",
                   borderRadius: "9px",
-                  border: `1px solid ${effort === key ? "var(--accent)" : "transparent"}`, // Replaced hard border with transparent
+                  border: `1px solid ${effort === key ? "var(--accent)" : "transparent"}`,
                   backgroundColor:
-                    effort === key ? "var(--accent-dim)" : "var(--surface2)", // Rely on surface contrast
+                    effort === key ? "var(--accent-dim)" : "var(--surface2)",
                   color: effort === key ? "var(--accent)" : "var(--text-muted)",
                   fontFamily: "var(--sans)",
                   fontSize: "13px",
@@ -954,7 +968,7 @@ export default function LogPage() {
                   style={{
                     padding: "8px 14px",
                     borderRadius: "9px",
-                    border: `1px solid ${liftType === t ? "var(--accent)" : "transparent"}`, // Replaced hard border
+                    border: `1px solid ${liftType === t ? "var(--accent)" : "transparent"}`,
                     backgroundColor:
                       liftType === t ? "var(--accent-dim)" : "var(--surface2)",
                     color:
