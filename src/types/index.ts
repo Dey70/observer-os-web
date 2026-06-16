@@ -3,6 +3,7 @@ export interface DailyLog {
   user_id: string;
   date: string;
   sleep_hours: number;
+  nap_hours?: number;
   sleep_quality: number;
   soreness: number;
   fatigue: number;

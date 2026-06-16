@@ -1,3 +1,4 @@
+// src/app/(app)/checkin/page.tsx
 "use client";
 
 import { useState, useEffect } from "react";
@@ -19,7 +20,7 @@ const SLIDERS = [
     label: "Soreness",
     min: 1,
     max: 10,
-    color: "var(--yellow)", // Was orange, maps to your var(--yellow)
+    color: "var(--yellow)",
     dataColor: "orange",
   },
   {
@@ -63,6 +64,11 @@ export const dynamic = "force-dynamic";
 export default function CheckinPage() {
   const sb = createClient();
   const [sleepHours, setSleepHours] = useState(7);
+  const [napHours, setNapHours] = useState(0);
+  const [showNapInput, setShowNapInput] = useState(false);
+  const [napToAdd, setNapToAdd] = useState(0.5);
+  const [loggingNap, setLoggingNap] = useState(false);
+  const [napLogged, setNapLogged] = useState(false);
   const [vals, setVals] = useState<Record<SliderKey, number>>(DEFAULT_VALS);
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
@@ -81,10 +87,6 @@ export default function CheckinPage() {
     vals.mood,
     vals.energy,
   );
-
-  // Note: Your calcReadiness likely returns hex codes (#E8FF47).
-  // If it does, you'll want to update that utility function to return CSS variables too
-  // (e.g., 'var(--accent)') so it changes based on theme!
 
   const todayLabel = new Date().toLocaleDateString("en-US", {
     weekday: "long",
@@ -126,6 +128,7 @@ export default function CheckinPage() {
 
       const data = rawLog as {
         sleep_hours: number;
+        nap_hours: number | null;
         sleep_quality: number;
         soreness: number;
         fatigue: number;
@@ -136,6 +139,7 @@ export default function CheckinPage() {
       if (data) {
         setAlreadyChecked(true);
         setSleepHours(data.sleep_hours ?? 7);
+        setNapHours(data.nap_hours ?? 0);
         setVals({
           sleep_quality: data.sleep_quality ?? 7,
           soreness: data.soreness ?? 3,
@@ -186,6 +190,7 @@ export default function CheckinPage() {
       user_id: user.id,
       date: todayStr,
       sleep_hours: sleepHours,
+      nap_hours: napHours,
       ...vals,
       notes: notes.trim() || null,
     };
@@ -209,11 +214,34 @@ export default function CheckinPage() {
     setNudgeLoading(false);
   }
 
+  async function handleLogNap() {
+    if (!alreadyChecked) return;
+    setLoggingNap(true);
+    const todayStr = new Date().toISOString().split("T")[0];
+    const {
+      data: { user },
+    } = await sb.auth.getUser();
+    if (!user) {
+      setLoggingNap(false);
+      return;
+    }
+    const newNapTotal = Math.round((napHours + napToAdd) * 10) / 10;
+    await (sb as any)
+      .from("daily_logs")
+      .update({ nap_hours: newNapTotal })
+      .eq("user_id", user.id)
+      .eq("date", todayStr);
+    setNapHours(newNapTotal);
+    setLoggingNap(false);
+    setNapLogged(true);
+    setShowNapInput(false);
+    setTimeout(() => setNapLogged(false), 3000);
+  }
+
   return (
     <div style={{ maxWidth: 800 }}>
       <PageHeader title="Daily Check-in" subtitle={todayLabel} />
 
-      {/* GLASS CARD */}
       <div
         style={{
           position: "relative",
@@ -244,7 +272,6 @@ export default function CheckinPage() {
           }}
         />
 
-        {/* Score */}
         <div
           style={{
             display: "flex",
@@ -318,7 +345,6 @@ export default function CheckinPage() {
           </div>
         </div>
 
-        {/* Sleep Hours */}
         <div
           style={{
             display: "flex",
@@ -368,7 +394,116 @@ export default function CheckinPage() {
           </span>
         </div>
 
-        {/* Metric sliders */}
+        {/* Nap logging — separate from the main check-in, additive, doesn't
+            disturb anything else already saved today */}
+        <div style={{ marginBottom: 16, position: "relative", zIndex: 10 }}>
+          {napHours > 0 && (
+            <div
+              style={{
+                fontSize: 11,
+                color: "var(--text-muted)",
+                fontFamily: "var(--mono)",
+                marginBottom: 8,
+              }}
+            >
+              Naps logged today: {napHours}h
+            </div>
+          )}
+          {!showNapInput ? (
+            <button
+              onClick={() => alreadyChecked && setShowNapInput(true)}
+              disabled={!alreadyChecked}
+              title={!alreadyChecked ? "Check in for today first" : undefined}
+              style={{
+                padding: "8px 14px",
+                borderRadius: 8,
+                border: "1px solid var(--border)",
+                background: "var(--surface2)",
+                color: alreadyChecked ? "var(--text-muted)" : "var(--text-dim)",
+                fontFamily: "var(--mono)",
+                fontSize: 12,
+                cursor: alreadyChecked ? "pointer" : "not-allowed",
+              }}
+            >
+              + Log a nap
+            </button>
+          ) : (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                flexWrap: "wrap",
+              }}
+            >
+              <input
+                type="range"
+                min={0.25}
+                max={4}
+                step={0.25}
+                value={napToAdd}
+                onChange={(e) => setNapToAdd(parseFloat(e.target.value))}
+                data-color="purple"
+                style={{ flex: 1, minWidth: 100 }}
+              />
+              <span
+                style={{
+                  fontFamily: "var(--mono)",
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color: "var(--purple)",
+                }}
+              >
+                {napToAdd}h
+              </span>
+              <button
+                onClick={handleLogNap}
+                disabled={loggingNap}
+                style={{
+                  padding: "7px 14px",
+                  borderRadius: 8,
+                  background: "var(--accent)",
+                  color: "var(--bg)",
+                  border: "none",
+                  fontFamily: "var(--mono)",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  cursor: loggingNap ? "not-allowed" : "pointer",
+                }}
+              >
+                {loggingNap ? "..." : "Add"}
+              </button>
+              <button
+                onClick={() => setShowNapInput(false)}
+                style={{
+                  padding: "7px 12px",
+                  borderRadius: 8,
+                  background: "var(--surface2)",
+                  border: "1px solid var(--border)",
+                  color: "var(--text-muted)",
+                  fontFamily: "var(--mono)",
+                  fontSize: 11,
+                  cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+          {napLogged && (
+            <div
+              style={{
+                fontSize: 11,
+                color: "var(--green)",
+                fontFamily: "var(--mono)",
+                marginTop: 6,
+              }}
+            >
+              Nap logged
+            </div>
+          )}
+        </div>
+
         {SLIDERS.map((slider) => (
           <div
             key={slider.key}
@@ -425,7 +560,6 @@ export default function CheckinPage() {
           </div>
         ))}
 
-        {/* Notes */}
         <div
           style={{
             marginBottom: 16,
@@ -467,7 +601,6 @@ export default function CheckinPage() {
           />
         </div>
 
-        {/* Button */}
         <div
           style={{
             display: "flex",
@@ -520,7 +653,6 @@ export default function CheckinPage() {
         </div>
       </div>
 
-      {/* Stat cards */}
       <div
         style={{
           display: "grid",
@@ -619,7 +751,6 @@ export default function CheckinPage() {
         </div>
       </div>
 
-      {/* Nudge */}
       {(nudgeLoading || nudge) && (
         <NudgeCard>
           {nudgeLoading ? (

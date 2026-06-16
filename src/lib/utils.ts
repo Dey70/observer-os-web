@@ -67,7 +67,7 @@ export function calcDashboardStats(
   });
 
   return {
-    avgSleep: avg(logs.map((l) => l.sleep_hours)),
+    avgSleep: avg(logs.map((l) => l.sleep_hours + (l.nap_hours ?? 0))),
     avgMood: avg(logs.map((l) => l.mood)),
     avgEnergy: avg(logs.map((l) => l.energy)),
     totalSessions: sessions.length,
