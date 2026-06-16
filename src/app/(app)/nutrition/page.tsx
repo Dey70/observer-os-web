@@ -2,6 +2,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { PageHeader, Card, SectionLabel, EmptyState } from "@/components/ui";
 import type { DailyTargets } from "@/lib/nutritionEngine";
@@ -122,13 +123,20 @@ const MEAL_TYPES: {
   { value: "lunch", label: "Lunch", icon: Sun, color: "var(--accent)" },
   { value: "dinner", label: "Dinner", icon: Moon, color: "var(--purple)" },
   { value: "snack", label: "Snack", icon: Cookie, color: "var(--green)" },
+  { value: "junk", label: "Junk", icon: AlertCircle, color: "var(--red)" },
 ];
 
-const MEAL_ORDER: MealType[] = ["breakfast", "lunch", "dinner", "snack"];
+const MEAL_ORDER: MealType[] = [
+  "breakfast",
+  "lunch",
+  "dinner",
+  "snack",
+  "junk",
+];
 
 // No CSS theme var fits water cleanly (accent/red/yellow/purple/green are
-// already claimed by the macro rings), so this one's a literal hex —
-// consistent with how records/page.tsx does the same thing for PR colors.
+// already claimed by the macro rings and now junk), so this one's a literal
+// hex — consistent with how records/page.tsx does the same thing for PR colors.
 const WATER_COLOR = "#4FC3F7";
 
 const WATER_QUICK_AMOUNTS = [250, 500, 1000];
@@ -154,6 +162,7 @@ function groupLogsByMeal(
     lunch: [],
     dinner: [],
     snack: [],
+    junk: [],
   };
   for (const l of logs) {
     const key: MealType = groups[l.meal_type] ? l.meal_type : "snack";
@@ -260,9 +269,6 @@ function MacroRing({
   );
 }
 
-// Same visual shell as MacroRing but values are in liters, since 1900/3500
-// reads worse than 1.9/3.5 — the underlying numbers stay in ml everywhere
-// else (DB, target calc), this is purely a display conversion.
 function WaterRing({
   consumedMl,
   targetMl,
@@ -738,7 +744,6 @@ export default function NutritionPage() {
               )}
             </div>
 
-            {/* Water quick-log */}
             <div
               style={{
                 marginTop: 14,
@@ -851,9 +856,28 @@ export default function NutritionPage() {
         )
       )}
 
-      {/* Meal log — grouped by meal type */}
       <Card style={{ marginBottom: 16 }}>
-        <SectionLabel>Today's Log ({logs.length} items)</SectionLabel>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: 12,
+          }}
+        >
+          <SectionLabel>Today's Log ({logs.length} items)</SectionLabel>
+          <Link
+            href="/nutrition/history"
+            style={{
+              fontSize: 11,
+              color: "var(--accent)",
+              fontFamily: "var(--mono)",
+              textDecoration: "none",
+            }}
+          >
+            History →
+          </Link>
+        </div>
         {logs.length === 0 ? (
           <EmptyState message="Nothing logged yet — tell the coach what you ate below" />
         ) : (
@@ -995,7 +1019,6 @@ export default function NutritionPage() {
         )}
       </Card>
 
-      {/* Pending confirmation card */}
       {pending && (
         <Card style={{ borderColor: "var(--accent)", marginBottom: 16 }}>
           <SectionLabel>Confirm This Meal</SectionLabel>
@@ -1351,7 +1374,6 @@ export default function NutritionPage() {
         </Card>
       )}
 
-      {/* Meal type selector */}
       <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
         {MEAL_TYPES.map(({ value, label, icon: Icon, color }) => {
           const isActive = mealType === value;
@@ -1384,7 +1406,6 @@ export default function NutritionPage() {
         })}
       </div>
 
-      {/* AI input bar */}
       <div
         style={{
           display: "flex",

@@ -9,6 +9,7 @@ const VALID_MEAL_TYPES: readonly MealType[] = [
   "lunch",
   "dinner",
   "snack",
+  "junk",
 ];
 
 function normalizeMealType(value: unknown): MealType {

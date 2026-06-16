@@ -271,7 +271,7 @@ export interface Database {
           meal_group_id: string;
           date: string;
           logged_at: string;
-          meal_type: "breakfast" | "lunch" | "dinner" | "snack";
+          meal_type: "breakfast" | "lunch" | "dinner" | "snack" | "junk";
           item_name: string;
           portion_desc: string | null;
           raw_input: string | null;
@@ -288,7 +288,7 @@ export interface Database {
           user_id: string;
           meal_group_id?: string;
           date: string;
-          meal_type?: "breakfast" | "lunch" | "dinner" | "snack";
+          meal_type?: "breakfast" | "lunch" | "dinner" | "snack" | "junk";
           item_name: string;
           portion_desc?: string | null;
           raw_input?: string | null;
@@ -301,7 +301,7 @@ export interface Database {
           fiber?: number;
         };
         Update: {
-          meal_type?: "breakfast" | "lunch" | "dinner" | "snack";
+          meal_type?: "breakfast" | "lunch" | "dinner" | "snack" | "junk";
           item_name?: string;
           portion_desc?: string | null;
           calories?: number;

@@ -163,7 +163,7 @@ export function rpeToLabel(rpe: number): string {
 }
 
 // ── Nutrition: meal type helpers ──
-export type MealType = "breakfast" | "lunch" | "dinner" | "snack";
+export type MealType = "breakfast" | "lunch" | "dinner" | "snack" | "junk";
 
 export function guessMealType(): MealType {
   const hour = new Date().getHours();
