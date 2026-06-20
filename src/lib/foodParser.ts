@@ -197,9 +197,12 @@ async function getPer100g(
       const offData = await offRes.json();
       const product = offData?.products?.[0];
       const n = product?.nutriments;
-      if (n && (n["energy-kcal_100g"] || n["energy-kcal_serving"])) {
+      // Only use OFF data when per-100g calorie value is present and non-zero.
+      // If the product only has per-serving data, energy-kcal_100g is undefined
+      // and ?? 0 would cache 0 calories for every future lookup of that food.
+      if (n && n["energy-kcal_100g"] > 0) {
         const per100g = {
-          calories: n["energy-kcal_100g"] ?? 0,
+          calories: n["energy-kcal_100g"],
           protein: n["proteins_100g"] ?? 0,
           carbs: n["carbohydrates_100g"] ?? 0,
           fat: n["fat_100g"] ?? 0,
@@ -350,12 +353,26 @@ const FILLER_PREFIXES = [
   /^of\s+/i,
 ];
 
+const FILLER_SUFFIXES = [
+  /\s+for\s+(breakfast|lunch|dinner|snack|supper|brunch)\s*$/i,
+  /\s+after\s+(workout|gym|run|training|exercise|lifting)\s*$/i,
+  /\s+before\s+(workout|gym|run|training|exercise|bed|sleep)\s*$/i,
+  /\s+in\s+(the\s+)?(morning|afternoon|evening|night)\s*$/i,
+  /\s+at\s+(breakfast|lunch|dinner|night)\s*$/i,
+];
+
 function cleanFoodName(raw: string): string {
   let text = raw.trim();
   let changed = true;
   while (changed) {
     changed = false;
     for (const pattern of FILLER_PREFIXES) {
+      if (pattern.test(text)) {
+        text = text.replace(pattern, "").trim();
+        changed = true;
+      }
+    }
+    for (const pattern of FILLER_SUFFIXES) {
       if (pattern.test(text)) {
         text = text.replace(pattern, "").trim();
         changed = true;
@@ -554,7 +571,7 @@ export async function parseMeal(
 
     const generic = matchGenericFood(name) ?? matchGenericFood(itemText);
     if (generic) {
-      const grams = explicitGrams ?? 100;
+      const grams = explicitGrams ?? 150;
       const factor = grams / 100;
       items.push({
         name: generic.label,
@@ -576,7 +593,10 @@ export async function parseMeal(
       supabase,
       groqApiKey,
     );
-    const grams = explicitGrams ?? 100;
+    // Use explicit grams if we parsed a portion (bowl, plate, count, etc.).
+    // Otherwise fall back to 150g — a more realistic single serving than 100g
+    // for cooked dishes (rice, dal, curry, etc.) while not overcounting snacks.
+    const grams = explicitGrams ?? 150;
 
     const finalConfidence: FoodConfidence =
       explicitGrams && !isApproximate
