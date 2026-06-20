@@ -523,8 +523,8 @@ export default function GoalsPage() {
                             }
                             title="Edit goal"
                             style={{
-                              width: 28,
-                              height: 28,
+                              width: 36,
+                              height: 36,
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "center",
@@ -537,10 +537,10 @@ export default function GoalsPage() {
                             }}
                           >
                             {isEditing ? (
-                              <X size={12} color="#E8FF47" strokeWidth={2} />
+                              <X size={14} color="#E8FF47" strokeWidth={2} />
                             ) : (
                               <Pencil
-                                size={12}
+                                size={14}
                                 color="var(--text-muted)"
                                 strokeWidth={1.75}
                               />
@@ -550,8 +550,8 @@ export default function GoalsPage() {
                             onClick={() => completeGoal(g.id)}
                             title="Mark complete"
                             style={{
-                              width: 28,
-                              height: 28,
+                              width: 36,
+                              height: 36,
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "center",
@@ -562,7 +562,7 @@ export default function GoalsPage() {
                             }}
                           >
                             <Check
-                              size={12}
+                              size={14}
                               color="var(--green)"
                               strokeWidth={2.5}
                             />
@@ -576,8 +576,8 @@ export default function GoalsPage() {
                             }}
                             title="Delete goal"
                             style={{
-                              width: 28,
-                              height: 28,
+                              width: 36,
+                              height: 36,
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "center",
@@ -590,7 +590,7 @@ export default function GoalsPage() {
                             }}
                           >
                             <Trash2
-                              size={12}
+                              size={14}
                               color={
                                 isConfirmingDelete
                                   ? "var(--red)"

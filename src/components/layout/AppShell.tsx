@@ -355,6 +355,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 padding: "20px 16px 8px",
                 backdropFilter: "blur(40px)",
                 animation: "slideUp 0.2s cubic-bezier(0.34,1.56,0.64,1)",
+                maxHeight: "70vh",
+                overflowY: "auto",
               }}
             >
               <div

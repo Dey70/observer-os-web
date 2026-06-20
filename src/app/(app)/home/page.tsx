@@ -1057,7 +1057,7 @@ export default function HomePage() {
         /* Rings + insight section */
         .home-pulse { display: grid; grid-template-columns: auto 1fr; gap: 12px; margin-bottom: 16px; align-items: stretch; }
         .home-rings { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-xl); padding: 20px 24px; }
-        .home-rings-row { display: flex; gap: 24px; align-items: flex-start; justify-content: center; }
+        .home-rings-row { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start; justify-content: center; }
         @keyframes insightSkeleton {
           0%, 100% { opacity: 0.4; } 50% { opacity: 0.9; }
         }

@@ -420,8 +420,8 @@ export default function HistoryPage() {
                               isEditing ? cancelEdit() : startEdit(s)
                             }
                             style={{
-                              width: 28,
-                              height: 28,
+                              width: 36,
+                              height: 36,
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "center",
@@ -435,13 +435,13 @@ export default function HistoryPage() {
                           >
                             {isEditing ? (
                               <X
-                                size={12}
+                                size={14}
                                 color="rgba(232,255,71,0.8)"
                                 strokeWidth={2}
                               />
                             ) : (
                               <Pencil
-                                size={12}
+                                size={14}
                                 color="rgba(255,255,255,0.4)"
                                 strokeWidth={1.75}
                               />
@@ -455,8 +455,8 @@ export default function HistoryPage() {
                               );
                             }}
                             style={{
-                              width: 28,
-                              height: 28,
+                              width: 36,
+                              height: 36,
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "center",
@@ -469,7 +469,7 @@ export default function HistoryPage() {
                             }}
                           >
                             <Trash2
-                              size={12}
+                              size={14}
                               color={
                                 isConfirmingDelete
                                   ? "var(--red)"
