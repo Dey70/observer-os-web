@@ -231,6 +231,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             display: "flex",
             flexDirection: "column",
             gap: "2px",
+            overflowY: "auto",
+            overflowX: "hidden",
+            scrollbarWidth: "thin",
+            scrollbarColor: "var(--border) transparent",
+            paddingBottom: 8,
           }}
         >
           {navItems.map(({ href, label, icon: Icon }) => {
