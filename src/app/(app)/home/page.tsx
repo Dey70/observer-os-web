@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { calcReadiness, calcCheckinStreak, calcSessionStreak } from "@/lib/utils";
+import { calcReadiness, calcCheckinStreak, calcSessionStreak, getWeekStart } from "@/lib/utils";
 import { calcBMR } from "@/lib/nutritionEngine";
 import type { DailyLog, Session, WeightLog, Goal } from "@/types";
 import {
@@ -387,6 +387,267 @@ function HeroCard() {
   );
 }
 
+// ── Progress Ring ────────────────────────────────────────────
+const RING_R = 36;
+const RING_CIRC = 2 * Math.PI * RING_R; // ≈ 226
+
+function ringColor(pct: number, type: "sleep" | "cals" | "sessions"): string {
+  if (type === "sleep") {
+    if (pct >= 85) return "var(--accent)";
+    if (pct >= 60) return "var(--yellow)";
+    return "var(--red)";
+  }
+  if (type === "cals") {
+    if (pct > 110) return "var(--red)";
+    if (pct >= 70) return "var(--green)";
+    return "var(--yellow)";
+  }
+  // sessions
+  if (pct >= 100) return "var(--purple)";
+  if (pct >= 50) return "var(--yellow)";
+  return "var(--text-dim)";
+}
+
+function ProgressRing({
+  pct,
+  value,
+  sub,
+  label,
+  type,
+  delay = 0,
+}: {
+  pct: number;
+  value: string;
+  sub?: string;
+  label: string;
+  type: "sleep" | "cals" | "sessions";
+  delay?: number;
+}) {
+  const [animated, setAnimated] = useState(false);
+  const color = ringColor(pct, type);
+  const offset = animated ? RING_CIRC - (RING_CIRC * Math.min(pct, 100)) / 100 : RING_CIRC;
+
+  useEffect(() => {
+    const t = setTimeout(() => setAnimated(true), delay);
+    return () => clearTimeout(t);
+  }, [delay]);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+      <div style={{ position: "relative", width: 96, height: 96 }}>
+        <svg
+          viewBox="0 0 100 100"
+          style={{ width: "100%", height: "100%", transform: "rotate(-90deg)" }}
+        >
+          {/* Track */}
+          <circle cx="50" cy="50" r={RING_R} fill="none" stroke="var(--border)" strokeWidth="8" />
+          {/* Progress arc */}
+          <circle
+            cx="50"
+            cy="50"
+            r={RING_R}
+            fill="none"
+            stroke={color}
+            strokeWidth="8"
+            strokeLinecap="round"
+            strokeDasharray={RING_CIRC}
+            strokeDashoffset={offset}
+            style={{
+              transition: `stroke-dashoffset 1.1s cubic-bezier(0.4, 0, 0.2, 1) ${delay}ms, stroke 0.4s ease`,
+              filter: animated ? `drop-shadow(0 0 6px ${color}88)` : "none",
+            }}
+          />
+        </svg>
+        {/* Center label */}
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <span
+            style={{
+              fontFamily: "var(--mono)",
+              fontSize: 14,
+              fontWeight: 700,
+              color: pct === 0 ? "var(--text-dim)" : color,
+              lineHeight: 1,
+              transition: "color 0.4s ease",
+            }}
+          >
+            {value}
+          </span>
+          {sub && (
+            <span style={{ fontFamily: "var(--mono)", fontSize: 8, color: "var(--text-dim)", marginTop: 2 }}>
+              {sub}
+            </span>
+          )}
+        </div>
+      </div>
+      <div
+        style={{
+          fontFamily: "var(--mono)",
+          fontSize: 9,
+          letterSpacing: "0.12em",
+          textTransform: "uppercase",
+          color: "var(--text-muted)",
+          textAlign: "center",
+        }}
+      >
+        {label}
+      </div>
+      <div
+        style={{
+          fontFamily: "var(--mono)",
+          fontSize: 10,
+          fontWeight: 700,
+          color: pct === 0 ? "var(--text-dim)" : color,
+          transition: "color 0.4s ease",
+        }}
+      >
+        {pct === 0 ? "—" : `${Math.min(Math.round(pct), 999)}%`}
+      </div>
+    </div>
+  );
+}
+
+// ── Daily Insight card ────────────────────────────────────────
+type InsightPayload = {
+  avgSleep7d: number;
+  todaySleep: number | null;
+  avgMood7d: number;
+  avgEnergy7d: number;
+  sessionTypes: { run: number; lift: number; study: number };
+  todayCals: number | null;
+  calTarget: number | null;
+  latestWeight: number | null;
+  weightChange7d: number | null;
+  checkinStreak: number;
+  thisWeekSessions: number;
+  weeklyGoal: number;
+};
+
+function DailyInsightCard(payload: InsightPayload) {
+  const [insight, setInsight] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const fetchedRef = useRef(false);
+
+  useEffect(() => {
+    if (fetchedRef.current) return;
+    fetchedRef.current = true;
+    fetch("/api/insight", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    })
+      .then((r) => r.json())
+      .then((d) => {
+        setInsight(d.insight ?? null);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, []);
+
+  if (!loading && !insight) return null;
+
+  return (
+    <div
+      style={{
+        background: "var(--surface)",
+        border: "1px solid var(--border)",
+        borderRadius: "var(--radius-xl)",
+        padding: "20px 22px",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "space-between",
+        minHeight: 140,
+        position: "relative",
+        overflow: "hidden",
+      }}
+    >
+      {/* Top accent line */}
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          height: 2,
+          background: "linear-gradient(90deg, var(--accent), var(--purple))",
+          borderRadius: "inherit",
+        }}
+      />
+      <div>
+        <div
+          style={{
+            fontFamily: "var(--mono)",
+            fontSize: 9,
+            letterSpacing: "0.15em",
+            textTransform: "uppercase",
+            color: "var(--text-dim)",
+            marginBottom: 12,
+          }}
+        >
+          Daily Insight · AI Coach
+        </div>
+        {loading ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {[80, 100, 60].map((w, i) => (
+              <div
+                key={i}
+                style={{
+                  height: 10,
+                  width: `${w}%`,
+                  background: "var(--border)",
+                  borderRadius: 4,
+                  animation: "insightSkeleton 1.4s ease-in-out infinite",
+                  animationDelay: `${i * 0.15}s`,
+                }}
+              />
+            ))}
+          </div>
+        ) : (
+          <p
+            style={{
+              fontFamily: "var(--mono)",
+              fontSize: 13,
+              lineHeight: 1.65,
+              color: "var(--text)",
+              margin: 0,
+              animation: "insightFadeIn 0.5s ease",
+            }}
+          >
+            {insight}
+          </p>
+        )}
+      </div>
+      {!loading && insight && (
+        <Link
+          href="/coach"
+          style={{
+            marginTop: 16,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 5,
+            fontFamily: "var(--mono)",
+            fontSize: 10,
+            letterSpacing: "0.08em",
+            color: "var(--accent)",
+            textDecoration: "none",
+            textTransform: "uppercase",
+          }}
+        >
+          Discuss with Coach →
+        </Link>
+      )}
+    </div>
+  );
+}
+
 function getGreeting(): string {
   const hour = new Date().getHours();
   if (hour < 5) return "Good night";
@@ -623,6 +884,14 @@ export default function HomePage() {
   const [checkinStreak, setCheckinStreak] = useState(0);
   const [sessionStreak, setSessionStreak] = useState(0);
   const [todaySessionCount, setTodaySessionCount] = useState(0);
+  const [thisWeekSessions, setThisWeekSessions] = useState(0);
+  const [weeklyGoal, setWeeklyGoal] = useState(4);
+  const [sessionTypes7d, setSessionTypes7d] = useState({ run: 0, lift: 0, study: 0 });
+  const [avgSleep7d, setAvgSleep7d] = useState(0);
+  const [avgMood7d, setAvgMood7d] = useState(0);
+  const [avgEnergy7d, setAvgEnergy7d] = useState(0);
+  const [weightChange7d, setWeightChange7d] = useState<number | null>(null);
+  const [insightReady, setInsightReady] = useState(false);
 
   useEffect(() => {
     setGreeting(getGreeting());
@@ -647,7 +916,7 @@ export default function HomePage() {
         { data: recentSessions },
         { data: todaySessions },
       ] = await Promise.all([
-        sb.from("profiles").select("name, age, height_cm, sex, nutrition_goal_type").eq("user_id", user.id).maybeSingle(),
+        sb.from("profiles").select("name, age, height_cm, sex, nutrition_goal_type, weekly_goal").eq("user_id", user.id).maybeSingle(),
         sb.from("daily_logs").select("*").eq("user_id", user.id).eq("date", todayStr).maybeSingle(),
         sb.from("nutrition_logs").select("calories").eq("user_id", user.id).eq("date", todayStr),
         sb.from("weight_logs").select("weight").eq("user_id", user.id).order("date", { ascending: false }).limit(7),
@@ -663,6 +932,7 @@ export default function HomePage() {
         height_cm: number | null;
         sex: string | null;
         nutrition_goal_type: string | null;
+        weekly_goal: number | null;
       } | null;
 
       setName(profile?.name?.trim() || user.email?.split("@")[0] || "there");
@@ -695,6 +965,32 @@ export default function HomePage() {
       setSessionStreak(calcSessionStreak((recentSessions ?? []) as Session[]));
       setTodaySessionCount((todaySessions ?? []).length);
 
+      // Derived stats for rings + insight
+      const wkStart = getWeekStart();
+      const sessArr = (recentSessions ?? []) as Session[];
+      const wkSessions = sessArr.filter((s) => s.date >= wkStart);
+      setThisWeekSessions(wkSessions.length);
+      setWeeklyGoal(profile?.weekly_goal ?? 4);
+
+      const byType = { run: 0, lift: 0, study: 0 };
+      sessArr.forEach((s) => { if (s.type in byType) byType[s.type as keyof typeof byType]++; });
+      setSessionTypes7d(byType);
+
+      const logs7 = ((recentLogs ?? []) as DailyLog[]).slice(-7);
+      const avg = (arr: number[]) =>
+        arr.length ? Math.round((arr.reduce((a, b) => a + b, 0) / arr.length) * 10) / 10 : 0;
+      setAvgSleep7d(avg(logs7.map((l) => l.sleep_hours + (l.nap_hours ?? 0))));
+      setAvgMood7d(avg(logs7.map((l) => l.mood)));
+      setAvgEnergy7d(avg(logs7.map((l) => l.energy)));
+
+      const wArr2 = (weightData ?? []) as WeightLog[];
+      if (wArr2.length >= 2) {
+        setWeightChange7d(
+          Math.round((wArr2[0].weight - wArr2[Math.min(wArr2.length - 1, 6)].weight) * 10) / 10,
+        );
+      }
+
+      setInsightReady(true);
       setLoading(false);
     }
     load();
@@ -758,6 +1054,17 @@ export default function HomePage() {
   return (
     <>
       <style>{`
+        /* Rings + insight section */
+        .home-pulse { display: grid; grid-template-columns: auto 1fr; gap: 12px; margin-bottom: 16px; align-items: stretch; }
+        .home-rings { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-xl); padding: 20px 24px; }
+        .home-rings-row { display: flex; gap: 24px; align-items: flex-start; justify-content: center; }
+        @keyframes insightSkeleton {
+          0%, 100% { opacity: 0.4; } 50% { opacity: 0.9; }
+        }
+        @keyframes insightFadeIn {
+          from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); }
+        }
+
         /* Layout grids */
         .home-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
         .home-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
@@ -822,6 +1129,7 @@ export default function HomePage() {
         @media (max-width: 640px) {
           .hero-inner { flex-direction: column; gap: 16px; }
           .hero-figure { width: 100px; height: 110px; }
+          .home-pulse { grid-template-columns: 1fr; }
           .home-grid { grid-template-columns: repeat(2, 1fr); }
           .home-actions { grid-template-columns: repeat(1, 1fr); gap: 10px; }
           .home-nav { grid-template-columns: repeat(4, 1fr); }
@@ -946,6 +1254,69 @@ export default function HomePage() {
 
         {/* Hero card */}
         <HeroCard />
+
+        {/* Progress rings + AI insight */}
+        <div className="home-pulse">
+          {/* Rings */}
+          <div className="home-rings">
+            <div
+              style={{
+                fontFamily: "var(--mono)",
+                fontSize: 9,
+                letterSpacing: "0.15em",
+                textTransform: "uppercase",
+                color: "var(--text-dim)",
+                marginBottom: 16,
+              }}
+            >
+              Today's Progress
+            </div>
+            <div className="home-rings-row">
+              <ProgressRing
+                type="sleep"
+                label="Sleep"
+                value={todayLog ? `${(todayLog.sleep_hours + (todayLog.nap_hours ?? 0)).toFixed(1)}h` : "—"}
+                sub="/ 8h"
+                pct={todayLog ? ((todayLog.sleep_hours + (todayLog.nap_hours ?? 0)) / 8) * 100 : 0}
+                delay={100}
+              />
+              <ProgressRing
+                type="cals"
+                label="Calories"
+                value={todayCals !== null ? `${Math.round(todayCals / 10) * 10}` : "—"}
+                sub={calTarget ? `/ ${calTarget}` : undefined}
+                pct={calTarget && todayCals !== null ? (todayCals / calTarget) * 100 : 0}
+                delay={300}
+              />
+              <ProgressRing
+                type="sessions"
+                label="Sessions"
+                value={`${thisWeekSessions}/${weeklyGoal}`}
+                sub="this week"
+                pct={(thisWeekSessions / weeklyGoal) * 100}
+                delay={500}
+              />
+            </div>
+          </div>
+
+          {/* AI insight — loads after data is ready */}
+          {insightReady && (
+            <DailyInsightCard
+              avgSleep7d={avgSleep7d}
+              todaySleep={todayLog ? todayLog.sleep_hours + (todayLog.nap_hours ?? 0) : null}
+              avgMood7d={avgMood7d}
+              avgEnergy7d={avgEnergy7d}
+              sessionTypes={sessionTypes7d}
+              todayCals={todayCals}
+              calTarget={calTarget}
+              latestWeight={latestWeight}
+              weightChange7d={weightChange7d}
+              checkinStreak={checkinStreak}
+              thisWeekSessions={thisWeekSessions}
+              weeklyGoal={weeklyGoal}
+            />
+          )}
+        </div>
 
         {/* Stat cards */}
         <div className="home-grid">
