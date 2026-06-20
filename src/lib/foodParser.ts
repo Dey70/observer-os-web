@@ -187,50 +187,26 @@ async function getPer100g(
     };
   }
 
-  try {
-    const offRes = await fetch(
-      `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(
-        foodName,
-      )}&search_simple=1&action=process&json=1&page_size=1`,
-    );
-    if (offRes.ok) {
-      const offData = await offRes.json();
-      const product = offData?.products?.[0];
-      const n = product?.nutriments;
-      // Only use OFF data when per-100g calorie value is present and non-zero.
-      // If the product only has per-serving data, energy-kcal_100g is undefined
-      // and ?? 0 would cache 0 calories for every future lookup of that food.
-      if (n && n["energy-kcal_100g"] > 0) {
-        const per100g = {
-          calories: n["energy-kcal_100g"],
-          protein: n["proteins_100g"] ?? 0,
-          carbs: n["carbohydrates_100g"] ?? 0,
-          fat: n["fat_100g"] ?? 0,
-          fiber: n["fiber_100g"] ?? 0,
-        };
-        await cacheResult(supabase, normalized, "off", per100g);
-        return { source: "off", confidence: "high", per100g };
-      }
-    }
-  } catch {
-    // fall through to next source
-  }
-
   const usdaKey = process.env.USDA_API_KEY;
+
+  // When USDA is configured, use it first and skip OFF entirely.
+  // USDA (lab-measured whole foods) is far more accurate than OFF
+  // (crowdsourced packaged products) for common meal ingredients.
   if (usdaKey) {
     try {
       const usdaRes = await fetch(
         `https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${usdaKey}&query=${encodeURIComponent(
           foodName,
-        )}&pageSize=1`,
+        )}&pageSize=3&dataType=Survey%20(FNDDS),SR%20Legacy,Foundation`,
       );
       if (usdaRes.ok) {
         const usdaData = await usdaRes.json();
-        const food = usdaData?.foods?.[0];
-        if (food?.foodNutrients) {
-          const findNutrient = (name: string) =>
+        // Pick the first result that has a meaningful calorie value
+        for (const food of usdaData?.foods ?? []) {
+          if (!food?.foodNutrients) continue;
+          const findNutrient = (term: string) =>
             food.foodNutrients.find((n: any) =>
-              n.nutrientName?.toLowerCase().includes(name),
+              n.nutrientName?.toLowerCase().includes(term),
             )?.value ?? 0;
           const per100g = {
             calories: findNutrient("energy"),
@@ -243,6 +219,34 @@ async function getPer100g(
             await cacheResult(supabase, normalized, "usda", per100g);
             return { source: "usda", confidence: "high", per100g };
           }
+        }
+      }
+    } catch {
+      // fall through to AI
+    }
+  } else {
+    // No USDA key — fall back to OFF (packaged product database).
+    // Only accepts results that include per-100g calorie data to avoid
+    // caching zero-calorie entries from serving-only products.
+    try {
+      const offRes = await fetch(
+        `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(
+          foodName,
+        )}&search_simple=1&action=process&json=1&page_size=1`,
+      );
+      if (offRes.ok) {
+        const offData = await offRes.json();
+        const n = offData?.products?.[0]?.nutriments;
+        if (n && n["energy-kcal_100g"] > 0) {
+          const per100g = {
+            calories: n["energy-kcal_100g"],
+            protein: n["proteins_100g"] ?? 0,
+            carbs: n["carbohydrates_100g"] ?? 0,
+            fat: n["fat_100g"] ?? 0,
+            fiber: n["fiber_100g"] ?? 0,
+          };
+          await cacheResult(supabase, normalized, "off", per100g);
+          return { source: "off", confidence: "high", per100g };
         }
       }
     } catch {
