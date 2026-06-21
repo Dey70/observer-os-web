@@ -27,6 +27,8 @@ import {
   Undo2,
   Bookmark,
   BookmarkCheck,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -414,7 +416,7 @@ function WaterRing({
 
 export default function NutritionPage() {
   const sb = createClient();
-  const [date] = useState(() => new Date().toISOString().split("T")[0]);
+  const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [targets, setTargets] = useState<DailyTargets | null>(null);
   const [targetsError, setTargetsError] = useState<string[] | null>(null);
   const [logs, setLogs] = useState<NutritionLogRow[]>([]);
@@ -432,6 +434,24 @@ export default function NutritionPage() {
   const [loggingWater, setLoggingWater] = useState(false);
   const [pinnedIndices, setPinnedIndices] = useState<Set<number>>(new Set());
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const todayStr = new Date().toISOString().split("T")[0];
+  const isToday = date === todayStr;
+
+  function shiftDate(days: number) {
+    const d = new Date(date + "T00:00:00");
+    d.setDate(d.getDate() + days);
+    const next = d.toISOString().split("T")[0];
+    if (next <= todayStr) setDate(next);
+  }
+
+  function formatDisplayDate(dateStr: string): string {
+    return new Date(dateStr + "T00:00:00").toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  }
 
   const load = useCallback(async () => {
     const {
@@ -795,7 +815,9 @@ export default function NutritionPage() {
       ) : (
         targets && (
           <Card style={{ marginBottom: 16 }}>
-            <SectionLabel>Today's Targets</SectionLabel>
+            <SectionLabel>
+              {isToday ? "Today's Targets" : `Targets · ${formatDisplayDate(date)}`}
+            </SectionLabel>
             <div
               style={{
                 display: "grid",
@@ -964,42 +986,130 @@ export default function NutritionPage() {
       )}
 
       <Card style={{ marginBottom: 16 }}>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: 12,
-          }}
-        >
-          <SectionLabel>Today's Log ({logs.length} items)</SectionLabel>
-          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-            <Link
-              href="/nutrition/my-foods"
-              style={{
-                fontSize: 11,
-                color: "var(--purple)",
-                fontFamily: "var(--mono)",
-                textDecoration: "none",
-              }}
-            >
-              My Foods →
-            </Link>
-            <Link
-              href="/nutrition/history"
-              style={{
-                fontSize: 11,
-                color: "var(--accent)",
-                fontFamily: "var(--mono)",
-                textDecoration: "none",
-              }}
-            >
-              History →
-            </Link>
+        <div style={{ marginBottom: 12 }}>
+          {/* Date navigation */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: 10,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <button
+                onClick={() => shiftDate(-1)}
+                title="Previous day"
+                style={{
+                  width: 26,
+                  height: 26,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  background: "var(--surface2)",
+                  border: "1px solid var(--border)",
+                  borderRadius: 6,
+                  cursor: "pointer",
+                  color: "var(--text-muted)",
+                }}
+              >
+                <ChevronLeft size={13} strokeWidth={2} />
+              </button>
+              <input
+                type="date"
+                value={date}
+                max={todayStr}
+                onChange={(e) => e.target.value && setDate(e.target.value)}
+                style={{
+                  padding: "4px 8px",
+                  background: "var(--surface2)",
+                  border: "1px solid var(--border)",
+                  borderRadius: 6,
+                  color: "var(--text)",
+                  fontFamily: "var(--mono)",
+                  fontSize: 12,
+                  outline: "none",
+                  cursor: "pointer",
+                }}
+              />
+              <button
+                onClick={() => shiftDate(1)}
+                disabled={isToday}
+                title="Next day"
+                style={{
+                  width: 26,
+                  height: 26,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  background: "var(--surface2)",
+                  border: "1px solid var(--border)",
+                  borderRadius: 6,
+                  cursor: isToday ? "not-allowed" : "pointer",
+                  color: isToday ? "var(--border2)" : "var(--text-muted)",
+                }}
+              >
+                <ChevronRight size={13} strokeWidth={2} />
+              </button>
+              {!isToday && (
+                <button
+                  onClick={() => setDate(todayStr)}
+                  style={{
+                    padding: "4px 9px",
+                    background: "var(--surface2)",
+                    border: "1px solid var(--accent)",
+                    borderRadius: 6,
+                    color: "var(--accent)",
+                    fontFamily: "var(--mono)",
+                    fontSize: 10,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    letterSpacing: "0.04em",
+                  }}
+                >
+                  Today
+                </button>
+              )}
+            </div>
+            <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+              <Link
+                href="/nutrition/my-foods"
+                style={{
+                  fontSize: 11,
+                  color: "var(--purple)",
+                  fontFamily: "var(--mono)",
+                  textDecoration: "none",
+                }}
+              >
+                My Foods →
+              </Link>
+              <Link
+                href="/nutrition/history"
+                style={{
+                  fontSize: 11,
+                  color: "var(--accent)",
+                  fontFamily: "var(--mono)",
+                  textDecoration: "none",
+                }}
+              >
+                History →
+              </Link>
+            </div>
           </div>
+          <SectionLabel>
+            {isToday
+              ? `Today's Log (${logs.length} items)`
+              : `Log · ${formatDisplayDate(date)} (${logs.length} items)`}
+          </SectionLabel>
         </div>
         {logs.length === 0 ? (
-          <EmptyState message="Nothing logged yet — tell the coach what you ate below" />
+          <EmptyState
+            message={
+              isToday
+                ? "Nothing logged yet — tell the coach what you ate below"
+                : `No entries for ${formatDisplayDate(date)}`
+            }
+          />
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
             {MEAL_ORDER.map((mt) => {
