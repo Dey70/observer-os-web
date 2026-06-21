@@ -61,34 +61,73 @@ function strSimilarity(a: string, b: string): number {
 
 const FUZZY_THRESHOLD = 0.82;
 
+// Robustly extract and normalize aliases from a user food row.
+// Handles JS arrays (normal Supabase return) and PostgreSQL literal strings
+// like {alias1,"alias two"} that may appear in edge cases.
+function getAliasesNormalized(food: any): string[] {
+  const raw = food.aliases;
+  if (!raw) return [];
+  const arr: unknown[] = Array.isArray(raw)
+    ? raw
+    : typeof raw === "string"
+      ? raw.replace(/^\{|\}$/g, "").split(",").map((s) => s.replace(/^"|"$/g, ""))
+      : [];
+  return arr.map((a) => normalizeQuery(String(a))).filter(Boolean);
+}
+
 function findUserFood(
   query: string,
   userFoods: any[],
-): { food: any; matchType: "exact" | "alias" | "fuzzy" } | null {
+): {
+  food: any;
+  matchType: "exact" | "alias" | "fuzzyName" | "fuzzyAlias" | "substring";
+  score: number;
+} | null {
   const q = normalizeQuery(query);
+  if (!q) return null;
 
   // 1. Exact name match
   const byName = userFoods.find((f) => f.name === q);
-  if (byName) return { food: byName, matchType: "exact" };
+  if (byName) return { food: byName, matchType: "exact", score: 1 };
 
-  // 2. Alias match (case-insensitive stored values)
-  const byAlias = userFoods.find((f) =>
-    (f.aliases ?? []).includes(q),
-  );
-  if (byAlias) return { food: byAlias, matchType: "alias" };
-
-  // 3. Fuzzy match — Levenshtein over names and aliases
-  let best: any = null;
-  let bestScore = FUZZY_THRESHOLD;
+  // 2. Exact alias match — each alias is normalized before comparison so
+  //    whitespace/casing variations in stored values don't cause misses.
   for (const food of userFoods) {
-    const nameScore = strSimilarity(q, food.name);
-    if (nameScore > bestScore) { bestScore = nameScore; best = food; }
-    for (const alias of (food.aliases ?? [])) {
-      const s = strSimilarity(q, alias);
-      if (s > bestScore) { bestScore = s; best = food; }
+    if (getAliasesNormalized(food).includes(q)) {
+      return { food, matchType: "alias", score: 1 };
     }
   }
-  if (best) return { food: best, matchType: "fuzzy" };
+
+  // 3. Fuzzy name match (Levenshtein ≥ FUZZY_THRESHOLD)
+  let bestFood: any = null;
+  let bestScore = FUZZY_THRESHOLD;
+  for (const food of userFoods) {
+    const s = strSimilarity(q, food.name);
+    if (s > bestScore) { bestScore = s; bestFood = food; }
+  }
+  if (bestFood) return { food: bestFood, matchType: "fuzzyName", score: bestScore };
+
+  // 4. Fuzzy alias match
+  bestFood = null;
+  bestScore = FUZZY_THRESHOLD;
+  for (const food of userFoods) {
+    for (const alias of getAliasesNormalized(food)) {
+      const s = strSimilarity(q, alias);
+      if (s > bestScore) { bestScore = s; bestFood = food; }
+    }
+  }
+  if (bestFood) return { food: bestFood, matchType: "fuzzyAlias", score: bestScore };
+
+  // 5. Substring: query appears as a whole word inside a food name.
+  //    Catches "oats" → "protein oats", "whey" → "osoaa whey", etc.
+  try {
+    const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const re = new RegExp(`\\b${escaped}\\b`);
+    const bySub = userFoods.find((f) => re.test(f.name));
+    if (bySub) return { food: bySub, matchType: "substring", score: q.length / bySub.name.length };
+  } catch {
+    /* skip malformed regex */
+  }
 
   return null;
 }
@@ -782,7 +821,7 @@ export async function parseMeal(
       findUserFood(normalizeQuery(itemText), userFoods);
 
     if (userMatch) {
-      const { food: uf, matchType } = userMatch;
+      const { food: uf, matchType, score } = userMatch;
       // When no explicit grams were parsed (e.g. just "egg"), use the food's
       // own serving_grams so the calories reflect a real portion, not 150g.
       const grams = explicitGrams ?? uf.serving_grams;
@@ -792,8 +831,8 @@ export async function parseMeal(
       const factor = grams / 100;
 
       console.log(
-        `[FoodLookup] query="${name}" ${matchType}Match matchedFood="${uf.name}" ` +
-        `serving=${grams}g source="user" confidence="${uf.confidence}"`,
+        `[FoodLookup] query="${name}" matchType="${matchType}" score=${score.toFixed(2)}` +
+        ` → "${uf.name}" serving=${grams}g source="user" confidence="${uf.confidence}"`,
       );
 
       // Increment usage counter — fire and forget, non-blocking
@@ -825,7 +864,7 @@ export async function parseMeal(
     // ── 2. Supplements ────────────────────────────────────────────────────────
     const supplement = matchSupplement(name) ?? matchSupplement(itemText);
     if (supplement) {
-      console.log(`[FoodLookup] query="${name}" supplementMatch matchedFood="${supplement.label}" source="manual"`);
+      console.log(`[FoodLookup] query="${name}" matchType="supplement" score=1.00 → "${supplement.label}"`);
       items.push({
         name: supplement.label,
         portion_desc: explicitGrams ? `${explicitGrams}g` : "1 serving",
@@ -846,7 +885,7 @@ export async function parseMeal(
     if (generic) {
       const grams = explicitGrams ?? 150;
       const factor = grams / 100;
-      console.log(`[FoodLookup] query="${name}" genericMatch matchedFood="${generic.label}" serving=${grams}g source="manual"`);
+      console.log(`[FoodLookup] query="${name}" matchType="generic" score=1.00 → "${generic.label}" serving=${grams}g`);
       items.push({
         name: generic.label,
         portion_desc: portionDesc,
@@ -877,7 +916,7 @@ export async function parseMeal(
           ? "medium"
           : confidence;
 
-    console.log(`[FoodLookup] query="${name}" source="${source}" confidence="${finalConfidence}" serving=${grams}g`);
+    console.log(`[FoodLookup] query="${name}" matchType="${source}" score=0.00 → serving=${grams}g confidence="${finalConfidence}"`);
 
     const factor = grams / 100;
     items.push({
