@@ -2,7 +2,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { estimatePortionGrams } from "./nutritionEngine";
 
-export type FoodConfidence = "verified" | "learned" | "high" | "medium" | "low";
+export type FoodConfidence = "verified" | "learned" | "imported" | "high" | "medium" | "low";
 export type FoodSource = "off" | "usda" | "ai" | "manual" | "user";
 
 export interface ParsedFoodItem {
