@@ -1361,10 +1361,8 @@ export default function NutritionPage() {
                             </div>
                           </div>
                           <div style={{ display: "flex", gap: 4 }}>
-                            {/* Teach Observer pin — only for AI / OFF / USDA sources */}
-                            {(item.source === "ai" ||
-                              item.source === "off" ||
-                              item.source === "usda") && (
+                            {/* Teach Observer pin — show for everything except already-saved user foods */}
+                            {item.source !== "user" && (
                               <button
                                 onClick={() => togglePinItem(i)}
                                 title={
