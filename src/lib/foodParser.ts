@@ -582,11 +582,31 @@ async function estimateWithAI(
   }
 }
 
+// Conversational openers that precede the food list.
+// Stripped from the WHOLE input before splitting so they don't attach
+// to the first food item ("i had oats with milk" → "oats with milk").
+const MEAL_LEAD_PATTERNS = [
+  /^(i\s+)?(had|ate|drank|consumed)\s+/i,
+  /^(for\s+(?:breakfast|lunch|dinner|snack|brunch|supper)[,:]\s*)/i,
+];
+
 function splitItems(input: string): string[] {
-  return input
-    .split(/,| and |\+/i)
+  let text = input.trim();
+  for (const p of MEAL_LEAD_PATTERNS) {
+    text = text.replace(p, "").trim();
+  }
+
+  // Split on all food connectors in one pass.
+  // "with" separates components: "oats with milk" → ["oats", "milk"]
+  const tokens = text
+    .split(/,\s*|\s+(?:and|with)\s+|\s*\+\s*/i)
     .map((s) => s.trim())
-    .filter((s) => s.length > 0);
+    .filter((s) => s.length > 1);
+
+  console.log(
+    `[FoodParse] raw="${input}"\ntokens=[${tokens.map((t) => `"${t}"`).join(", ")}]`,
+  );
+  return tokens;
 }
 
 const FILLER_PREFIXES = [
@@ -662,6 +682,8 @@ const SIZE_WORDS = [
   "handful",
   "cup",
   "glass",
+  "scoops",
+  "scoop",
 ];
 
 function extractPortion(itemText: string): {

@@ -300,6 +300,8 @@ export const PORTION_SIZE_GRAMS: Record<string, number> = {
   glass: 240,
   slice: 35,
   piece: 50,
+  scoop: 30,
+  scoops: 30,
 };
 
 export function estimatePortionGrams(description: string): number {
