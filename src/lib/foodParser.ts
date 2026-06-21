@@ -122,12 +122,98 @@ interface GenericFoodMatch {
 }
 
 const GENERIC_FOODS: GenericFoodMatch[] = [
+  // ── Whole foods: always prefer these over cache/OFF for accuracy ──────────
+  {
+    match: (q) => /\beggs?\b/.test(q) && !/\b(fried\s+rice|mayo|mayonnaise|scotch)\b/.test(q),
+    per100g: { calories: 155, protein: 13, carbs: 1.1, fat: 11, fiber: 0 },
+    label: "Egg",
+  },
+  {
+    match: (q) => /\bbananas?\b/.test(q),
+    per100g: { calories: 89, protein: 1.1, carbs: 23, fat: 0.3, fiber: 2.6 },
+    label: "Banana",
+  },
+  {
+    match: (q) => /\bchicken\s+breast\b/.test(q),
+    per100g: { calories: 165, protein: 31, carbs: 0, fat: 3.6, fiber: 0 },
+    label: "Chicken breast",
+  },
+  {
+    match: (q) =>
+      /\brice\b/.test(q) &&
+      !/\b(fried\s+rice|biryani|pulao|pilaf)\b/.test(q),
+    per100g: { calories: 130, protein: 2.7, carbs: 28, fat: 0.3, fiber: 0.4 },
+    label: "Cooked rice",
+  },
+  {
+    match: (q) =>
+      /\b(daal?|lentils?|masoor|chana\s+dal|moong\s+dal|toor\s+dal|urad\s+dal)\b/.test(q),
+    per100g: { calories: 116, protein: 9, carbs: 20, fat: 0.4, fiber: 8 },
+    label: "Dal (cooked lentils)",
+  },
+  {
+    match: (q) =>
+      /\bmilk\b/.test(q) &&
+      !/\b(milkshake|condensed|evaporated|coconut\s+milk|almond\s+milk|oat\s+milk|soy\s+milk)\b/.test(q),
+    per100g: { calories: 61, protein: 3.2, carbs: 4.8, fat: 3.3, fiber: 0 },
+    label: "Milk",
+  },
+  {
+    match: (q) =>
+      /\boats?\b/.test(q) &&
+      !/\b(granola|oat\s+milk|oat\s+bar|flapjack)\b/.test(q),
+    per100g: { calories: 71, protein: 2.5, carbs: 12, fat: 1.4, fiber: 1.7 },
+    label: "Oats (cooked)",
+  },
+  {
+    match: (q) => /\bapples?\b/.test(q),
+    per100g: { calories: 52, protein: 0.3, carbs: 14, fat: 0.2, fiber: 2.4 },
+    label: "Apple",
+  },
+  {
+    match: (q) => /\b(roti|chapati|chapatti)\b/.test(q),
+    per100g: { calories: 297, protein: 9, carbs: 55, fat: 5, fiber: 4.7 },
+    label: "Roti",
+  },
+  {
+    match: (q) => /\bpaneer\b/.test(q),
+    per100g: { calories: 265, protein: 18, carbs: 1.2, fat: 21, fiber: 0 },
+    label: "Paneer",
+  },
+  {
+    match: (q) => /\b(curd|dahi|yoghurt?)\b/.test(q),
+    per100g: { calories: 59, protein: 3.5, carbs: 3.4, fat: 3.3, fiber: 0 },
+    label: "Curd / yogurt",
+  },
+  {
+    match: (q) =>
+      /\bpotatoes?\b/.test(q) &&
+      !/\b(sweet\s+potato|chips|fries|crisps)\b/.test(q),
+    per100g: { calories: 77, protein: 2, carbs: 17, fat: 0.1, fiber: 2.2 },
+    label: "Potato (cooked)",
+  },
+  {
+    match: (q) => /\bsweet\s+potato\b/.test(q),
+    per100g: { calories: 86, protein: 1.6, carbs: 20, fat: 0.1, fiber: 3 },
+    label: "Sweet potato (cooked)",
+  },
+  {
+    match: (q) =>
+      /\b(bread|toast)\b/.test(q) &&
+      !/\b(sandwich|burger|naan)\b/.test(q),
+    per100g: { calories: 265, protein: 9, carbs: 49, fat: 3.2, fiber: 2.7 },
+    label: "White bread",
+  },
+  {
+    match: (q) => /\btofu\b/.test(q),
+    per100g: { calories: 76, protein: 8, carbs: 1.9, fat: 4.8, fiber: 0.3 },
+    label: "Tofu",
+  },
+  // ── Generic dishes ────────────────────────────────────────────────────────
   {
     match: (q) =>
       /\b(mixed\s+)?(veggies|vegetables|greens)\b/.test(q) &&
-      !/\b(curry|fry|fried|gravy|stir.?fry|sabzi|sabji|roasted|grilled)\b/.test(
-        q,
-      ),
+      !/\b(curry|fry|fried|gravy|stir.?fry|sabzi|sabji|roasted|grilled)\b/.test(q),
     per100g: { calories: 35, protein: 2, carbs: 6, fat: 0.4, fiber: 2.5 },
     label: "Mixed vegetables",
   },
@@ -143,6 +229,20 @@ const GENERIC_FOODS: GenericFoodMatch[] = [
 function matchGenericFood(foodName: string): GenericFoodMatch | null {
   const normalized = normalizeQuery(foodName);
   return GENERIC_FOODS.find((g) => g.match(normalized)) ?? null;
+}
+
+function scoreOFFProductName(
+  productName: string | undefined,
+  query: string,
+): number {
+  if (!productName) return 0;
+  const pn = productName.toLowerCase().trim();
+  const q = query.toLowerCase().trim();
+  if (pn === q) return 100;
+  const words = q.split(/\s+/).filter((w) => w.length > 2);
+  if (words.length === 0) return pn.includes(q) ? 50 : 0;
+  const matched = words.filter((w) => pn.includes(w));
+  return Math.round((matched.length / words.length) * 60);
 }
 
 async function getPer100g(
@@ -169,22 +269,41 @@ async function getPer100g(
     .maybeSingle();
 
   if (cached) {
-    (supabase as any)
-      .from("food_cache")
-      .update({ last_used_at: new Date().toISOString() })
-      .eq("id", cached.id)
-      .then(() => {});
-    return {
-      source: cached.source,
-      confidence: cached.source === "ai" ? "medium" : "high",
-      per100g: {
-        calories: cached.calories_per_100g,
-        protein: cached.protein_per_100g,
-        carbs: cached.carbs_per_100g,
-        fat: cached.fat_per_100g,
-        fiber: cached.fiber_per_100g,
-      },
-    };
+    // Detect internally inconsistent cache entries (e.g. a complex dish cached
+    // under a simple food name): if macro-derived calories diverge >30% from
+    // the stated calories the entry is untrustworthy — delete and re-fetch.
+    const expectedCals =
+      cached.protein_per_100g * 4 +
+      cached.carbs_per_100g * 4 +
+      cached.fat_per_100g * 9;
+    const divergence =
+      Math.abs(cached.calories_per_100g - expectedCals) /
+      Math.max(cached.calories_per_100g, 1);
+    if (divergence > 0.3) {
+      (supabase as any)
+        .from("food_cache")
+        .delete()
+        .eq("id", cached.id)
+        .then(() => {});
+      // fall through to re-fetch
+    } else {
+      (supabase as any)
+        .from("food_cache")
+        .update({ last_used_at: new Date().toISOString() })
+        .eq("id", cached.id)
+        .then(() => {});
+      return {
+        source: cached.source,
+        confidence: cached.source === "ai" ? "medium" : "high",
+        per100g: {
+          calories: cached.calories_per_100g,
+          protein: cached.protein_per_100g,
+          carbs: cached.carbs_per_100g,
+          fat: cached.fat_per_100g,
+          fiber: cached.fiber_per_100g,
+        },
+      };
+    }
   }
 
   const usdaKey = process.env.USDA_API_KEY;
@@ -226,18 +345,43 @@ async function getPer100g(
     }
   } else {
     // No USDA key — fall back to OFF (packaged product database).
-    // Only accepts results that include per-100g calorie data to avoid
-    // caching zero-calorie entries from serving-only products.
+    // Fetch 5 candidates, score by name similarity, and reject implausibly
+    // high-calorie products to avoid caching wrong matches (e.g. "banana"
+    // returning banana chips at 500 kcal/100g instead of fresh banana at 89).
     try {
       const offRes = await fetch(
         `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(
           foodName,
-        )}&search_simple=1&action=process&json=1&page_size=1`,
+        )}&search_simple=1&action=process&json=1&page_size=5`,
       );
       if (offRes.ok) {
         const offData = await offRes.json();
-        const n = offData?.products?.[0]?.nutriments;
-        if (n && n["energy-kcal_100g"] > 0) {
+        // Oils, nuts, and butter legitimately exceed 600 kcal/100g.
+        const isFatFood =
+          /\b(oil|ghee|butter|lard|mayo|mayonnaise|peanut\s+butter|tahini|coconut\s+cream|coconut\s+oil|almonds?|cashews?|walnuts?|peanuts?)\b/i.test(
+            foodName,
+          );
+        const candidates: Array<{ product: any; score: number }> = (
+          offData?.products ?? []
+        )
+          .filter((p: any) => {
+            const cal = p?.nutriments?.["energy-kcal_100g"];
+            return cal && cal > 0 && (isFatFood || cal <= 900);
+          })
+          .map((p: any) => ({
+            product: p,
+            score: scoreOFFProductName(p.product_name, foodName),
+          }))
+          .filter((c: { product: any; score: number }) => c.score > 0)
+          .sort(
+            (
+              a: { product: any; score: number },
+              b: { product: any; score: number },
+            ) => b.score - a.score,
+          );
+
+        if (candidates.length > 0) {
+          const n = candidates[0].product.nutriments;
           const per100g = {
             calories: n["energy-kcal_100g"],
             protein: n["proteins_100g"] ?? 0,
