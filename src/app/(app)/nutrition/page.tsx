@@ -34,14 +34,22 @@ export const dynamic = "force-dynamic";
 function getSourceBadge(
   source: string,
   confidence: string,
-): { label: string; color: string } {
-  if (source === "user") return { label: "MY FOOD", color: "var(--purple)" };
-  if (confidence === "low") return { label: "LOW", color: "var(--red)" };
-  if (source === "manual") return { label: "VERIFIED", color: "var(--green)" };
-  if (source === "usda") return { label: "USDA", color: "var(--accent)" };
-  if (source === "off") return { label: "DATABASE", color: "var(--yellow)" };
-  if (source === "ai") return { label: "AI", color: "var(--yellow)" };
-  return { label: "EST.", color: "var(--text-dim)" };
+): { label: string; color: string; icon: boolean } {
+  if (source === "user" && confidence === "imported")
+    return { label: "IMPORTED", color: "var(--accent)", icon: false };
+  if (source === "user")
+    return { label: "MY FOOD", color: "var(--purple)", icon: true };
+  if (confidence === "low")
+    return { label: "LOW", color: "var(--red)", icon: false };
+  if (source === "manual")
+    return { label: "VERIFIED", color: "var(--green)", icon: false };
+  if (source === "usda")
+    return { label: "USDA", color: "var(--accent)", icon: false };
+  if (source === "off")
+    return { label: "DATABASE", color: "var(--yellow)", icon: false };
+  if (source === "ai")
+    return { label: "AI EST.", color: "var(--yellow)", icon: false };
+  return { label: "EST.", color: "var(--text-dim)", icon: false };
 }
 
 function SourceBadge({
@@ -51,7 +59,7 @@ function SourceBadge({
   source: string;
   confidence: string;
 }) {
-  const { label, color } = getSourceBadge(source, confidence);
+  const { label, color, icon } = getSourceBadge(source, confidence);
   return (
     <span
       style={{
@@ -68,7 +76,7 @@ function SourceBadge({
         letterSpacing: "0.05em",
       }}
     >
-      {source === "user" && <BookmarkCheck size={8} strokeWidth={2} />}
+      {icon && <BookmarkCheck size={8} strokeWidth={2} />}
       {label}
     </span>
   );
@@ -1325,7 +1333,9 @@ export default function NutritionPage() {
                             }}
                           >
                             {item.portion_desc}
-                            {item.source === "user" && item.times_used && (
+                            {item.source === "user" &&
+                              item.confidence !== "imported" &&
+                              !!item.times_used && (
                               <span
                                 style={{
                                   color: "var(--purple)",

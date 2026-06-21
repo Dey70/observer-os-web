@@ -34,6 +34,67 @@ function normalizeQuery(q: string): string {
   return q.toLowerCase().trim().replace(/\s+/g, " ");
 }
 
+// ── Levenshtein-based fuzzy matching for user food lookup ─────────────────────
+
+function levenshtein(a: string, b: string): number {
+  const m = a.length, n = b.length;
+  const dp: number[] = Array.from({ length: n + 1 }, (_, j) => j);
+  for (let i = 1; i <= m; i++) {
+    let prev = dp[0];
+    dp[0] = i;
+    for (let j = 1; j <= n; j++) {
+      const tmp = dp[j];
+      dp[j] = a[i - 1] === b[j - 1]
+        ? prev
+        : 1 + Math.min(prev, dp[j], dp[j - 1]);
+      prev = tmp;
+    }
+  }
+  return dp[n];
+}
+
+function strSimilarity(a: string, b: string): number {
+  const maxLen = Math.max(a.length, b.length);
+  if (maxLen === 0) return 1;
+  return 1 - levenshtein(a, b) / maxLen;
+}
+
+const FUZZY_THRESHOLD = 0.82;
+
+function findUserFood(
+  query: string,
+  userFoods: any[],
+): { food: any; matchType: "exact" | "alias" | "fuzzy" } | null {
+  const q = normalizeQuery(query);
+
+  // 1. Exact name match
+  const byName = userFoods.find((f) => f.name === q);
+  if (byName) return { food: byName, matchType: "exact" };
+
+  // 2. Alias match (case-insensitive stored values)
+  const byAlias = userFoods.find((f) =>
+    (f.aliases ?? []).includes(q),
+  );
+  if (byAlias) return { food: byAlias, matchType: "alias" };
+
+  // 3. Fuzzy match — Levenshtein over names and aliases
+  let best: any = null;
+  let bestScore = FUZZY_THRESHOLD;
+  for (const food of userFoods) {
+    const nameScore = strSimilarity(q, food.name);
+    if (nameScore > bestScore) { bestScore = nameScore; best = food; }
+    for (const alias of (food.aliases ?? [])) {
+      const s = strSimilarity(q, alias);
+      if (s > bestScore) { bestScore = s; best = food; }
+    }
+  }
+  if (best) return { food: best, matchType: "fuzzy" };
+
+  return null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 interface SupplementMatch {
   match: (q: string) => boolean;
   perServing: {
@@ -246,6 +307,9 @@ function scoreOFFProductName(
   return Math.round((matched.length / words.length) * 60);
 }
 
+// getPer100g handles everything EXCEPT user_foods.
+// User foods are resolved in parseMeal (before this call) via the prefetched
+// library, so they take priority over generics and external APIs.
 async function getPer100g(
   foodName: string,
   supabase: SupabaseClient,
@@ -253,7 +317,6 @@ async function getPer100g(
 ): Promise<{
   source: FoodSource;
   confidence: FoodConfidence;
-  times_used?: number;
   per100g: {
     calories: number;
     protein: number;
@@ -263,48 +326,6 @@ async function getPer100g(
   };
 }> {
   const normalized = normalizeQuery(foodName);
-
-  // 1. User's personal food dictionary — highest priority.
-  // RLS filters to the current user automatically.
-  {
-    const { data: byName } = await (supabase as any)
-      .from("user_foods")
-      .select("*")
-      .eq("name", normalized)
-      .maybeSingle();
-
-    const { data: byAlias } = !byName
-      ? await (supabase as any)
-          .from("user_foods")
-          .select("*")
-          .contains("aliases", [normalized])
-          .maybeSingle()
-      : { data: null };
-
-    const userFood = byName ?? byAlias;
-    if (userFood) {
-      (supabase as any)
-        .from("user_foods")
-        .update({
-          times_used: userFood.times_used + 1,
-          last_used_at: new Date().toISOString(),
-        })
-        .eq("id", userFood.id)
-        .then(() => {});
-      return {
-        source: "user" as FoodSource,
-        confidence: userFood.confidence as FoodConfidence,
-        times_used: userFood.times_used as number,
-        per100g: {
-          calories: userFood.calories_per_100g,
-          protein: userFood.protein_per_100g,
-          carbs: userFood.carbs_per_100g,
-          fat: userFood.fat_per_100g,
-          fiber: userFood.fiber_per_100g,
-        },
-      };
-    }
-  }
 
   const { data: cached } = await (supabase as any)
     .from("food_cache")
@@ -739,13 +760,72 @@ export async function parseMeal(
   const itemTexts = splitItems(rawInput);
   const items: ParsedFoodItem[] = [];
 
+  // Prefetch user's personal food library once — single DB round trip for
+  // all items in this meal, and lets us check it BEFORE generic/supplement
+  // tables so user-defined serving sizes always take precedence.
+  const { data: rawUserFoods } = await (supabase as any)
+    .from("user_foods")
+    .select("*");
+  const userFoods: any[] = rawUserFoods ?? [];
+
   for (const itemText of itemTexts) {
     const { name, portionDesc, explicitGrams, isApproximate } =
       extractPortion(itemText);
     if (!name) continue;
 
+    // ── 1. User's personal food library ─────────────────────────────────────
+    // Checked first so user-defined nutrition and serving sizes always win
+    // over generic tables, cache, or external APIs.
+    // Lookup order: exact name → alias → fuzzy (Levenshtein ≥ 82%)
+    const userMatch =
+      findUserFood(name, userFoods) ??
+      findUserFood(normalizeQuery(itemText), userFoods);
+
+    if (userMatch) {
+      const { food: uf, matchType } = userMatch;
+      // When no explicit grams were parsed (e.g. just "egg"), use the food's
+      // own serving_grams so the calories reflect a real portion, not 150g.
+      const grams = explicitGrams ?? uf.serving_grams;
+      const effectiveDesc = explicitGrams === null
+        ? `${uf.serving_desc} (${uf.serving_grams}g)`
+        : portionDesc;
+      const factor = grams / 100;
+
+      console.log(
+        `[FoodLookup] query="${name}" ${matchType}Match matchedFood="${uf.name}" ` +
+        `serving=${grams}g source="user" confidence="${uf.confidence}"`,
+      );
+
+      // Increment usage counter — fire and forget, non-blocking
+      ;(supabase as any)
+        .from("user_foods")
+        .update({
+          times_used: uf.times_used + 1,
+          last_used_at: new Date().toISOString(),
+        })
+        .eq("id", uf.id)
+        .then(() => {});
+
+      items.push({
+        name: uf.name,
+        portion_desc: effectiveDesc,
+        grams,
+        confidence: uf.confidence as FoodConfidence,
+        source: "user",
+        times_used: uf.times_used,
+        calories: Math.round(uf.calories_per_100g * factor),
+        protein: Math.round(uf.protein_per_100g * factor * 10) / 10,
+        carbs: Math.round(uf.carbs_per_100g * factor * 10) / 10,
+        fat: Math.round(uf.fat_per_100g * factor * 10) / 10,
+        fiber: Math.round(uf.fiber_per_100g * factor * 10) / 10,
+      });
+      continue;
+    }
+
+    // ── 2. Supplements ────────────────────────────────────────────────────────
     const supplement = matchSupplement(name) ?? matchSupplement(itemText);
     if (supplement) {
+      console.log(`[FoodLookup] query="${name}" supplementMatch matchedFood="${supplement.label}" source="manual"`);
       items.push({
         name: supplement.label,
         portion_desc: explicitGrams ? `${explicitGrams}g` : "1 serving",
@@ -761,10 +841,12 @@ export async function parseMeal(
       continue;
     }
 
+    // ── 3. Hardcoded generics ─────────────────────────────────────────────────
     const generic = matchGenericFood(name) ?? matchGenericFood(itemText);
     if (generic) {
       const grams = explicitGrams ?? 150;
       const factor = grams / 100;
+      console.log(`[FoodLookup] query="${name}" genericMatch matchedFood="${generic.label}" serving=${grams}g source="manual"`);
       items.push({
         name: generic.label,
         portion_desc: portionDesc,
@@ -780,14 +862,12 @@ export async function parseMeal(
       continue;
     }
 
-    const { source, confidence, per100g, times_used } = await getPer100g(
+    // ── 4. Cache → USDA → OFF → AI ───────────────────────────────────────────
+    const { source, confidence, per100g } = await getPer100g(
       name,
       supabase,
       groqApiKey,
     );
-    // Use explicit grams if we parsed a portion (bowl, plate, count, etc.).
-    // Otherwise fall back to 150g — a more realistic single serving than 100g
-    // for cooked dishes (rice, dal, curry, etc.) while not overcounting snacks.
     const grams = explicitGrams ?? 150;
 
     const finalConfidence: FoodConfidence =
@@ -797,6 +877,8 @@ export async function parseMeal(
           ? "medium"
           : confidence;
 
+    console.log(`[FoodLookup] query="${name}" source="${source}" confidence="${finalConfidence}" serving=${grams}g`);
+
     const factor = grams / 100;
     items.push({
       name,
@@ -804,7 +886,6 @@ export async function parseMeal(
       grams,
       confidence: finalConfidence,
       source,
-      times_used,
       calories: Math.round(per100g.calories * factor),
       protein: Math.round(per100g.protein * factor * 10) / 10,
       carbs: Math.round(per100g.carbs * factor * 10) / 10,
