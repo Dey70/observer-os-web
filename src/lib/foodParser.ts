@@ -2,8 +2,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { estimatePortionGrams } from "./nutritionEngine";
 
-export type FoodConfidence = "high" | "medium" | "low";
-export type FoodSource = "off" | "usda" | "ai" | "manual";
+export type FoodConfidence = "verified" | "learned" | "high" | "medium" | "low";
+export type FoodSource = "off" | "usda" | "ai" | "manual" | "user";
 
 export interface ParsedFoodItem {
   name: string;
@@ -261,6 +261,47 @@ async function getPer100g(
   };
 }> {
   const normalized = normalizeQuery(foodName);
+
+  // 1. User's personal food dictionary — highest priority.
+  // RLS filters to the current user automatically.
+  {
+    const { data: byName } = await (supabase as any)
+      .from("user_foods")
+      .select("*")
+      .eq("name", normalized)
+      .maybeSingle();
+
+    const { data: byAlias } = !byName
+      ? await (supabase as any)
+          .from("user_foods")
+          .select("*")
+          .contains("aliases", [normalized])
+          .maybeSingle()
+      : { data: null };
+
+    const userFood = byName ?? byAlias;
+    if (userFood) {
+      (supabase as any)
+        .from("user_foods")
+        .update({
+          times_used: userFood.times_used + 1,
+          last_used_at: new Date().toISOString(),
+        })
+        .eq("id", userFood.id)
+        .then(() => {});
+      return {
+        source: "user" as FoodSource,
+        confidence: userFood.confidence as FoodConfidence,
+        per100g: {
+          calories: userFood.calories_per_100g,
+          protein: userFood.protein_per_100g,
+          carbs: userFood.carbs_per_100g,
+          fat: userFood.fat_per_100g,
+          fiber: userFood.fiber_per_100g,
+        },
+      };
+    }
+  }
 
   const { data: cached } = await (supabase as any)
     .from("food_cache")

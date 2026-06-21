@@ -25,6 +25,8 @@ import {
   Moon,
   Cookie,
   Undo2,
+  Bookmark,
+  BookmarkCheck,
 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -377,6 +379,7 @@ export default function NutritionPage() {
   const [editDraft, setEditDraft] = useState<ParsedFoodItem | null>(null);
   const [customWaterAmount, setCustomWaterAmount] = useState("");
   const [loggingWater, setLoggingWater] = useState(false);
+  const [pinnedIndices, setPinnedIndices] = useState<Set<number>>(new Set());
   const inputRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
@@ -439,6 +442,7 @@ export default function NutritionPage() {
     setParseError(null);
     setPending(null);
     setEditingIndex(null);
+    setPinnedIndices(new Set());
     try {
       const res = await fetch("/api/nutrition/parse", {
         method: "POST",
@@ -476,8 +480,52 @@ export default function NutritionPage() {
     } = await sb.auth.getUser();
     if (!user) return;
 
+    // Save pinned items to the user's personal food dictionary.
+    for (const idx of pinnedIndices) {
+      const item = pending.items[idx];
+      if (!item || item.grams <= 0) continue;
+      const f = 100 / item.grams;
+      const normalizedName = item.name.toLowerCase().trim().replace(/\s+/g, " ");
+      const { data: existing } = await (sb as any)
+        .from("user_foods")
+        .select("id, times_used")
+        .eq("user_id", user.id)
+        .eq("name", normalizedName)
+        .maybeSingle();
+      if (existing) {
+        await (sb as any)
+          .from("user_foods")
+          .update({
+            serving_desc: item.portion_desc,
+            serving_grams: item.grams,
+            calories_per_100g: Math.round(item.calories * f * 10) / 10,
+            protein_per_100g: Math.round(item.protein * f * 10) / 10,
+            carbs_per_100g: Math.round(item.carbs * f * 10) / 10,
+            fat_per_100g: Math.round(item.fat * f * 10) / 10,
+            fiber_per_100g: Math.round(item.fiber * f * 10) / 10,
+            times_used: existing.times_used + 1,
+            last_used_at: new Date().toISOString(),
+          })
+          .eq("id", existing.id);
+      } else {
+        await (sb as any).from("user_foods").insert({
+          user_id: user.id,
+          name: normalizedName,
+          serving_desc: item.portion_desc,
+          serving_grams: item.grams,
+          calories_per_100g: Math.round(item.calories * f * 10) / 10,
+          protein_per_100g: Math.round(item.protein * f * 10) / 10,
+          carbs_per_100g: Math.round(item.carbs * f * 10) / 10,
+          fat_per_100g: Math.round(item.fat * f * 10) / 10,
+          fiber_per_100g: Math.round(item.fiber * f * 10) / 10,
+          confidence: "verified",
+          times_used: 1,
+        });
+      }
+    }
+
     const mealGroupId = crypto.randomUUID();
-    const rows = pending.items.map((item) => ({
+    const rows = pending.items.map((item, i) => ({
       user_id: user.id,
       meal_group_id: mealGroupId,
       date,
@@ -485,8 +533,8 @@ export default function NutritionPage() {
       item_name: item.name,
       portion_desc: item.portion_desc,
       raw_input: pending.raw_input,
-      source: item.source,
-      confidence: item.confidence,
+      source: pinnedIndices.has(i) ? "user" : item.source,
+      confidence: pinnedIndices.has(i) ? "verified" : item.confidence,
       calories: item.calories,
       protein: item.protein,
       carbs: item.carbs,
@@ -497,6 +545,7 @@ export default function NutritionPage() {
     await (sb as any).from("nutrition_logs").insert(rows);
     setPending(null);
     setEditingIndex(null);
+    setPinnedIndices(new Set());
     setInput("");
     load();
     inputRef.current?.focus();
@@ -505,6 +554,16 @@ export default function NutritionPage() {
   function discardPending() {
     setPending(null);
     setEditingIndex(null);
+    setPinnedIndices(new Set());
+  }
+
+  function togglePinItem(index: number) {
+    setPinnedIndices((prev) => {
+      const next = new Set(prev);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
   }
 
   function changePendingMealType(newType: MealType) {
@@ -528,8 +587,8 @@ export default function NutritionPage() {
     const newItems = [...pending.items];
     newItems[editingIndex] = {
       ...editDraft,
-      confidence: "high",
-      source: "manual",
+      confidence: "verified",
+      source: "user",
     };
     setPending({
       items: newItems,
@@ -537,6 +596,8 @@ export default function NutritionPage() {
       raw_input: pending.raw_input,
       meal_type: pending.meal_type,
     });
+    // Automatically teach Observer when the user corrects nutrition values.
+    setPinnedIndices((prev) => new Set([...prev, editingIndex]));
     setEditingIndex(null);
     setEditDraft(null);
   }
@@ -610,9 +671,19 @@ export default function NutritionPage() {
   }
 
   const confidenceColor: Record<string, string> = {
+    verified: "var(--purple)",
+    learned: "var(--accent)",
     high: "var(--green)",
     medium: "var(--yellow)",
     low: "var(--red)",
+  };
+
+  const confidenceLabel: Record<string, string> = {
+    verified: "Verified",
+    learned: "Learned",
+    high: "High",
+    medium: "Medium",
+    low: "Low",
   };
 
   const editFieldStyle: React.CSSProperties = {
@@ -973,7 +1044,7 @@ export default function NutritionPage() {
                                 letterSpacing: "0.05em",
                               }}
                             >
-                              {l.confidence}
+                              {confidenceLabel[l.confidence] ?? l.confidence}
                             </span>
                           </div>
                           <div
@@ -1183,114 +1254,224 @@ export default function NutritionPage() {
                       </div>
                     </div>
                   ) : (
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "flex-start",
-                        gap: 8,
-                      }}
-                    >
-                      <div style={{ minWidth: 0 }}>
-                        <span
-                          style={{
-                            fontSize: 13,
-                            color: "var(--text)",
-                            textTransform: "capitalize",
-                          }}
-                        >
-                          {item.name}
-                        </span>
-                        <div
-                          style={{
-                            fontSize: 10,
-                            color: "var(--text-dim)",
-                            fontFamily: "var(--mono)",
-                            marginTop: 2,
-                          }}
-                        >
-                          {item.portion_desc} ·{" "}
-                          <span
-                            style={{ color: confidenceColor[item.confidence] }}
-                          >
-                            {item.confidence} confidence
-                          </span>
-                        </div>
-                      </div>
+                    <div>
                       <div
                         style={{
                           display: "flex",
+                          justifyContent: "space-between",
                           alignItems: "flex-start",
-                          gap: 10,
-                          flexShrink: 0,
+                          gap: 8,
                         }}
                       >
-                        <div style={{ textAlign: "right" }}>
+                        <div style={{ minWidth: 0 }}>
                           <div
                             style={{
-                              fontFamily: "var(--mono)",
-                              fontSize: 13,
-                              fontWeight: 700,
-                              color: "var(--accent)",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 6,
+                              flexWrap: "wrap",
                             }}
                           >
-                            {item.calories} kcal
+                            <span
+                              style={{
+                                fontSize: 13,
+                                color: "var(--text)",
+                                textTransform: "capitalize",
+                              }}
+                            >
+                              {item.name}
+                            </span>
+                            {item.source === "user" ? (
+                              <span
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: 3,
+                                  fontSize: 9,
+                                  fontFamily: "var(--mono)",
+                                  color: "var(--purple)",
+                                  border: "1px solid var(--purple)",
+                                  borderRadius: 4,
+                                  padding: "1px 5px",
+                                  textTransform: "uppercase",
+                                  letterSpacing: "0.05em",
+                                }}
+                              >
+                                <BookmarkCheck size={8} strokeWidth={2} />
+                                My Foods
+                              </span>
+                            ) : (
+                              <span
+                                style={{
+                                  fontSize: 9,
+                                  fontFamily: "var(--mono)",
+                                  color:
+                                    confidenceColor[item.confidence] ??
+                                    "var(--text-dim)",
+                                  border: `1px solid ${confidenceColor[item.confidence] ?? "var(--border)"}40`,
+                                  borderRadius: 4,
+                                  padding: "1px 5px",
+                                  textTransform: "uppercase",
+                                  letterSpacing: "0.05em",
+                                }}
+                              >
+                                {confidenceLabel[item.confidence] ??
+                                  item.confidence}
+                              </span>
+                            )}
                           </div>
                           <div
                             style={{
                               fontSize: 10,
                               color: "var(--text-dim)",
                               fontFamily: "var(--mono)",
+                              marginTop: 2,
                             }}
                           >
-                            P{item.protein} C{item.carbs} F{item.fat}
+                            {item.portion_desc}
                           </div>
                         </div>
-                        <div style={{ display: "flex", gap: 4 }}>
-                          <button
-                            onClick={() => startEditItem(i)}
-                            title="Edit"
-                            style={{
-                              width: 24,
-                              height: 24,
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              background: "transparent",
-                              border: "1px solid var(--border2)",
-                              borderRadius: 6,
-                              cursor: "pointer",
-                            }}
-                          >
-                            <Pencil
-                              size={11}
-                              color="var(--text-muted)"
-                              strokeWidth={1.75}
-                            />
-                          </button>
-                          <button
-                            onClick={() => removePendingItem(i)}
-                            title="Remove from this meal"
-                            style={{
-                              width: 24,
-                              height: 24,
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              background: "transparent",
-                              border: "1px solid var(--border2)",
-                              borderRadius: 6,
-                              cursor: "pointer",
-                            }}
-                          >
-                            <X
-                              size={11}
-                              color="var(--text-dim)"
-                              strokeWidth={1.75}
-                            />
-                          </button>
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "flex-start",
+                            gap: 10,
+                            flexShrink: 0,
+                          }}
+                        >
+                          <div style={{ textAlign: "right" }}>
+                            <div
+                              style={{
+                                fontFamily: "var(--mono)",
+                                fontSize: 13,
+                                fontWeight: 700,
+                                color: "var(--accent)",
+                              }}
+                            >
+                              {item.calories} kcal
+                            </div>
+                            <div
+                              style={{
+                                fontSize: 10,
+                                color: "var(--text-dim)",
+                                fontFamily: "var(--mono)",
+                              }}
+                            >
+                              P{item.protein} C{item.carbs} F{item.fat}
+                            </div>
+                          </div>
+                          <div style={{ display: "flex", gap: 4 }}>
+                            {/* Teach Observer pin — only for AI / OFF / USDA sources */}
+                            {(item.source === "ai" ||
+                              item.source === "off" ||
+                              item.source === "usda") && (
+                              <button
+                                onClick={() => togglePinItem(i)}
+                                title={
+                                  pinnedIndices.has(i)
+                                    ? "Observer will remember this food"
+                                    : "Teach Observer to remember this food"
+                                }
+                                style={{
+                                  width: 24,
+                                  height: 24,
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  background: pinnedIndices.has(i)
+                                    ? "color-mix(in srgb, var(--purple) 15%, transparent)"
+                                    : "transparent",
+                                  border: `1px solid ${pinnedIndices.has(i) ? "var(--purple)" : "var(--border2)"}`,
+                                  borderRadius: 6,
+                                  cursor: "pointer",
+                                  transition: "all 0.15s",
+                                }}
+                              >
+                                <Bookmark
+                                  size={11}
+                                  color={
+                                    pinnedIndices.has(i)
+                                      ? "var(--purple)"
+                                      : "var(--text-dim)"
+                                  }
+                                  fill={
+                                    pinnedIndices.has(i)
+                                      ? "var(--purple)"
+                                      : "none"
+                                  }
+                                  strokeWidth={1.75}
+                                />
+                              </button>
+                            )}
+                            <button
+                              onClick={() => startEditItem(i)}
+                              title="Edit nutrition"
+                              style={{
+                                width: 24,
+                                height: 24,
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                background: "transparent",
+                                border: "1px solid var(--border2)",
+                                borderRadius: 6,
+                                cursor: "pointer",
+                              }}
+                            >
+                              <Pencil
+                                size={11}
+                                color="var(--text-muted)"
+                                strokeWidth={1.75}
+                              />
+                            </button>
+                            <button
+                              onClick={() => removePendingItem(i)}
+                              title="Remove from this meal"
+                              style={{
+                                width: 24,
+                                height: 24,
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                background: "transparent",
+                                border: "1px solid var(--border2)",
+                                borderRadius: 6,
+                                cursor: "pointer",
+                              }}
+                            >
+                              <X
+                                size={11}
+                                color="var(--text-dim)"
+                                strokeWidth={1.75}
+                              />
+                            </button>
+                          </div>
                         </div>
                       </div>
+                      {/* Teach strip — shown when item is pinned */}
+                      {pinnedIndices.has(i) && (
+                        <div
+                          style={{
+                            marginTop: 8,
+                            padding: "5px 8px",
+                            background:
+                              "color-mix(in srgb, var(--purple) 10%, transparent)",
+                            border:
+                              "1px solid color-mix(in srgb, var(--purple) 30%, transparent)",
+                            borderRadius: 6,
+                            fontSize: 10,
+                            color: "var(--purple)",
+                            fontFamily: "var(--mono)",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 5,
+                          }}
+                        >
+                          <BookmarkCheck size={10} strokeWidth={2} />
+                          Observer will remember &ldquo;{item.name}&rdquo; from
+                          next time
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1316,6 +1497,30 @@ export default function NutritionPage() {
               Fi{pending.totals.fiber.toFixed(1)}
             </span>
           </div>
+          {pinnedIndices.size > 0 && (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                marginBottom: 10,
+                padding: "6px 10px",
+                background:
+                  "color-mix(in srgb, var(--purple) 8%, transparent)",
+                border:
+                  "1px solid color-mix(in srgb, var(--purple) 25%, transparent)",
+                borderRadius: 8,
+                fontSize: 11,
+                color: "var(--purple)",
+                fontFamily: "var(--mono)",
+              }}
+            >
+              <BookmarkCheck size={12} strokeWidth={2} />
+              Teaching Observer {pinnedIndices.size} food
+              {pinnedIndices.size > 1 ? "s" : ""} — they&apos;ll load
+              instantly next time
+            </div>
+          )}
           <div style={{ display: "flex", gap: 8 }}>
             <button
               onClick={confirmMeal}
