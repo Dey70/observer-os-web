@@ -16,6 +16,7 @@ export interface ParsedFoodItem {
   carbs: number;
   fat: number;
   fiber: number;
+  times_used?: number;
 }
 
 export interface MealParseResult {
@@ -252,6 +253,7 @@ async function getPer100g(
 ): Promise<{
   source: FoodSource;
   confidence: FoodConfidence;
+  times_used?: number;
   per100g: {
     calories: number;
     protein: number;
@@ -292,6 +294,7 @@ async function getPer100g(
       return {
         source: "user" as FoodSource,
         confidence: userFood.confidence as FoodConfidence,
+        times_used: userFood.times_used as number,
         per100g: {
           calories: userFood.calories_per_100g,
           protein: userFood.protein_per_100g,
@@ -777,7 +780,7 @@ export async function parseMeal(
       continue;
     }
 
-    const { source, confidence, per100g } = await getPer100g(
+    const { source, confidence, per100g, times_used } = await getPer100g(
       name,
       supabase,
       groqApiKey,
@@ -801,6 +804,7 @@ export async function parseMeal(
       grams,
       confidence: finalConfidence,
       source,
+      times_used,
       calories: Math.round(per100g.calories * factor),
       protein: Math.round(per100g.protein * factor * 10) / 10,
       carbs: Math.round(per100g.carbs * factor * 10) / 10,

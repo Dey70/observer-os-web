@@ -31,6 +31,49 @@ import {
 
 export const dynamic = "force-dynamic";
 
+function getSourceBadge(
+  source: string,
+  confidence: string,
+): { label: string; color: string } {
+  if (source === "user") return { label: "MY FOOD", color: "var(--purple)" };
+  if (confidence === "low") return { label: "LOW", color: "var(--red)" };
+  if (source === "manual") return { label: "VERIFIED", color: "var(--green)" };
+  if (source === "usda") return { label: "USDA", color: "var(--accent)" };
+  if (source === "off") return { label: "DATABASE", color: "var(--yellow)" };
+  if (source === "ai") return { label: "AI", color: "var(--yellow)" };
+  return { label: "EST.", color: "var(--text-dim)" };
+}
+
+function SourceBadge({
+  source,
+  confidence,
+}: {
+  source: string;
+  confidence: string;
+}) {
+  const { label, color } = getSourceBadge(source, confidence);
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 3,
+        fontSize: 9,
+        fontFamily: "var(--mono)",
+        color,
+        border: `1px solid ${color}60`,
+        borderRadius: 4,
+        padding: "1px 5px",
+        textTransform: "uppercase",
+        letterSpacing: "0.05em",
+      }}
+    >
+      {source === "user" && <BookmarkCheck size={8} strokeWidth={2} />}
+      {label}
+    </span>
+  );
+}
+
 type NutritionLogRow = {
   id: number;
   meal_group_id: string;
@@ -670,21 +713,6 @@ export default function NutritionPage() {
     if (e.key === "Enter") logCustomWater();
   }
 
-  const confidenceColor: Record<string, string> = {
-    verified: "var(--purple)",
-    learned: "var(--accent)",
-    high: "var(--green)",
-    medium: "var(--yellow)",
-    low: "var(--red)",
-  };
-
-  const confidenceLabel: Record<string, string> = {
-    verified: "Verified",
-    learned: "Learned",
-    high: "High",
-    medium: "Medium",
-    low: "Low",
-  };
 
   const editFieldStyle: React.CSSProperties = {
     width: "100%",
@@ -937,17 +965,30 @@ export default function NutritionPage() {
           }}
         >
           <SectionLabel>Today's Log ({logs.length} items)</SectionLabel>
-          <Link
-            href="/nutrition/history"
-            style={{
-              fontSize: 11,
-              color: "var(--accent)",
-              fontFamily: "var(--mono)",
-              textDecoration: "none",
-            }}
-          >
-            History →
-          </Link>
+          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+            <Link
+              href="/nutrition/my-foods"
+              style={{
+                fontSize: 11,
+                color: "var(--purple)",
+                fontFamily: "var(--mono)",
+                textDecoration: "none",
+              }}
+            >
+              My Foods →
+            </Link>
+            <Link
+              href="/nutrition/history"
+              style={{
+                fontSize: 11,
+                color: "var(--accent)",
+                fontFamily: "var(--mono)",
+                textDecoration: "none",
+              }}
+            >
+              History →
+            </Link>
+          </div>
         </div>
         {logs.length === 0 ? (
           <EmptyState message="Nothing logged yet — tell the coach what you ate below" />
@@ -1030,22 +1071,10 @@ export default function NutritionPage() {
                             >
                               {l.item_name}
                             </span>
-                            <span
-                              style={{
-                                fontSize: 9,
-                                fontFamily: "var(--mono)",
-                                color:
-                                  confidenceColor[l.confidence] ??
-                                  "var(--text-dim)",
-                                border: `1px solid ${confidenceColor[l.confidence] ?? "var(--border)"}`,
-                                borderRadius: 4,
-                                padding: "1px 5px",
-                                textTransform: "uppercase",
-                                letterSpacing: "0.05em",
-                              }}
-                            >
-                              {confidenceLabel[l.confidence] ?? l.confidence}
-                            </span>
+                            <SourceBadge
+                              source={l.source}
+                              confidence={l.confidence}
+                            />
                           </div>
                           <div
                             style={{
@@ -1263,7 +1292,8 @@ export default function NutritionPage() {
                           gap: 8,
                         }}
                       >
-                        <div style={{ minWidth: 0 }}>
+                        {/* Left: name + badge + portion + remember link */}
+                        <div style={{ minWidth: 0, flex: 1 }}>
                           <div
                             style={{
                               display: "flex",
@@ -1281,44 +1311,10 @@ export default function NutritionPage() {
                             >
                               {item.name}
                             </span>
-                            {item.source === "user" ? (
-                              <span
-                                style={{
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  gap: 3,
-                                  fontSize: 9,
-                                  fontFamily: "var(--mono)",
-                                  color: "var(--purple)",
-                                  border: "1px solid var(--purple)",
-                                  borderRadius: 4,
-                                  padding: "1px 5px",
-                                  textTransform: "uppercase",
-                                  letterSpacing: "0.05em",
-                                }}
-                              >
-                                <BookmarkCheck size={8} strokeWidth={2} />
-                                My Foods
-                              </span>
-                            ) : (
-                              <span
-                                style={{
-                                  fontSize: 9,
-                                  fontFamily: "var(--mono)",
-                                  color:
-                                    confidenceColor[item.confidence] ??
-                                    "var(--text-dim)",
-                                  border: `1px solid ${confidenceColor[item.confidence] ?? "var(--border)"}40`,
-                                  borderRadius: 4,
-                                  padding: "1px 5px",
-                                  textTransform: "uppercase",
-                                  letterSpacing: "0.05em",
-                                }}
-                              >
-                                {confidenceLabel[item.confidence] ??
-                                  item.confidence}
-                              </span>
-                            )}
+                            <SourceBadge
+                              source={item.source}
+                              confidence={item.confidence}
+                            />
                           </div>
                           <div
                             style={{
@@ -1329,8 +1325,60 @@ export default function NutritionPage() {
                             }}
                           >
                             {item.portion_desc}
+                            {item.source === "user" && item.times_used && (
+                              <span
+                                style={{
+                                  color: "var(--purple)",
+                                  marginLeft: 6,
+                                }}
+                              >
+                                · Used {item.times_used}&times;
+                              </span>
+                            )}
                           </div>
+                          {/* Discoverable "Remember this food" text link */}
+                          {item.source !== "user" && (
+                            <button
+                              onClick={() => togglePinItem(i)}
+                              style={{
+                                marginTop: 5,
+                                background: "none",
+                                border: "none",
+                                padding: 0,
+                                cursor: "pointer",
+                                fontFamily: "var(--mono)",
+                                fontSize: 10,
+                                color: pinnedIndices.has(i)
+                                  ? "var(--purple)"
+                                  : "var(--text-muted)",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 4,
+                              }}
+                            >
+                              {pinnedIndices.has(i) ? (
+                                <>
+                                  <BookmarkCheck
+                                    size={10}
+                                    strokeWidth={2}
+                                    color="var(--purple)"
+                                  />
+                                  Observer will remember this &middot;{" "}
+                                  <span style={{ color: "var(--text-dim)" }}>
+                                    undo
+                                  </span>
+                                </>
+                              ) : (
+                                <>
+                                  <Bookmark size={10} strokeWidth={1.75} />
+                                  Remember this food
+                                </>
+                              )}
+                            </button>
+                          )}
                         </div>
+
+                        {/* Right: calories + icon buttons */}
                         <div
                           style={{
                             display: "flex",
@@ -1361,46 +1409,6 @@ export default function NutritionPage() {
                             </div>
                           </div>
                           <div style={{ display: "flex", gap: 4 }}>
-                            {/* Teach Observer pin — show for everything except already-saved user foods */}
-                            {item.source !== "user" && (
-                              <button
-                                onClick={() => togglePinItem(i)}
-                                title={
-                                  pinnedIndices.has(i)
-                                    ? "Observer will remember this food"
-                                    : "Teach Observer to remember this food"
-                                }
-                                style={{
-                                  width: 24,
-                                  height: 24,
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  background: pinnedIndices.has(i)
-                                    ? "color-mix(in srgb, var(--purple) 15%, transparent)"
-                                    : "transparent",
-                                  border: `1px solid ${pinnedIndices.has(i) ? "var(--purple)" : "var(--border2)"}`,
-                                  borderRadius: 6,
-                                  cursor: "pointer",
-                                  transition: "all 0.15s",
-                                }}
-                              >
-                                <Bookmark
-                                  size={11}
-                                  color={
-                                    pinnedIndices.has(i)
-                                      ? "var(--purple)"
-                                      : "var(--text-dim)"
-                                  }
-                                  fill={
-                                    pinnedIndices.has(i)
-                                      ? "var(--purple)"
-                                      : "none"
-                                  }
-                                  strokeWidth={1.75}
-                                />
-                              </button>
-                            )}
                             <button
                               onClick={() => startEditItem(i)}
                               title="Edit nutrition"
@@ -1446,30 +1454,6 @@ export default function NutritionPage() {
                           </div>
                         </div>
                       </div>
-                      {/* Teach strip — shown when item is pinned */}
-                      {pinnedIndices.has(i) && (
-                        <div
-                          style={{
-                            marginTop: 8,
-                            padding: "5px 8px",
-                            background:
-                              "color-mix(in srgb, var(--purple) 10%, transparent)",
-                            border:
-                              "1px solid color-mix(in srgb, var(--purple) 30%, transparent)",
-                            borderRadius: 6,
-                            fontSize: 10,
-                            color: "var(--purple)",
-                            fontFamily: "var(--mono)",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 5,
-                          }}
-                        >
-                          <BookmarkCheck size={10} strokeWidth={2} />
-                          Observer will remember &ldquo;{item.name}&rdquo; from
-                          next time
-                        </div>
-                      )}
                     </div>
                   )}
                 </div>
