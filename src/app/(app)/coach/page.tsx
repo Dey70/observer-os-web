@@ -4,34 +4,61 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { calcReadiness, isSunday } from "@/lib/utils";
+import { calcCheckinStreak, calcSessionStreak, isSunday } from "@/lib/utils";
 import { Badge, TypingDots } from "@/components/ui";
 import type { ChatMessage, DailyLog, Session } from "@/types";
 import { Activity, BarChart2, CalendarDays, Target } from "lucide-react";
+import { computeRecoveryScore } from "@/lib/recoveryScore";
+import { computeCTLATLTSB } from "@/lib/trainingLoad";
+import type { TrainingMetricRow } from "@/lib/trainingLoad";
+import { computeReadiness } from "@/lib/readiness";
+import type { ReadinessOutput } from "@/lib/readiness";
+import { runCoachEngine } from "@/lib/coachEngine";
+import type { CoachOutput, GoalProgress } from "@/lib/coachEngine";
+import { computeHybridScore } from "@/lib/hybridScore";
+import type { HybridScoreOutput } from "@/lib/hybridScore";
+import { calculateDailyTargets } from "@/lib/nutritionEngine";
+import type { NutritionProfileInputs } from "@/lib/nutritionEngine";
+import type { RunningActivity } from "@/types";
 
 export const dynamic = "force-dynamic";
 
+// ── Types ──────────────────────────────────────────────────────────────────
+
+type ProfileRow = {
+  weekly_run_km_target:   number | null;
+  weekly_run_count_target: number | null;
+  weekly_gym_target:      number | null;
+  sex:                    "male" | "female" | null;
+  age:                    number | null;
+  height_cm:              number | null;
+  nutrition_goal_type:    string | null;
+  target_weight:          number | null;
+};
+
+type Intelligence = {
+  readiness:    ReadinessOutput | null;
+  coach:        CoachOutput     | null;
+  hybrid:       HybridScoreOutput;
+  ctl:          number;
+  atl:          number;
+  tsb:          number;
+  goalProgress: GoalProgress;
+  weeklyStats: {
+    readiness: number | null;
+    sessions:  number;
+    avgSleep:  number | null;
+  };
+};
+
+// ── Sub-components ─────────────────────────────────────────────────────────
+
 const QUICK_PROMPTS = [
-  {
-    label: "Recovery",
-    msg: "Pull my last 7 days and tell me how my recovery looks.",
-  },
-  {
-    label: "Train today?",
-    msg: "Look at my recent readiness — should I train hard today or rest?",
-  },
-  {
-    label: "Sleep",
-    msg: "Analyze my sleep trends and how they affect my training.",
-  },
-  {
-    label: "Load vs recovery",
-    msg: "Analyze training load vs recovery scores over 2 weeks.",
-  },
-  {
-    label: "Patterns",
-    msg: "What patterns do you see across sleep, mood, energy, training?",
-  },
+  { label: "Recovery",      msg: "Pull my last 7 days and tell me how my recovery looks." },
+  { label: "Train today?",  msg: "Look at my recent readiness — should I train hard today or rest?" },
+  { label: "Sleep",         msg: "Analyze my sleep trends and how they affect my training." },
+  { label: "Load vs recovery", msg: "Analyze training load vs recovery scores over 2 weeks." },
+  { label: "Patterns",     msg: "What patterns do you see across sleep, mood, energy, training?" },
 ];
 
 const INITIAL_MESSAGE: ChatMessage = {
@@ -40,83 +67,84 @@ const INITIAL_MESSAGE: ChatMessage = {
     "Observer OS loaded. I have access to your data — check-ins, sessions, goals, weight logs. Ask me anything.",
 };
 
-type WeeklyStats = {
-  readiness: number | null;
-  sessions: number;
-  avgSleep: number | null;
-};
-
-function WeeklyStatsBlock({ stats }: { stats: WeeklyStats | null }) {
+function SideLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      <div>
-        <div
-          style={{
-            fontSize: 9,
-            color: "var(--text-dim)",
-            letterSpacing: "0.1em",
-            textTransform: "uppercase",
-            fontFamily: "var(--mono)",
-          }}
-        >
-          Readiness (7d avg)
-        </div>
-        <div
-          style={{
-            fontFamily: "var(--mono)",
-            fontSize: 18,
-            fontWeight: 700,
-            color: "var(--text)",
-          }}
-        >
-          {stats?.readiness != null ? stats.readiness.toFixed(1) : "—"}
-        </div>
+    <div
+      style={{
+        fontSize: 9,
+        color: "var(--text-dim)",
+        letterSpacing: "0.12em",
+        textTransform: "uppercase",
+        fontFamily: "var(--mono)",
+        marginBottom: 8,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function MiniBar({
+  value,
+  color,
+  label,
+}: {
+  value: number;
+  color: string;
+  label: string;
+}) {
+  return (
+    <div>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          marginBottom: 3,
+        }}
+      >
+        <span style={{ fontSize: 10, color: "var(--text-dim)" }}>{label}</span>
+        <span style={{ fontFamily: "var(--mono)", fontSize: 10, color }}>{value}</span>
       </div>
-      <div style={{ display: "flex", gap: 16 }}>
-        <div>
-          <div
-            style={{
-              fontSize: 9,
-              color: "var(--text-dim)",
-              letterSpacing: "0.1em",
-              textTransform: "uppercase",
-              fontFamily: "var(--mono)",
-            }}
-          >
-            Sessions
-          </div>
-          <div
-            style={{
-              fontFamily: "var(--mono)",
-              fontSize: 14,
-              color: "var(--text)",
-            }}
-          >
-            {stats?.sessions ?? "—"}
-          </div>
-        </div>
-        <div>
-          <div
-            style={{
-              fontSize: 9,
-              color: "var(--text-dim)",
-              letterSpacing: "0.1em",
-              textTransform: "uppercase",
-              fontFamily: "var(--mono)",
-            }}
-          >
-            Avg sleep
-          </div>
-          <div
-            style={{
-              fontFamily: "var(--mono)",
-              fontSize: 14,
-              color: "var(--text)",
-            }}
-          >
-            {stats?.avgSleep != null ? `${stats.avgSleep}h` : "—"}
-          </div>
-        </div>
+      <div style={{ height: 3, background: "var(--border2)", borderRadius: 2, overflow: "hidden" }}>
+        <div
+          style={{
+            height: "100%",
+            width: `${Math.min(100, value)}%`,
+            background: color,
+            borderRadius: 2,
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function GoalLine({
+  label,
+  pct,
+  color,
+}: {
+  label: string;
+  pct: number;
+  color: string;
+}) {
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
+        <span style={{ fontSize: 10, color: "var(--text-dim)" }}>{label}</span>
+        <span style={{ fontFamily: "var(--mono)", fontSize: 10, color }}>
+          {Math.round(pct * 100)}%
+        </span>
+      </div>
+      <div style={{ height: 3, background: "var(--border2)", borderRadius: 2, overflow: "hidden" }}>
+        <div
+          style={{
+            height: "100%",
+            width: `${Math.min(100, pct * 100)}%`,
+            background: pct >= 1 ? "var(--green)" : color,
+            borderRadius: 2,
+          }}
+        />
       </div>
     </div>
   );
@@ -159,13 +187,238 @@ function ShortcutButton({
       <Icon size={13} strokeWidth={1.75} />
       {label}
       {highlight && (
-        <span
-          style={{ marginLeft: "auto", fontSize: 9, color: "var(--accent)" }}
-        >
-          Today
-        </span>
+        <span style={{ marginLeft: "auto", fontSize: 9, color: "var(--accent)" }}>Today</span>
       )}
     </button>
+  );
+}
+
+function IntelligencePanel({ intel, loading }: { intel: Intelligence | null; loading: boolean }) {
+  if (loading || !intel) {
+    return (
+      <div style={{ color: "var(--text-dim)", fontFamily: "var(--mono)", fontSize: 11, padding: "12px 0" }}>
+        {loading ? "Loading..." : "—"}
+      </div>
+    );
+  }
+
+  const goalStatusColor: Record<string, string> = {
+    Exceeded: "var(--green)",
+    "On Track": "var(--accent)",
+    Behind: "var(--red)",
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+
+      {/* 1. Readiness */}
+      <div>
+        <SideLabel>Readiness</SideLabel>
+        {intel.readiness ? (
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+              <span
+                style={{
+                  fontFamily: "var(--mono)",
+                  fontSize: 24,
+                  fontWeight: 700,
+                  color: intel.readiness.color,
+                  lineHeight: 1,
+                }}
+              >
+                {intel.readiness.score}
+              </span>
+              <div>
+                <div
+                  style={{
+                    fontFamily: "var(--mono)",
+                    fontSize: 9,
+                    fontWeight: 700,
+                    letterSpacing: "0.1em",
+                    color: intel.readiness.color,
+                  }}
+                >
+                  {intel.readiness.grade}
+                </div>
+                <div style={{ fontSize: 9, color: "var(--text-dim)", marginTop: 1 }}>
+                  {intel.readiness.label}
+                </div>
+              </div>
+            </div>
+            {intel.coach && (
+              <div
+                style={{
+                  fontFamily: "var(--mono)",
+                  fontSize: 9,
+                  color: "var(--accent)",
+                  letterSpacing: "0.04em",
+                  marginTop: 2,
+                }}
+              >
+                Focus: {intel.coach.primaryFocus}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div style={{ fontSize: 10, color: "var(--text-dim)" }}>
+            Log today&apos;s check-in to activate.
+          </div>
+        )}
+      </div>
+
+      <div style={{ height: 1, background: "var(--border2)" }} />
+
+      {/* 2. Training Load */}
+      <div>
+        <SideLabel>Training Load</SideLabel>
+        <div style={{ display: "flex", gap: 10, marginBottom: 8 }}>
+          {[
+            { label: "ATL", value: intel.atl, color: "var(--red)" },
+            { label: "CTL", value: intel.ctl, color: "var(--green)" },
+            { label: "TSB", value: intel.tsb > 0 ? `+${intel.tsb}` : String(intel.tsb), color: "var(--accent)" },
+          ].map(({ label, value, color }) => (
+            <div key={label} style={{ flex: 1, textAlign: "center" }}>
+              <div
+                style={{
+                  fontFamily: "var(--mono)",
+                  fontSize: 16,
+                  fontWeight: 700,
+                  color,
+                  lineHeight: 1,
+                }}
+              >
+                {value}
+              </div>
+              <div style={{ fontSize: 9, color: "var(--text-dim)", marginTop: 3 }}>{label}</div>
+            </div>
+          ))}
+        </div>
+        {intel.coach && (
+          <div
+            style={{
+              fontSize: 10,
+              color: "var(--text-muted)",
+              lineHeight: 1.5,
+              padding: "6px 8px",
+              background: "var(--surface2)",
+              borderRadius: 6,
+            }}
+          >
+            {intel.coach.trainingRecommendation}
+          </div>
+        )}
+      </div>
+
+      <div style={{ height: 1, background: "var(--border2)" }} />
+
+      {/* 3. Goal Progress */}
+      <div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+          <SideLabel>Goal Progress</SideLabel>
+          {intel.coach && (
+            <span
+              style={{
+                fontSize: 8,
+                fontFamily: "var(--mono)",
+                fontWeight: 700,
+                color: goalStatusColor[intel.coach.goalStatus],
+                letterSpacing: "0.08em",
+              }}
+            >
+              {intel.coach.goalStatus.toUpperCase()}
+            </span>
+          )}
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {intel.goalProgress.hasKmGoal && (
+            <GoalLine label="Distance" pct={intel.goalProgress.weeklyKmPct}  color="var(--accent)" />
+          )}
+          {intel.goalProgress.hasRunGoal && (
+            <GoalLine label="Runs"     pct={intel.goalProgress.weeklyRunPct} color="var(--accent)" />
+          )}
+          {intel.goalProgress.hasGymGoal && (
+            <GoalLine label="Gym"      pct={intel.goalProgress.weeklyGymPct} color="var(--purple)" />
+          )}
+          {!intel.goalProgress.hasKmGoal && !intel.goalProgress.hasRunGoal && !intel.goalProgress.hasGymGoal && (
+            <div style={{ fontSize: 10, color: "var(--text-dim)" }}>Set targets in Profile.</div>
+          )}
+        </div>
+        {intel.coach && (
+          <div style={{ fontSize: 10, color: "var(--text-muted)", lineHeight: 1.5, marginTop: 8 }}>
+            {intel.coach.goalRecommendation}
+          </div>
+        )}
+      </div>
+
+      <div style={{ height: 1, background: "var(--border2)" }} />
+
+      {/* 4. Hybrid Athlete Score */}
+      <div>
+        <SideLabel>Hybrid Athlete Score</SideLabel>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 10 }}>
+          <span
+            style={{
+              fontFamily: "var(--mono)",
+              fontSize: 22,
+              fontWeight: 700,
+              color: "var(--accent)",
+              lineHeight: 1,
+            }}
+          >
+            {intel.hybrid.score}
+          </span>
+          <span style={{ fontFamily: "var(--mono)", fontSize: 9, color: "var(--accent)" }}>
+            {intel.hybrid.level}
+          </span>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <MiniBar value={intel.hybrid.components.recovery}    color="var(--green)"  label="Recovery" />
+          <MiniBar value={intel.hybrid.components.training}    color="var(--accent)" label="Training" />
+          <MiniBar value={intel.hybrid.components.nutrition}   color="var(--yellow)" label="Nutrition" />
+          <MiniBar value={intel.hybrid.components.consistency} color="var(--purple)" label="Consistency" />
+        </div>
+      </div>
+
+      <div style={{ height: 1, background: "var(--border2)" }} />
+
+      {/* 5. Weekly Recommendations */}
+      {intel.coach && (
+        <div>
+          <SideLabel>Weekly Recommendations</SideLabel>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {[
+              { tag: "RECOV", text: intel.coach.recoveryRecommendation },
+              { tag: "NUT",   text: intel.coach.nutritionRecommendation },
+            ].map(({ tag, text }) => (
+              <div
+                key={tag}
+                style={{
+                  padding: "7px 8px",
+                  background: "var(--surface2)",
+                  borderRadius: 6,
+                  borderLeft: "2px solid var(--border)",
+                }}
+              >
+                <div
+                  style={{
+                    fontFamily: "var(--mono)",
+                    fontSize: 8,
+                    color: "var(--text-dim)",
+                    letterSpacing: "0.1em",
+                    marginBottom: 3,
+                  }}
+                >
+                  {tag}
+                </div>
+                <div style={{ fontSize: 10, color: "var(--text-muted)", lineHeight: 1.5 }}>
+                  {text}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -176,6 +429,7 @@ function formatPlanAsText(
 ): string {
   const header = `**Training plan — ${focus} focus, ${intensity} intensity**\n\n`;
   const lines = plan
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .map((day: any) => {
       const rpe = day.target_rpe ? ` (RPE ${day.target_rpe})` : "";
       return `**${day.day}** — ${day.title}${rpe}: ${day.description}`;
@@ -184,75 +438,227 @@ function formatPlanAsText(
   return header + lines;
 }
 
-export default function CoachPage() {
-  const sb = createClient();
-  const router = useRouter();
-  const [messages, setMessages] = useState<ChatMessage[]>([INITIAL_MESSAGE]);
-  const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [mounted, setMounted] = useState(false);
-  const [sheetOpen, setSheetOpen] = useState(false);
-  const [weeklyStats, setWeeklyStats] = useState<WeeklyStats | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
-  const todayIsSunday = isSunday();
+// ── Page ───────────────────────────────────────────────────────────────────
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+export default function CoachPage() {
+  const sb     = createClient();
+  const router = useRouter();
+
+  const [messages, setMessages]     = useState<ChatMessage[]>([INITIAL_MESSAGE]);
+  const [input, setInput]           = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
+  const [mounted, setMounted]       = useState(false);
+  const [sheetOpen, setSheetOpen]   = useState(false);
+  const [intel, setIntel]           = useState<Intelligence | null>(null);
+  const [intelLoading, setIntelLoading] = useState(true);
+
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef       = useRef<HTMLTextAreaElement>(null);
+  const todayIsSunday  = isSunday();
+
+  useEffect(() => { setMounted(true); }, []);
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, loading]);
+  }, [messages, chatLoading]);
 
-  const loadWeeklyStats = useCallback(async () => {
-    const {
-      data: { user },
-    } = await sb.auth.getUser();
+  // ── Load all intelligence data ──────────────────────────────────────────
+
+  const loadIntelligence = useCallback(async () => {
+    const { data: { user } } = await sb.auth.getUser();
     if (!user) return;
-    const since = new Date(Date.now() - 7 * 86400000)
-      .toISOString()
-      .split("T")[0];
-    const [{ data: rawLogs }, { data: rawSessions }] = await Promise.all([
-      sb
-        .from("daily_logs")
-        .select("*")
-        .eq("user_id", user.id)
-        .gte("date", since),
-      sb.from("sessions").select("*").eq("user_id", user.id).gte("date", since),
+
+    const todayStr  = new Date().toISOString().split("T")[0];
+    const since7    = new Date(Date.now() -  7 * 86400000).toISOString().split("T")[0];
+    const since14   = new Date(Date.now() - 14 * 86400000).toISOString().split("T")[0];
+    const since90   = new Date(Date.now() - 90 * 86400000).toISOString().split("T")[0];
+    const weekStart = new Date(Date.now() -  7 * 86400000).toISOString().split("T")[0];
+
+    const [
+      { data: rawLogs },
+      { data: rawSessions },
+      { data: rawMetrics },
+      { data: rawProfile },
+      { data: rawRuns },
+      { data: rawWeights },
+    ] = await Promise.all([
+      sb.from("daily_logs").select("*").eq("user_id", user.id).gte("date", since14).order("date", { ascending: false }),
+      sb.from("sessions").select("*").eq("user_id", user.id).gte("date", since14).order("date", { ascending: false }),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (sb as any).from("training_metrics")
+        .select("activity_date, tss, trimp, pace_seconds_per_km, load_score, source")
+        .eq("user_id", user.id).gte("activity_date", since90).order("activity_date"),
+      sb.from("profiles")
+        .select("weekly_run_km_target, weekly_run_count_target, weekly_gym_target, sex, age, height_cm, nutrition_goal_type, target_weight")
+        .eq("user_id", user.id).maybeSingle(),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (sb as any).from("running_activities")
+        .select("distance_meters, moving_time_seconds, activity_date")
+        .eq("user_id", user.id).gte("activity_date", weekStart),
+      sb.from("weight_logs").select("weight").eq("user_id", user.id).order("date", { ascending: false }).limit(1),
     ]);
-    const logs = (rawLogs ?? []) as DailyLog[];
+
+    const logs     = (rawLogs     ?? []) as DailyLog[];
     const sessions = (rawSessions ?? []) as Session[];
-    const avgSleep = logs.length
+    const metrics  = (rawMetrics  ?? []) as TrainingMetricRow[];
+    const profile  = rawProfile as ProfileRow | null;
+    const runs     = (rawRuns ?? []) as Pick<RunningActivity, "distance_meters" | "moving_time_seconds" | "activity_date">[];
+    const weights  = (rawWeights ?? []) as { weight: number }[];
+
+    // Streaks
+    const checkinStreak = calcCheckinStreak(logs);
+    const sessionStreak = calcSessionStreak(sessions);
+
+    // CTL / ATL / TSB
+    const { ctl, atl, tsb } = metrics.length > 0
+      ? computeCTLATLTSB(metrics)
+      : { ctl: 0, atl: 0, tsb: 0 };
+
+    // Today's log
+    const todayLog = logs.find((l) => l.date === todayStr) ?? null;
+
+    // Recovery
+    const recoveryScore = computeRecoveryScore(todayLog, tsb);
+
+    // Goal progress
+    const weekDistM    = runs.reduce((s, r) => s + r.distance_meters, 0);
+    const weekRunCount = runs.length;
+    const weekGymCount = sessions.filter((s) => s.type === "lift" && s.date >= weekStart).length;
+
+    const hasKmGoal  = (profile?.weekly_run_km_target   ?? 0) > 0;
+    const hasRunGoal = (profile?.weekly_run_count_target ?? 0) > 0;
+    const hasGymGoal = (profile?.weekly_gym_target       ?? 0) > 0;
+
+    const goalProgress: GoalProgress = {
+      weeklyKmPct:  hasKmGoal  ? (weekDistM / 1000) / profile!.weekly_run_km_target!   : 0,
+      weeklyRunPct: hasRunGoal ? weekRunCount        / profile!.weekly_run_count_target! : 0,
+      weeklyGymPct: hasGymGoal ? weekGymCount        / profile!.weekly_gym_target!       : 0,
+      hasKmGoal,
+      hasRunGoal,
+      hasGymGoal,
+    };
+
+    // Readiness + coach engine (requires check-in)
+    let readiness: ReadinessOutput | null = null;
+    let coach:     CoachOutput | null     = null;
+    let proteinTarget = 140;
+    let waterTargetMl = 3000;
+
+    const currentWeight = weights[0]?.weight ?? null;
+
+    if (todayLog && recoveryScore !== null) {
+      readiness = computeReadiness(
+        recoveryScore,
+        tsb,
+        todayLog.sleep_quality,
+        todayLog.fatigue,
+        todayLog.energy,
+      );
+
+      if (profile?.sex && profile?.age && profile?.height_cm && currentWeight) {
+        const todaySessions = sessions.filter((s) => s.date === todayStr);
+        const targets = calculateDailyTargets(
+          {
+            sex:       profile.sex as NutritionProfileInputs["sex"],
+            age:       profile.age,
+            height_cm: profile.height_cm,
+            weight_kg: currentWeight,
+            goal_type: (profile.nutrition_goal_type ?? "maintain") as NutritionProfileInputs["goal_type"],
+            target_weight_kg: profile.target_weight ?? null,
+          },
+          todaySessions,
+          readiness.score,
+          false,
+          null,
+        );
+        proteinTarget = targets.protein;
+        waterTargetMl = targets.water;
+      }
+
+      coach = runCoachEngine({
+        recoveryScore,
+        readinessScore: readiness.score,
+        readinessGrade: readiness.grade,
+        ctl,
+        atl,
+        tsb,
+        sleepQuality: todayLog.sleep_quality,
+        energy:       todayLog.energy,
+        mood:         todayLog.mood,
+        fatigue:      todayLog.fatigue,
+        soreness:     todayLog.soreness,
+        goalProgress,
+        proteinTarget,
+        waterTargetMl,
+      });
+    } else {
+      // Goal-only coach output (no check-in)
+      coach = runCoachEngine({
+        recoveryScore:  null,
+        readinessScore: 50,
+        readinessGrade: "YELLOW",
+        ctl,
+        atl,
+        tsb,
+        sleepQuality: 7,
+        energy:       5,
+        mood:         5,
+        fatigue:      5,
+        soreness:     5,
+        goalProgress,
+        proteinTarget,
+        waterTargetMl,
+      });
+    }
+
+    // Hybrid score
+    const hybrid = computeHybridScore(recoveryScore, ctl, null, checkinStreak, sessionStreak);
+
+    // Weekly stats for sheet header
+    const last7Logs = logs.filter((l) => l.date >= since7);
+    const avgSleep = last7Logs.length
+      ? Math.round((last7Logs.reduce((s, l) => s + l.sleep_hours, 0) / last7Logs.length) * 10) / 10
+      : null;
+    const avgReadiness = last7Logs.length
       ? Math.round(
-          (logs.reduce((s, l) => s + l.sleep_hours, 0) / logs.length) * 10,
+          last7Logs.reduce(
+            (s, l) =>
+              s +
+              (l.sleep_quality * 0.3 +
+                l.mood * 0.2 +
+                l.energy * 0.2 +
+                (10 - l.soreness) * 0.15 +
+                (10 - l.fatigue) * 0.15),
+            0,
+          ) / last7Logs.length * 10,
         ) / 10
       : null;
-    const readinessScores = logs.map(
-      (l) =>
-        calcReadiness(l.sleep_quality, l.soreness, l.fatigue, l.mood, l.energy)
-          .score,
-    );
-    const avgReadiness = readinessScores.length
-      ? Math.round(
-          (readinessScores.reduce((s, v) => s + v, 0) /
-            readinessScores.length) *
-            10,
-        ) / 10
-      : null;
-    setWeeklyStats({
-      readiness: avgReadiness,
-      sessions: sessions.length,
-      avgSleep,
+
+    setIntel({
+      readiness,
+      coach,
+      hybrid,
+      ctl,
+      atl,
+      tsb,
+      goalProgress,
+      weeklyStats: {
+        readiness: avgReadiness,
+        sessions:  sessions.length,
+        avgSleep,
+      },
     });
+    setIntelLoading(false);
   }, []);
 
   useEffect(() => {
-    loadWeeklyStats();
-  }, [loadWeeklyStats]);
+    loadIntelligence();
+  }, [loadIntelligence]);
+
+  // ── Chat ───────────────────────────────────────────────────────────────
 
   const sendMessage = useCallback(
     async (text: string) => {
-      if (!text.trim() || loading) return;
+      if (!text.trim() || chatLoading) return;
       const userMsg: ChatMessage = {
         role: "user",
         content: text.trim(),
@@ -261,7 +667,7 @@ export default function CoachPage() {
       const newHistory = [...messages, userMsg];
       setMessages(newHistory);
       setInput("");
-      setLoading(true);
+      setChatLoading(true);
 
       const apiMessages = newHistory
         .filter((m, i) => !(i === 0 && m.role === "assistant"))
@@ -277,11 +683,7 @@ export default function CoachPage() {
         const data = await res.json();
         setMessages((prev) => [
           ...prev,
-          {
-            role: "assistant",
-            content: data.content,
-            timestamp: new Date().toISOString(),
-          },
+          { role: "assistant", content: data.content, timestamp: new Date().toISOString() },
         ]);
       } catch (err) {
         setMessages((prev) => [
@@ -293,27 +695,23 @@ export default function CoachPage() {
           },
         ]);
       } finally {
-        setLoading(false);
+        setChatLoading(false);
         inputRef.current?.focus();
       }
     },
-    [messages, loading],
+    [messages, chatLoading],
   );
 
   async function runWeeklyReview() {
-    if (loading) return;
+    if (chatLoading) return;
     setSheetOpen(false);
     setMessages((prev) => [
       ...prev,
-      {
-        role: "user",
-        content: "Run my weekly review",
-        timestamp: new Date().toISOString(),
-      },
+      { role: "user", content: "Run my weekly review", timestamp: new Date().toISOString() },
     ]);
-    setLoading(true);
+    setChatLoading(true);
     try {
-      const res = await fetch("/api/review", { method: "POST" });
+      const res  = await fetch("/api/review", { method: "POST" });
       const data = await res.json();
       setMessages((prev) => [
         ...prev,
@@ -326,31 +724,23 @@ export default function CoachPage() {
     } catch {
       setMessages((prev) => [
         ...prev,
-        {
-          role: "assistant",
-          content: "Something went wrong generating the review.",
-          timestamp: new Date().toISOString(),
-        },
+        { role: "assistant", content: "Something went wrong generating the review.", timestamp: new Date().toISOString() },
       ]);
     } finally {
-      setLoading(false);
+      setChatLoading(false);
     }
   }
 
   async function runGeneratePlan() {
-    if (loading) return;
+    if (chatLoading) return;
     setSheetOpen(false);
     setMessages((prev) => [
       ...prev,
-      {
-        role: "user",
-        content: "Generate a training plan for this week",
-        timestamp: new Date().toISOString(),
-      },
+      { role: "user", content: "Generate a training plan for this week", timestamp: new Date().toISOString() },
     ]);
-    setLoading(true);
+    setChatLoading(true);
     try {
-      const res = await fetch("/api/coach/quick-plan", { method: "POST" });
+      const res  = await fetch("/api/coach/quick-plan", { method: "POST" });
       const data = await res.json();
       const content = data.error
         ? `Couldn't generate a plan: ${data.error}`
@@ -362,14 +752,10 @@ export default function CoachPage() {
     } catch {
       setMessages((prev) => [
         ...prev,
-        {
-          role: "assistant",
-          content: "Something went wrong generating the plan.",
-          timestamp: new Date().toISOString(),
-        },
+        { role: "assistant", content: "Something went wrong generating the plan.", timestamp: new Date().toISOString() },
       ]);
     } finally {
-      setLoading(false);
+      setChatLoading(false);
     }
   }
 
@@ -387,19 +773,15 @@ export default function CoachPage() {
 
   function formatTime(iso?: string) {
     if (!iso || !mounted) return "";
-    return new Date(iso).toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    });
+    return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
   }
 
   function formatContent(content: string) {
     if (!content) return "";
-    return content
-      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-      .replace(/\n/g, "<br>");
+    return content.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/\n/g, "<br>");
   }
+
+  // ── Render ─────────────────────────────────────────────────────────────
 
   return (
     <>
@@ -407,7 +789,18 @@ export default function CoachPage() {
         .coach-root { display: flex; flex-direction: column; width: 100%; height: calc(100vh - 80px); overflow: hidden; }
         .coach-body { display: flex; flex: 1; min-height: 0; gap: 16px; }
         .coach-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-        .coach-sidebar { width: 220px; flex-shrink: 0; display: flex; flex-direction: column; gap: 16px; }
+        .coach-sidebar {
+          width: 260px; flex-shrink: 0; display: flex; flex-direction: column; gap: 0;
+          background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+          overflow: hidden;
+        }
+        .coach-sidebar-scroll {
+          flex: 1; overflow-y: auto; padding: 14px;
+        }
+        .coach-sidebar-actions {
+          padding: 10px 14px; border-top: 1px solid var(--border2);
+          display: flex; flex-direction: column; gap: 6px;
+        }
         .coach-mobile-toggle { display: none; }
         .coach-prompts { flex-shrink: 0; overflow-x: auto; margin-bottom: 10px; padding-bottom: 2px; }
         @media (max-width: 768px) {
@@ -422,6 +815,7 @@ export default function CoachPage() {
       `}</style>
 
       <div className="coach-root">
+        {/* Header */}
         <div style={{ flexShrink: 0, marginBottom: 10 }}>
           <div
             style={{
@@ -434,19 +828,10 @@ export default function CoachPage() {
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div
-                style={{
-                  fontFamily: "var(--mono)",
-                  fontSize: 18,
-                  fontWeight: 700,
-                  color: "var(--text)",
-                }}
-              >
+              <div style={{ fontFamily: "var(--mono)", fontSize: 18, fontWeight: 700, color: "var(--text)" }}>
                 AI COACH
               </div>
-              {todayIsSunday && (
-                <Badge color="var(--accent)">Weekly review day</Badge>
-              )}
+              {todayIsSunday && <Badge color="var(--accent)">Weekly review day</Badge>}
             </div>
             <button
               className="coach-mobile-toggle"
@@ -468,11 +853,10 @@ export default function CoachPage() {
               Stats
             </button>
           </div>
-          <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
-            Groq · llama-3.3-70b
-          </div>
+          <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Groq · llama-3.3-70b</div>
         </div>
 
+        {/* Quick prompts */}
         {messages.length <= 1 && (
           <div className="coach-prompts">
             <div style={{ display: "flex", gap: 6, width: "max-content" }}>
@@ -481,14 +865,14 @@ export default function CoachPage() {
                   key={qp.label}
                   className="coach-prompt-btn"
                   onClick={() => sendMessage(qp.msg)}
-                  disabled={loading}
+                  disabled={chatLoading}
                   style={{
                     padding: "6px 14px",
                     border: "1px solid var(--border)",
                     fontSize: 12,
-                    color: loading ? "var(--text-dim)" : "var(--text-muted)",
+                    color: chatLoading ? "var(--text-dim)" : "var(--text-muted)",
                     background: "var(--surface2)",
-                    cursor: loading ? "not-allowed" : "pointer",
+                    cursor: chatLoading ? "not-allowed" : "pointer",
                     whiteSpace: "nowrap",
                     borderRadius: 8,
                     transition: "all 0.15s ease",
@@ -502,6 +886,7 @@ export default function CoachPage() {
         )}
 
         <div className="coach-body">
+          {/* Chat */}
           <div className="coach-main">
             <div
               className="coach-messages"
@@ -533,10 +918,7 @@ export default function CoachPage() {
                       padding: "10px 14px",
                       fontSize: 13,
                       lineHeight: 1.65,
-                      background:
-                        msg.role === "user"
-                          ? "var(--accent-dim)"
-                          : "var(--surface2)",
+                      background: msg.role === "user" ? "var(--accent-dim)" : "var(--surface2)",
                       border: `1px solid ${msg.role === "user" ? "var(--accent)" : "var(--border2)"}`,
                       color: "var(--text)",
                       borderRadius: 10,
@@ -544,9 +926,7 @@ export default function CoachPage() {
                       wordBreak: "break-word",
                       maxWidth: "100%",
                     }}
-                    dangerouslySetInnerHTML={{
-                      __html: formatContent(msg.content),
-                    }}
+                    dangerouslySetInnerHTML={{ __html: formatContent(msg.content) }}
                   />
                   <div
                     style={{
@@ -561,15 +941,9 @@ export default function CoachPage() {
                   </div>
                 </div>
               ))}
-              {loading && (
+              {chatLoading && (
                 <div style={{ alignSelf: "flex-start", maxWidth: "85%" }}>
-                  <div
-                    style={{
-                      background: "var(--surface2)",
-                      border: "1px solid var(--border)",
-                      borderRadius: 10,
-                    }}
-                  >
+                  <div style={{ background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 10 }}>
                     <TypingDots />
                   </div>
                 </div>
@@ -593,7 +967,7 @@ export default function CoachPage() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                disabled={loading}
+                disabled={chatLoading}
                 rows={2}
                 placeholder="Ask the coach..."
                 style={{
@@ -613,19 +987,15 @@ export default function CoachPage() {
               />
               <button
                 onClick={() => sendMessage(input)}
-                disabled={loading || !input.trim()}
+                disabled={chatLoading || !input.trim()}
                 style={{
                   padding: "0 20px",
-                  background:
-                    loading || !input.trim()
-                      ? "var(--surface2)"
-                      : "var(--accent)",
-                  color:
-                    loading || !input.trim() ? "var(--text-dim)" : "var(--bg)",
+                  background: chatLoading || !input.trim() ? "var(--surface2)" : "var(--accent)",
+                  color: chatLoading || !input.trim() ? "var(--text-dim)" : "var(--bg)",
                   fontWeight: 700,
                   fontSize: 20,
                   border: "none",
-                  cursor: loading || !input.trim() ? "not-allowed" : "pointer",
+                  cursor: chatLoading || !input.trim() ? "not-allowed" : "pointer",
                 }}
               >
                 ↑
@@ -633,54 +1003,57 @@ export default function CoachPage() {
             </div>
           </div>
 
+          {/* Intelligence Sidebar */}
           <div className="coach-sidebar">
             <div
               style={{
-                background: "var(--surface)",
-                border: "1px solid var(--border)",
-                borderRadius: 12,
-                padding: 14,
+                padding: "12px 14px 10px",
+                borderBottom: "1px solid var(--border2)",
+                flexShrink: 0,
               }}
             >
               <div
                 style={{
-                  fontSize: 9,
-                  color: "var(--text-muted)",
-                  letterSpacing: "0.1em",
-                  textTransform: "uppercase",
                   fontFamily: "var(--mono)",
-                  marginBottom: 10,
+                  fontSize: 9,
+                  fontWeight: 700,
+                  letterSpacing: "0.16em",
+                  textTransform: "uppercase",
+                  color: "var(--text-muted)",
                 }}
               >
-                This Week
+                Intelligence Panel
               </div>
-              <WeeklyStatsBlock stats={weeklyStats} />
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div className="coach-sidebar-scroll">
+              <IntelligencePanel intel={intel} loading={intelLoading} />
+            </div>
+            <div className="coach-sidebar-actions">
               <ShortcutButton
                 icon={BarChart2}
                 label="Weekly review"
                 onClick={runWeeklyReview}
-                disabled={loading}
+                disabled={chatLoading}
                 highlight={todayIsSunday}
               />
               <ShortcutButton
                 icon={CalendarDays}
                 label="Generate plan"
                 onClick={runGeneratePlan}
-                disabled={loading}
+                disabled={chatLoading}
               />
               <ShortcutButton
                 icon={Target}
                 label="Set a goal"
                 onClick={goToSetGoal}
-                disabled={loading}
+                disabled={chatLoading}
               />
             </div>
           </div>
         </div>
       </div>
 
+      {/* Mobile sheet */}
       {sheetOpen && (
         <div
           onClick={() => setSheetOpen(false)}
@@ -703,6 +1076,8 @@ export default function CoachPage() {
               borderTop: "1px solid var(--border)",
               borderRadius: "20px 20px 0 0",
               padding: "20px 16px",
+              maxHeight: "80vh",
+              overflowY: "auto",
               animation: "slideUp 0.2s cubic-bezier(0.34,1.56,0.64,1)",
             }}
           >
@@ -715,28 +1090,26 @@ export default function CoachPage() {
                 margin: "0 auto 16px",
               }}
             />
-            <div style={{ marginBottom: 16 }}>
-              <WeeklyStatsBlock stats={weeklyStats} />
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <IntelligencePanel intel={intel} loading={intelLoading} />
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 16 }}>
               <ShortcutButton
                 icon={BarChart2}
                 label="Weekly review"
                 onClick={runWeeklyReview}
-                disabled={loading}
+                disabled={chatLoading}
                 highlight={todayIsSunday}
               />
               <ShortcutButton
                 icon={CalendarDays}
                 label="Generate plan"
                 onClick={runGeneratePlan}
-                disabled={loading}
+                disabled={chatLoading}
               />
               <ShortcutButton
                 icon={Target}
                 label="Set a goal"
                 onClick={goToSetGoal}
-                disabled={loading}
+                disabled={chatLoading}
               />
             </div>
           </div>

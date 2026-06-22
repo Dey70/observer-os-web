@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import {
   calcDashboardStats,
@@ -20,49 +20,179 @@ import {
   Input,
   EmptyState,
 } from "@/components/ui";
-import { formatDistance, formatDuration as fmtDur, formatPace, activityTypeLabel, activityTypeColor } from "@/lib/strava";
-import { computeRecoveryScore, getRecoveryStatus, getRecoveryBanner } from "@/lib/recoveryScore";
+import {
+  formatDistance,
+  formatDuration as fmtDur,
+  formatPace,
+  activityTypeLabel,
+  activityTypeColor,
+} from "@/lib/strava";
+import {
+  computeRecoveryScore,
+  getRecoveryStatus,
+  getRecoveryBanner,
+} from "@/lib/recoveryScore";
 import { computeCTLATLTSB } from "@/lib/trainingLoad";
 import type { TrainingMetricRow } from "@/lib/trainingLoad";
-import type { DailyLog, Session, WeightLog, DashboardStats, RunningActivity } from "@/types";
+import { computeReadiness } from "@/lib/readiness";
+import type { ReadinessOutput } from "@/lib/readiness";
+import { runCoachEngine } from "@/lib/coachEngine";
+import type { CoachOutput } from "@/lib/coachEngine";
+import { computeHybridScore } from "@/lib/hybridScore";
+import type { HybridScoreOutput } from "@/lib/hybridScore";
+import { calculateDailyTargets } from "@/lib/nutritionEngine";
+import type { NutritionProfileInputs } from "@/lib/nutritionEngine";
+import type {
+  DailyLog,
+  Session,
+  WeightLog,
+  DashboardStats,
+  RunningActivity,
+} from "@/types";
 
 export const dynamic = "force-dynamic";
 
+type ProfileRow = {
+  weekly_run_km_target:  number;
+  weekly_run_count_target: number;
+  weekly_gym_target:     number;
+  sex:                   "male" | "female" | null;
+  age:                   number | null;
+  height_cm:             number | null;
+  nutrition_goal_type:   string | null;
+  target_weight:         number | null;
+  threshold_pace_seconds: number | null;
+};
+
+// ── Reusable sub-components ────────────────────────────────────────────────
+
+function RecRow({
+  icon,
+  text,
+}: {
+  icon: string;
+  text: string;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "flex-start",
+        gap: 10,
+        padding: "8px 0",
+        borderBottom: "1px solid var(--border2)",
+      }}
+    >
+      <span
+        style={{
+          fontFamily: "var(--mono)",
+          fontSize: 10,
+          color: "var(--text-dim)",
+          letterSpacing: "0.06em",
+          flexShrink: 0,
+          paddingTop: 1,
+        }}
+      >
+        {icon}
+      </span>
+      <span style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.55 }}>
+        {text}
+      </span>
+    </div>
+  );
+}
+
+function GoalBar({
+  label,
+  current,
+  target,
+  color,
+}: {
+  label: string;
+  current: number | string;
+  target: number | string;
+  color: string;
+}) {
+  const pct = Math.min(
+    1,
+    typeof current === "number" && typeof target === "number" && target > 0
+      ? current / target
+      : 0,
+  );
+  const done = pct >= 1;
+  return (
+    <div>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          marginBottom: 6,
+        }}
+      >
+        <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{label}</span>
+        <span
+          style={{
+            fontFamily: "var(--mono)",
+            fontSize: 12,
+            color: done ? color : "var(--text)",
+          }}
+        >
+          {current} / {target}
+          {typeof current === "number" && typeof target === "string" ? "" : ""}
+        </span>
+      </div>
+      <div
+        style={{
+          height: 6,
+          background: "var(--border2)",
+          borderRadius: 3,
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            height: "100%",
+            width: `${pct * 100}%`,
+            background: done ? "var(--green)" : color,
+            borderRadius: 3,
+            transition: "width 0.4s ease",
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+// ── Page ───────────────────────────────────────────────────────────────────
+
 export default function DashboardPage() {
   const sb = createClient();
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [logs, setLogs] = useState<DailyLog[]>([]);
-  const [sessions, setSessions] = useState<Session[]>([]);
-  const [weights, setWeights] = useState<WeightLog[]>([]);
+  const [stats, setStats]               = useState<DashboardStats | null>(null);
+  const [logs, setLogs]                 = useState<DailyLog[]>([]);
+  const [sessions, setSessions]         = useState<Session[]>([]);
+  const [weights, setWeights]           = useState<WeightLog[]>([]);
   const [checkinStreak, setCheckinStreak] = useState(0);
   const [sessionStreak, setSessionStreak] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [weightInput, setWeightInput] = useState("");
+  const [loading, setLoading]           = useState(true);
+  const [weightInput, setWeightInput]   = useState("");
   const [savingWeight, setSavingWeight] = useState(false);
-  const [weekRuns, setWeekRuns] = useState<RunningActivity[]>([]);
+  const [weekRuns, setWeekRuns]         = useState<RunningActivity[]>([]);
   const [recentActivities, setRecentActivities] = useState<RunningActivity[]>([]);
-  const [stravaConnected, setStravaConnected] = useState(false);
-  const [trainingMetrics, setTrainingMetrics] = useState<TrainingMetricRow[]>([]);
+  const [stravaConnected, setStravaConnected]   = useState(false);
+  const [trainingMetrics, setTrainingMetrics]   = useState<TrainingMetricRow[]>([]);
   const [todayNetCals, setTodayNetCals] = useState<{ eaten: number; burned: number } | null>(null);
-  const [profile, setProfile] = useState<{
-    weekly_run_km_target: number;
-    weekly_run_count_target: number;
-    weekly_gym_target: number;
-  } | null>(null);
+  const [profile, setProfile]           = useState<ProfileRow | null>(null);
 
   const load = useCallback(async () => {
     const {
       data: { user },
     } = await sb.auth.getUser();
     if (!user) return;
-    const since = getLast14Days();
-    // Rolling 7-day window so a Sunday run is never dropped when viewed on Monday.
-    const weekStart = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-      .toISOString()
-      .split("T")[0];
-    const metrics42Since = new Date(Date.now() - 90 * 86400000).toISOString().split("T")[0];
 
-    const todayStr2 = new Date().toISOString().split("T")[0];
+    const since        = getLast14Days();
+    const weekStart    = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+    const metrics90Since = new Date(Date.now() - 90 * 86400000).toISOString().split("T")[0];
+    const todayStr2    = new Date().toISOString().split("T")[0];
 
     const [
       { data: l },
@@ -74,59 +204,35 @@ export default function DashboardPage() {
       { data: profileData },
       { data: nutData },
     ] = await Promise.all([
-      sb
-        .from("daily_logs")
-        .select("*")
-        .eq("user_id", user.id)
-        .gte("date", since)
-        .order("date"),
-      sb
-        .from("sessions")
-        .select("*")
-        .eq("user_id", user.id)
-        .gte("date", since)
-        .order("date", { ascending: false }),
-      sb
-        .from("weight_logs")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("date", { ascending: false })
-        .limit(14),
-      (sb as any)
-        .from("running_activities")
-        .select("*")
-        .eq("user_id", user.id)
-        .gte("activity_date", weekStart)
-        .order("activity_date", { ascending: false }),
-      (sb as any)
-        .from("running_activities")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("activity_date", { ascending: false })
-        .limit(5),
+      sb.from("daily_logs").select("*").eq("user_id", user.id).gte("date", since).order("date"),
+      sb.from("sessions").select("*").eq("user_id", user.id).gte("date", since).order("date", { ascending: false }),
+      sb.from("weight_logs").select("*").eq("user_id", user.id).order("date", { ascending: false }).limit(14),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (sb as any).from("running_activities").select("*").eq("user_id", user.id).gte("activity_date", weekStart).order("activity_date", { ascending: false }),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (sb as any).from("running_activities").select("*").eq("user_id", user.id).order("activity_date", { ascending: false }).limit(5),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (sb as any)
         .from("training_metrics")
         .select("activity_date, tss, trimp, pace_seconds_per_km, load_score, source")
         .eq("user_id", user.id)
-        .gte("activity_date", metrics42Since)
+        .gte("activity_date", metrics90Since)
         .order("activity_date"),
       sb
         .from("profiles")
-        .select("weekly_run_km_target, weekly_run_count_target, weekly_gym_target")
+        .select(
+          "weekly_run_km_target, weekly_run_count_target, weekly_gym_target, sex, age, height_cm, nutrition_goal_type, target_weight, threshold_pace_seconds",
+        )
         .eq("user_id", user.id)
         .maybeSingle(),
-      sb
-        .from("nutrition_logs")
-        .select("calories")
-        .eq("user_id", user.id)
-        .eq("date", todayStr2),
+      sb.from("nutrition_logs").select("calories").eq("user_id", user.id).eq("date", todayStr2),
     ]);
 
-    const logsData = (l ?? []) as DailyLog[];
-    const sessData = (s ?? []) as Session[];
-    const wData = (w ?? []) as WeightLog[];
-    const runsData = (runs ?? []) as RunningActivity[];
-    const recentData = (recent ?? []) as RunningActivity[];
+    const logsData    = (l      ?? []) as DailyLog[];
+    const sessData    = (s      ?? []) as Session[];
+    const wData       = (w      ?? []) as WeightLog[];
+    const runsData    = (runs   ?? []) as RunningActivity[];
+    const recentData  = (recent ?? []) as RunningActivity[];
 
     setLogs(logsData);
     setSessions(sessData);
@@ -135,11 +241,11 @@ export default function DashboardPage() {
     setRecentActivities(recentData);
     setStravaConnected(recentData.length > 0);
     setTrainingMetrics((metricsData ?? []) as TrainingMetricRow[]);
-    setProfile(profileData as typeof profile);
+    setProfile(profileData as ProfileRow | null);
 
     const nutRows = (nutData ?? []) as { calories: number }[];
-    const eaten = nutRows.reduce((sum, r) => sum + (r.calories ?? 0), 0);
-    const burned = (sessData as { calories_burned?: number | null; date: string }[])
+    const eaten   = nutRows.reduce((sum, r) => sum + (r.calories ?? 0), 0);
+    const burned  = (sessData as { calories_burned?: number | null; date: string }[])
       .filter((s) => s.date === todayStr2 && s.calories_burned)
       .reduce((sum, s) => sum + (s.calories_burned ?? 0), 0);
     setTodayNetCals(nutRows.length > 0 || burned > 0 ? { eaten, burned } : null);
@@ -151,6 +257,7 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
   }, [load]);
 
@@ -161,72 +268,140 @@ export default function DashboardPage() {
     const {
       data: { user },
     } = await sb.auth.getUser();
-    if (!user) {
-      setSavingWeight(false);
-      return;
-    }
+    if (!user) { setSavingWeight(false); return; }
     const todayStr = new Date().toISOString().split("T")[0];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (sb as any)
       .from("weight_logs")
-      .upsert(
-        { user_id: user.id, date: todayStr, weight: val },
-        { onConflict: "user_id,date" },
-      );
+      .upsert({ user_id: user.id, date: todayStr, weight: val }, { onConflict: "user_id,date" });
     setWeightInput("");
     setSavingWeight(false);
     load();
   }
 
-  const weekStartDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-  const todayStr = new Date().toISOString().split("T")[0];
-  const todayLog = logs.find((l) => l.date === todayStr) ?? null;
-  const { tsb } = trainingMetrics.length > 0 ? computeCTLATLTSB(trainingMetrics) : { tsb: 0 };
-  const recoveryScore = computeRecoveryScore(todayLog, tsb);
+  // ── Derived values ──────────────────────────────────────────────────────
+
+  const todayStr      = useMemo(() => new Date().toISOString().split("T")[0], []);
+  const weekStartDate = useMemo(
+    () => {
+      // eslint-disable-next-line react-hooks/purity
+      return new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+    },
+    [],
+  );
+  const todayLog      = logs.find((l) => l.date === todayStr) ?? null;
+
+  const { tsb, ctl, atl } = trainingMetrics.length > 0
+    ? computeCTLATLTSB(trainingMetrics)
+    : { tsb: 0, ctl: 0, atl: 0 };
+
+  const recoveryScore  = computeRecoveryScore(todayLog, tsb);
   const recoveryStatus = recoveryScore !== null ? getRecoveryStatus(recoveryScore) : null;
   const recoveryBanner = getRecoveryBanner(todayLog, recoveryScore);
 
-  const weekDistM = weekRuns.reduce((s, r) => s + r.distance_meters, 0);
+  const weekDistM  = weekRuns.reduce((s, r) => s + r.distance_meters, 0);
   const weekGymCount = sessions.filter((s) => s.type === "lift" && s.date >= weekStartDate).length;
 
+  // Readiness + coach engine (require today's check-in)
+  let readinessOutput: ReadinessOutput | null = null;
+  let coachOutput:     CoachOutput     | null = null;
+  let hybridOutput:    HybridScoreOutput      = computeHybridScore(recoveryScore, ctl, null, checkinStreak, sessionStreak);
+
+  if (todayLog && recoveryScore !== null) {
+    readinessOutput = computeReadiness(
+      recoveryScore,
+      tsb,
+      todayLog.sleep_quality,
+      todayLog.fatigue,
+      todayLog.energy,
+    );
+
+    // Nutrition targets for rec text
+    const currentWeight = weights[0]?.weight ?? null;
+    let proteinTarget   = 140;
+    let waterTargetMl   = 3000;
+
+    if (
+      profile?.sex &&
+      profile?.age &&
+      profile?.height_cm &&
+      currentWeight
+    ) {
+      const todaySessions = sessions.filter((s) => s.date === todayStr);
+      const targets = calculateDailyTargets(
+        {
+          sex:              profile.sex as NutritionProfileInputs["sex"],
+          age:              profile.age,
+          height_cm:        profile.height_cm,
+          weight_kg:        currentWeight,
+          goal_type:        (profile.nutrition_goal_type ?? "maintain") as NutritionProfileInputs["goal_type"],
+          target_weight_kg: profile.target_weight ?? null,
+        },
+        todaySessions,
+        readinessOutput?.score ?? null,
+        false,
+        null,
+      );
+      proteinTarget = targets.protein;
+      waterTargetMl = targets.water;
+    }
+
+    const hasKmGoal  = (profile?.weekly_run_km_target  ?? 0) > 0;
+    const hasRunGoal = (profile?.weekly_run_count_target ?? 0) > 0;
+    const hasGymGoal = (profile?.weekly_gym_target       ?? 0) > 0;
+
+    coachOutput = runCoachEngine({
+      recoveryScore,
+      readinessScore: readinessOutput.score,
+      readinessGrade: readinessOutput.grade,
+      ctl,
+      atl,
+      tsb,
+      sleepQuality: todayLog.sleep_quality,
+      energy:       todayLog.energy,
+      mood:         todayLog.mood,
+      fatigue:      todayLog.fatigue,
+      soreness:     todayLog.soreness,
+      goalProgress: {
+        weeklyKmPct:  hasKmGoal  ? (weekDistM / 1000) / profile!.weekly_run_km_target  : 0,
+        weeklyRunPct: hasRunGoal ? weekRuns.length    / profile!.weekly_run_count_target : 0,
+        weeklyGymPct: hasGymGoal ? weekGymCount       / profile!.weekly_gym_target       : 0,
+        hasKmGoal,
+        hasRunGoal,
+        hasGymGoal,
+      },
+      proteinTarget,
+      waterTargetMl,
+    });
+
+    hybridOutput = computeHybridScore(recoveryScore, ctl, null, checkinStreak, sessionStreak);
+  }
+
   const typeColor: Record<string, string> = {
-    run: "var(--green)",
-    lift: "var(--purple)",
-    study: "var(--yellow)",
+    run: "var(--green)", lift: "var(--purple)", study: "var(--yellow)",
   };
-  const sleepChartData = logs.map((l) => ({
-    label: l.date.slice(5),
-    value: l.sleep_hours,
-  }));
-  const moodChartData = logs.map((l) => ({
-    label: l.date.slice(5),
-    value: l.mood,
-  }));
-  const energyChartData = logs.map((l) => ({
-    label: l.date.slice(5),
-    value: l.energy,
-  }));
-  const weightChartData = [...weights]
-    .reverse()
-    .map((w) => ({ label: w.date.slice(5), value: w.weight }));
-  const weightMax = weights.length
-    ? Math.max(...weights.map((w) => w.weight)) + 1
-    : 100;
+
+  const sleepChartData  = logs.map((l) => ({ label: l.date.slice(5), value: l.sleep_hours }));
+  const moodChartData   = logs.map((l) => ({ label: l.date.slice(5), value: l.mood }));
+  const energyChartData = logs.map((l) => ({ label: l.date.slice(5), value: l.energy }));
+  const weightChartData = [...weights].reverse().map((w) => ({ label: w.date.slice(5), value: w.weight }));
+  const weightMax       = weights.length ? Math.max(...weights.map((w) => w.weight)) + 1 : 100;
 
   function streakLabel(n: number) {
     return n === 0 ? "—" : n >= 3 ? `🔥 ${n}` : `${n}`;
   }
 
+  const goalStatusColor: Record<string, string> = {
+    "Exceeded":  "var(--green)",
+    "On Track":  "var(--accent)",
+    "Behind":    "var(--red)",
+  };
+
   if (loading)
     return (
       <div>
         <PageHeader title="DASHBOARD" subtitle="Last 14 days" />
-        <div
-          style={{
-            color: "var(--text-muted)",
-            fontFamily: "var(--mono)",
-            fontSize: 13,
-          }}
-        >
+        <div style={{ color: "var(--text-muted)", fontFamily: "var(--mono)", fontSize: 13 }}>
           Loading...
         </div>
       </div>
@@ -265,24 +440,169 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {/* ── OBSERVER COACH CARD ── */}
+      {coachOutput && readinessOutput ? (
+        <div
+          style={{
+            marginBottom: 16,
+            background: "var(--surface)",
+            border: `1px solid ${readinessOutput.color}`,
+            borderRadius: 12,
+            overflow: "hidden",
+          }}
+        >
+          {/* Header */}
+          <div
+            style={{
+              padding: "14px 20px",
+              borderBottom: "1px solid var(--border2)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
+              flexWrap: "wrap",
+            }}
+          >
+            <div
+              style={{
+                fontFamily: "var(--mono)",
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: "0.18em",
+                textTransform: "uppercase",
+                color: "var(--text-muted)",
+              }}
+            >
+              Observer Coach
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div
+                style={{
+                  fontFamily: "var(--mono)",
+                  fontSize: 24,
+                  fontWeight: 700,
+                  color: readinessOutput.color,
+                  lineHeight: 1,
+                }}
+              >
+                {readinessOutput.score}
+                <span
+                  style={{ fontSize: 11, fontWeight: 400, color: "var(--text-dim)", marginLeft: 2 }}
+                >
+                  /100
+                </span>
+              </div>
+              <div
+                style={{
+                  padding: "3px 10px",
+                  borderRadius: 4,
+                  border: `1px solid ${readinessOutput.color}`,
+                  fontFamily: "var(--mono)",
+                  fontSize: 9,
+                  fontWeight: 700,
+                  letterSpacing: "0.12em",
+                  color: readinessOutput.color,
+                }}
+              >
+                {readinessOutput.grade}
+              </div>
+            </div>
+          </div>
+
+          {/* Body */}
+          <div style={{ padding: "14px 20px" }}>
+            {/* Focus + label */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                marginBottom: 14,
+              }}
+            >
+              <span
+                style={{
+                  fontSize: 9,
+                  fontFamily: "var(--mono)",
+                  color: "var(--text-dim)",
+                  letterSpacing: "0.1em",
+                  textTransform: "uppercase",
+                }}
+              >
+                Focus
+              </span>
+              <span
+                style={{
+                  fontFamily: "var(--mono)",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: readinessOutput.color,
+                  letterSpacing: "0.04em",
+                }}
+              >
+                {coachOutput.primaryFocus}
+              </span>
+              <span
+                style={{
+                  marginLeft: "auto",
+                  fontSize: 10,
+                  color: "var(--text-dim)",
+                  fontFamily: "var(--mono)",
+                }}
+              >
+                {readinessOutput.label}
+              </span>
+            </div>
+
+            {/* Three recommendations */}
+            <div>
+              <RecRow icon="TRAIN" text={coachOutput.trainingRecommendation} />
+              <RecRow icon="RECOV" text={coachOutput.recoveryRecommendation} />
+              <div style={{ paddingTop: 8 }}>
+                <RecRow icon="NUT  " text={coachOutput.nutritionRecommendation} />
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* No check-in nudge */
+        !todayLog && (
+          <div
+            style={{
+              marginBottom: 16,
+              padding: "16px 20px",
+              background: "var(--surface)",
+              border: "1px solid var(--border)",
+              borderRadius: 12,
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+            }}
+          >
+            <div
+              style={{
+                fontFamily: "var(--mono)",
+                fontSize: 10,
+                letterSpacing: "0.15em",
+                textTransform: "uppercase",
+                color: "var(--text-muted)",
+              }}
+            >
+              Observer Coach
+            </div>
+            <span style={{ fontSize: 12, color: "var(--text-dim)" }}>
+              Log today&apos;s check-in to activate coaching recommendations.
+            </span>
+          </div>
+        )
+      )}
+
       {/* Main stats — 2 cols on mobile, 4 on desktop */}
       <div className="grid-4" style={{ marginBottom: 12 }}>
-        <StatCard value={stats?.avgSleep ?? "—"} label="Avg Sleep (hrs)" />
-        <StatCard
-          value={stats?.avgMood ?? "—"}
-          label="Avg Mood"
-          color="var(--yellow)"
-        />
-        <StatCard
-          value={stats?.avgEnergy ?? "—"}
-          label="Avg Energy"
-          color="var(--green)"
-        />
-        <StatCard
-          value={stats?.totalSessions ?? 0}
-          label="Sessions"
-          color="var(--accent)"
-        />
+        <StatCard value={stats?.avgSleep ?? "—"}    label="Avg Sleep (hrs)" />
+        <StatCard value={stats?.avgMood  ?? "—"}    label="Avg Mood"   color="var(--yellow)" />
+        <StatCard value={stats?.avgEnergy ?? "—"}   label="Avg Energy" color="var(--green)" />
+        <StatCard value={stats?.totalSessions ?? 0} label="Sessions"   color="var(--accent)" />
       </div>
 
       {/* Second row */}
@@ -296,16 +616,8 @@ export default function DashboardPage() {
           value={`${stats?.sessionsByType.run ?? 0}/${stats?.sessionsByType.lift ?? 0}/${stats?.sessionsByType.study ?? 0}`}
           label="Run/Lift/Study"
         />
-        <StatCard
-          value={streakLabel(checkinStreak)}
-          label="Check-in Streak"
-          color="var(--red)"
-        />
-        <StatCard
-          value={streakLabel(sessionStreak)}
-          label="Session Streak"
-          color="var(--red)"
-        />
+        <StatCard value={streakLabel(checkinStreak)} label="Check-in Streak" color="var(--red)" />
+        <StatCard value={streakLabel(sessionStreak)} label="Session Streak"  color="var(--red)" />
       </div>
 
       {/* Recovery Score */}
@@ -361,7 +673,14 @@ export default function DashboardPage() {
               {recoveryStatus.description}
             </div>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", justifyContent: "flex-end", alignItems: "flex-end" }}>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "flex-end",
+              alignItems: "flex-end",
+            }}
+          >
             <div
               style={{
                 width: 6,
@@ -388,29 +707,35 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Net Calories — only shown when nutrition or burned data exists today */}
-      {todayNetCals !== null && (() => {
-        const net = todayNetCals.eaten - todayNetCals.burned;
-        const netColor = net > 300 ? "var(--yellow)" : net < -300 ? "var(--red)" : "var(--green)";
-        return (
-          <Card style={{ marginBottom: 16 }}>
-            <SectionLabel>Net Calories · Today</SectionLabel>
-            <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
-              <div style={{ flex: "1 1 100px" }}>
-                <StatCard value={Math.round(todayNetCals.eaten)} label="Eaten" color="var(--yellow)" />
+      {/* Net Calories */}
+      {todayNetCals !== null &&
+        (() => {
+          const net      = todayNetCals.eaten - todayNetCals.burned;
+          const netColor =
+            net > 300 ? "var(--yellow)" : net < -300 ? "var(--red)" : "var(--green)";
+          return (
+            <Card style={{ marginBottom: 16 }}>
+              <SectionLabel>Net Calories · Today</SectionLabel>
+              <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+                <div style={{ flex: "1 1 100px" }}>
+                  <StatCard value={Math.round(todayNetCals.eaten)} label="Eaten"  color="var(--yellow)" />
+                </div>
+                <div style={{ flex: "1 1 100px" }}>
+                  <StatCard value={Math.round(todayNetCals.burned)} label="Burned" color="var(--red)" />
+                </div>
+                <div style={{ flex: "1 1 100px" }}>
+                  <StatCard
+                    value={net > 0 ? `+${Math.round(net)}` : String(Math.round(net))}
+                    label="Net"
+                    color={netColor}
+                  />
+                </div>
               </div>
-              <div style={{ flex: "1 1 100px" }}>
-                <StatCard value={Math.round(todayNetCals.burned)} label="Burned" color="var(--red)" />
-              </div>
-              <div style={{ flex: "1 1 100px" }}>
-                <StatCard value={net > 0 ? `+${Math.round(net)}` : String(Math.round(net))} label="Net" color={netColor} />
-              </div>
-            </div>
-          </Card>
-        );
-      })()}
+            </Card>
+          );
+        })()}
 
-      {/* Running Summary — only shown when Strava activities exist */}
+      {/* Running Summary */}
       {stravaConnected && (
         <Card style={{ marginBottom: 16 }}>
           <div
@@ -437,14 +762,12 @@ export default function DashboardPage() {
             </span>
           </div>
 
-          {/* Weekly stats grid */}
           {(() => {
-            const weekDistM = weekRuns.reduce((s, r) => s + r.distance_meters, 0);
             const weekTotalTime = weekRuns.reduce((s, r) => s + r.moving_time_seconds, 0);
-            const longestM = weekRuns.length > 0 ? Math.max(...weekRuns.map((r) => r.distance_meters)) : 0;
-            const avgPace = weekDistM > 0 ? weekTotalTime / (weekDistM / 1000) : 0; // sec/km
-            const lastRun = recentActivities[0];
-            const lastRunLabel = (() => {
+            const longestM      = weekRuns.length > 0 ? Math.max(...weekRuns.map((r) => r.distance_meters)) : 0;
+            const avgPace       = weekDistM > 0 ? weekTotalTime / (weekDistM / 1000) : 0;
+            const lastRun       = recentActivities[0];
+            const lastRunLabel  = (() => {
               if (!lastRun) return "—";
               const diffDays = Math.floor(
                 (Date.now() - new Date(lastRun.activity_date + "T00:00:00").getTime()) / 86400000,
@@ -453,17 +776,9 @@ export default function DashboardPage() {
               if (diffDays === 1) return "Yesterday";
               return `${diffDays}d ago`;
             })();
-
             return (
               <>
-                <div
-                  style={{
-                    display: "flex",
-                    flexWrap: "wrap",
-                    gap: 8,
-                    marginBottom: weekRuns.length > 0 ? 16 : 0,
-                  }}
-                >
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: weekRuns.length > 0 ? 16 : 0 }}>
                   {[
                     { value: weekRuns.length > 0 ? `${(weekDistM / 1000).toFixed(1)} km` : "—", label: "Weekly km" },
                     { value: weekRuns.length, label: "Runs" },
@@ -480,7 +795,6 @@ export default function DashboardPage() {
             );
           })()}
 
-          {/* Recent 5 activities (all-time, not just this week) */}
           {recentActivities.length > 0 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {recentActivities.map((run) => (
@@ -526,51 +840,19 @@ export default function DashboardPage() {
                       {run.activity_name}
                     </span>
                   </div>
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: 12,
-                      alignItems: "center",
-                      flexShrink: 0,
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontFamily: "var(--mono)",
-                        fontSize: 12,
-                        fontWeight: 600,
-                        color: "var(--green)",
-                      }}
-                    >
+                  <div style={{ display: "flex", gap: 12, alignItems: "center", flexShrink: 0 }}>
+                    <span style={{ fontFamily: "var(--mono)", fontSize: 12, fontWeight: 600, color: "var(--green)" }}>
                       {formatDistance(run.distance_meters)} km
                     </span>
-                    <span
-                      style={{
-                        fontSize: 11,
-                        color: "var(--text-dim)",
-                        fontFamily: "var(--mono)",
-                      }}
-                    >
+                    <span style={{ fontSize: 11, color: "var(--text-dim)", fontFamily: "var(--mono)" }}>
                       {fmtDur(run.moving_time_seconds)}
                     </span>
                     {run.average_speed && run.average_speed > 0 && (
-                      <span
-                        style={{
-                          fontSize: 11,
-                          color: "var(--green)",
-                          fontFamily: "var(--mono)",
-                        }}
-                      >
+                      <span style={{ fontSize: 11, color: "var(--green)", fontFamily: "var(--mono)" }}>
                         {formatPace(run.average_speed)}
                       </span>
                     )}
-                    <span
-                      style={{
-                        fontSize: 10,
-                        color: "var(--text-dim)",
-                        fontFamily: "var(--mono)",
-                      }}
-                    >
+                    <span style={{ fontSize: 10, color: "var(--text-dim)", fontFamily: "var(--mono)" }}>
                       {run.activity_date.slice(5)}
                     </span>
                   </div>
@@ -582,67 +864,191 @@ export default function DashboardPage() {
       )}
 
       {/* Weekly Goals */}
-      {profile && (profile.weekly_run_km_target > 0 || profile.weekly_run_count_target > 0 || profile.weekly_gym_target > 0) && (
-        <Card style={{ marginBottom: 16 }}>
-          <SectionLabel>Weekly Goals</SectionLabel>
-          <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 4 }}>
-            {profile.weekly_run_km_target > 0 && (() => {
-              const current = weekDistM / 1000;
-              const pct = Math.min(1, current / profile.weekly_run_km_target);
-              const done = pct >= 1;
-              return (
-                <div key="km">
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                    <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Weekly Distance</span>
-                    <span style={{ fontFamily: "var(--mono)", fontSize: 12, color: done ? "var(--green)" : "var(--text)" }}>
-                      {current.toFixed(1)} / {profile.weekly_run_km_target} km
-                    </span>
-                  </div>
-                  <div style={{ height: 6, background: "var(--border2)", borderRadius: 3, overflow: "hidden" }}>
-                    <div style={{ height: "100%", width: `${pct * 100}%`, background: done ? "var(--green)" : "var(--accent)", borderRadius: 3, transition: "width 0.4s ease" }} />
-                  </div>
+      {profile &&
+        (profile.weekly_run_km_target > 0 ||
+          profile.weekly_run_count_target > 0 ||
+          profile.weekly_gym_target > 0) && (
+          <Card style={{ marginBottom: 0 }}>
+            <SectionLabel>Weekly Goals</SectionLabel>
+            <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 4 }}>
+              {profile.weekly_run_km_target > 0 && (
+                <GoalBar
+                  label="Weekly Distance"
+                  current={`${(weekDistM / 1000).toFixed(1)}`}
+                  target={`${profile.weekly_run_km_target} km`}
+                  color="var(--accent)"
+                />
+              )}
+              {profile.weekly_run_count_target > 0 && (
+                <GoalBar
+                  label="Runs"
+                  current={weekRuns.length}
+                  target={profile.weekly_run_count_target}
+                  color="var(--accent)"
+                />
+              )}
+              {profile.weekly_gym_target > 0 && (
+                <GoalBar
+                  label="Gym Sessions"
+                  current={weekGymCount}
+                  target={profile.weekly_gym_target}
+                  color="var(--purple)"
+                />
+              )}
+            </div>
+
+            {/* Goal Intelligence */}
+            {coachOutput && (
+              <div
+                style={{
+                  marginTop: 16,
+                  padding: "12px 14px",
+                  background: "var(--surface2)",
+                  border: `1px solid ${goalStatusColor[coachOutput.goalStatus]}30`,
+                  borderLeft: `3px solid ${goalStatusColor[coachOutput.goalStatus]}`,
+                  borderRadius: 8,
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    marginBottom: 6,
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: 9,
+                      fontFamily: "var(--mono)",
+                      color: "var(--text-dim)",
+                      letterSpacing: "0.1em",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    Goal Intelligence
+                  </span>
+                  <span
+                    style={{
+                      fontFamily: "var(--mono)",
+                      fontSize: 9,
+                      fontWeight: 700,
+                      color: goalStatusColor[coachOutput.goalStatus],
+                      letterSpacing: "0.08em",
+                    }}
+                  >
+                    {coachOutput.goalStatus.toUpperCase()}
+                  </span>
                 </div>
-              );
-            })()}
-            {profile.weekly_run_count_target > 0 && (() => {
-              const current = weekRuns.length;
-              const pct = Math.min(1, current / profile.weekly_run_count_target);
-              const done = pct >= 1;
-              return (
-                <div key="runs">
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                    <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Runs</span>
-                    <span style={{ fontFamily: "var(--mono)", fontSize: 12, color: done ? "var(--green)" : "var(--text)" }}>
-                      {current} / {profile.weekly_run_count_target}
-                    </span>
-                  </div>
-                  <div style={{ height: 6, background: "var(--border2)", borderRadius: 3, overflow: "hidden" }}>
-                    <div style={{ height: "100%", width: `${pct * 100}%`, background: done ? "var(--green)" : "var(--accent)", borderRadius: 3, transition: "width 0.4s ease" }} />
-                  </div>
-                </div>
-              );
-            })()}
-            {profile.weekly_gym_target > 0 && (() => {
-              const current = weekGymCount;
-              const pct = Math.min(1, current / profile.weekly_gym_target);
-              const done = pct >= 1;
-              return (
-                <div key="gym">
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                    <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Gym Sessions</span>
-                    <span style={{ fontFamily: "var(--mono)", fontSize: 12, color: done ? "var(--green)" : "var(--text)" }}>
-                      {current} / {profile.weekly_gym_target}
-                    </span>
-                  </div>
-                  <div style={{ height: 6, background: "var(--border2)", borderRadius: 3, overflow: "hidden" }}>
-                    <div style={{ height: "100%", width: `${pct * 100}%`, background: done ? "var(--green)" : "var(--purple)", borderRadius: 3, transition: "width 0.4s ease" }} />
-                  </div>
-                </div>
-              );
-            })()}
+                <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0, lineHeight: 1.55 }}>
+                  {coachOutput.goalRecommendation}
+                </p>
+              </div>
+            )}
+          </Card>
+        )}
+
+      {/* Hybrid Athlete Score */}
+      <Card style={{ marginTop: 16, marginBottom: 16 }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: 16,
+            flexWrap: "wrap",
+            gap: 10,
+          }}
+        >
+          <SectionLabel>Hybrid Athlete Score</SectionLabel>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+            <span
+              style={{
+                fontFamily: "var(--mono)",
+                fontSize: 28,
+                fontWeight: 700,
+                color: "var(--accent)",
+                lineHeight: 1,
+              }}
+            >
+              {hybridOutput.score}
+            </span>
+            <span
+              style={{
+                fontFamily: "var(--mono)",
+                fontSize: 10,
+                color: "var(--accent)",
+                letterSpacing: "0.08em",
+              }}
+            >
+              {hybridOutput.level}
+            </span>
           </div>
-        </Card>
-      )}
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {(
+            [
+              { label: "Recovery",    value: hybridOutput.components.recovery,    color: "var(--green)"  },
+              { label: "Training",    value: hybridOutput.components.training,     color: "var(--accent)" },
+              { label: "Nutrition",   value: hybridOutput.components.nutrition,    color: "var(--yellow)" },
+              { label: "Consistency", value: hybridOutput.components.consistency,  color: "var(--purple)" },
+            ] as const
+          ).map(({ label, value, color }) => (
+            <div
+              key={label}
+              style={{
+                flex: "1 1 100px",
+                padding: "10px 12px",
+                background: "var(--surface2)",
+                border: "1px solid var(--border2)",
+                borderRadius: 8,
+              }}
+            >
+              <div
+                style={{
+                  fontFamily: "var(--mono)",
+                  fontSize: 18,
+                  fontWeight: 700,
+                  color,
+                  lineHeight: 1,
+                }}
+              >
+                {value}
+              </div>
+              <div
+                style={{
+                  fontSize: 9,
+                  color: "var(--text-dim)",
+                  letterSpacing: "0.1em",
+                  textTransform: "uppercase",
+                  marginTop: 4,
+                }}
+              >
+                {label}
+              </div>
+              <div
+                style={{
+                  height: 3,
+                  background: "var(--border2)",
+                  borderRadius: 2,
+                  marginTop: 6,
+                  overflow: "hidden",
+                }}
+              >
+                <div
+                  style={{
+                    height: "100%",
+                    width: `${value}%`,
+                    background: color,
+                    borderRadius: 2,
+                    transition: "width 0.4s ease",
+                  }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
 
       {/* Weight Tracker */}
       <Card style={{ marginBottom: 16 }}>
@@ -668,11 +1074,7 @@ export default function DashboardPage() {
               />
             </Field>
           </div>
-          <Button
-            onClick={logWeight}
-            disabled={savingWeight || !weightInput}
-            style={{ marginBottom: 16 }}
-          >
+          <Button onClick={logWeight} disabled={savingWeight || !weightInput} style={{ marginBottom: 16 }}>
             Log
           </Button>
           {stats?.weightAvg7d ? (
@@ -702,11 +1104,7 @@ export default function DashboardPage() {
           ) : null}
         </div>
         {weightChartData.length > 0 ? (
-          <BarChart
-            data={weightChartData}
-            color="var(--purple)"
-            maxVal={weightMax}
-          />
+          <BarChart data={weightChartData} color="var(--purple)" maxVal={weightMax} />
         ) : (
           <EmptyState message="No weight data yet" />
         )}
@@ -728,11 +1126,7 @@ export default function DashboardPage() {
               >
                 Sleep (hours)
               </div>
-              <BarChart
-                data={sleepChartData}
-                color="var(--accent)"
-                maxVal={12}
-              />
+              <BarChart data={sleepChartData} color="var(--accent)" maxVal={12} />
             </div>
             <div style={{ marginBottom: 24 }}>
               <div
@@ -746,11 +1140,7 @@ export default function DashboardPage() {
               >
                 Mood
               </div>
-              <BarChart
-                data={moodChartData}
-                color="var(--yellow)"
-                maxVal={10}
-              />
+              <BarChart data={moodChartData} color="var(--yellow)" maxVal={10} />
             </div>
             <div>
               <div
@@ -764,11 +1154,7 @@ export default function DashboardPage() {
               >
                 Energy
               </div>
-              <BarChart
-                data={energyChartData}
-                color="var(--green)"
-                maxVal={10}
-              />
+              <BarChart data={energyChartData} color="var(--green)" maxVal={10} />
             </div>
           </>
         ) : (
@@ -796,14 +1182,7 @@ export default function DashboardPage() {
                   gap: 8,
                 }}
               >
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    minWidth: 0,
-                  }}
-                >
+                <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
                   <span
                     style={{
                       fontFamily: "var(--mono)",
@@ -834,13 +1213,7 @@ export default function DashboardPage() {
                   <div style={{ fontFamily: "var(--mono)", fontSize: 12 }}>
                     {formatDuration(s.duration)}
                   </div>
-                  <div
-                    style={{
-                      fontFamily: "var(--mono)",
-                      fontSize: 10,
-                      color: "var(--text-dim)",
-                    }}
-                  >
+                  <div style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--text-dim)" }}>
                     {s.date}
                   </div>
                 </div>

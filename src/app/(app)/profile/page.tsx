@@ -13,6 +13,13 @@ import {
 } from "@/components/ui";
 import { useNotifications } from "@/hooks/useNotifications";
 import { calcBMI, bmiCategory } from "@/lib/nutritionEngine";
+import { calcCheckinStreak, calcSessionStreak } from "@/lib/utils";
+import { computeRecoveryScore } from "@/lib/recoveryScore";
+import { computeCTLATLTSB } from "@/lib/trainingLoad";
+import type { TrainingMetricRow } from "@/lib/trainingLoad";
+import { computeHybridScore } from "@/lib/hybridScore";
+import type { HybridScoreOutput } from "@/lib/hybridScore";
+import type { DailyLog, Session } from "@/types";
 
 export const dynamic = "force-dynamic";
 
@@ -92,10 +99,11 @@ export default function ProfilePage() {
   const [storedLon, setStoredLon] = useState<number | null>(null);
   const [resolvedLocation, setResolvedLocation] = useState<string | null>(null);
   const [geocodeError, setGeocodeError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [saving, setSaving]         = useState(false);
+  const [saved, setSaved]           = useState(false);
+  const [loading, setLoading]       = useState(true);
   const [notifLoading, setNotifLoading] = useState(false);
+  const [hybrid, setHybrid]         = useState<HybridScoreOutput | null>(null);
 
   const load = useCallback(async () => {
     const {
@@ -104,14 +112,25 @@ export default function ProfilePage() {
     if (!user) return;
     setEmail(user.email ?? "");
 
-    const [{ data: raw }, { data: rawWeights }] = await Promise.all([
+    const since14 = new Date(Date.now() - 14 * 86400000).toISOString().split("T")[0];
+    const since90 = new Date(Date.now() - 90 * 86400000).toISOString().split("T")[0];
+    const todayStr = new Date().toISOString().split("T")[0];
+
+    const [
+      { data: raw },
+      { data: rawWeights },
+      { data: rawLogs },
+      { data: rawSessions },
+      { data: rawMetrics },
+    ] = await Promise.all([
       sb.from("profiles").select("*").eq("user_id", user.id).maybeSingle(),
-      sb
-        .from("weight_logs")
-        .select("weight")
-        .eq("user_id", user.id)
-        .order("date", { ascending: false })
-        .limit(1),
+      sb.from("weight_logs").select("weight").eq("user_id", user.id).order("date", { ascending: false }).limit(1),
+      sb.from("daily_logs").select("*").eq("user_id", user.id).gte("date", since14).order("date", { ascending: false }),
+      sb.from("sessions").select("*").eq("user_id", user.id).gte("date", since14).order("date", { ascending: false }),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (sb as any).from("training_metrics")
+        .select("activity_date, tss, trimp, pace_seconds_per_km, load_score, source")
+        .eq("user_id", user.id).gte("activity_date", since90).order("activity_date"),
     ]);
 
     const data = raw as {
@@ -153,13 +172,26 @@ export default function ProfilePage() {
       setThresholdPaceInput(`${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`);
     }
 
-    const weights = (rawWeights ?? []) as { weight: number }[];
+    const weights  = (rawWeights  ?? []) as { weight: number }[];
+    const logs     = (rawLogs     ?? []) as DailyLog[];
+    const sessions = (rawSessions ?? []) as Session[];
+    const metrics  = (rawMetrics  ?? []) as TrainingMetricRow[];
+
     setCurrentWeight(weights.length ? weights[0].weight : null);
+
+    // Hybrid Athlete Score
+    const { ctl, tsb } = metrics.length > 0 ? computeCTLATLTSB(metrics) : { ctl: 0, tsb: 0 };
+    const todayLog     = logs.find((l) => l.date === todayStr) ?? null;
+    const recoveryScore = computeRecoveryScore(todayLog, tsb);
+    const checkinStreak = calcCheckinStreak(logs);
+    const sessionStreak = calcSessionStreak(sessions);
+    setHybrid(computeHybridScore(recoveryScore, ctl, null, checkinStreak, sessionStreak));
 
     setLoading(false);
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
   }, [load]);
 
@@ -200,6 +232,7 @@ export default function ProfilePage() {
     const paceSeconds = parseInt(paceParts[1] ?? "30") || 0;
     const thresholdSecs = paceMinutes * 60 + paceSeconds;
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (sb as any).from("profiles").upsert(
       {
         user_id: user.id,
@@ -262,12 +295,159 @@ export default function ProfilePage() {
     heightNum && currentWeight ? calcBMI(currentWeight, heightNum) : null;
   const bmiInfo = bmi !== null ? BMI_CATEGORY_LABEL[bmiCategory(bmi)] : null;
 
+  const hybridLevelColor: Record<string, string> = {
+    "Hybrid Athlete": "var(--green)",
+    "Advancing":      "var(--accent)",
+    "Developing":     "var(--yellow)",
+    "Beginner":       "var(--text-muted)",
+  };
+
   return (
     <div>
       <PageHeader
         title="PROFILE"
         subtitle="The coach reads this before every response"
       />
+
+      {/* Hybrid Athlete Score */}
+      {hybrid && (
+        <Card style={{ marginBottom: 16 }}>
+          <div
+            style={{
+              fontSize: 10,
+              color: "var(--text-muted)",
+              letterSpacing: "0.12em",
+              textTransform: "uppercase",
+              marginBottom: 14,
+            }}
+          >
+            Hybrid Athlete Score
+          </div>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 16,
+              marginBottom: 16,
+              flexWrap: "wrap",
+            }}
+          >
+            <div>
+              <span
+                style={{
+                  fontFamily: "var(--mono)",
+                  fontSize: 40,
+                  fontWeight: 700,
+                  color: hybridLevelColor[hybrid.level] ?? "var(--accent)",
+                  lineHeight: 1,
+                }}
+              >
+                {hybrid.score}
+              </span>
+              <span
+                style={{
+                  fontFamily: "var(--mono)",
+                  fontSize: 10,
+                  color: "var(--text-dim)",
+                  marginLeft: 4,
+                }}
+              >
+                /100
+              </span>
+            </div>
+            <div>
+              <div
+                style={{
+                  fontFamily: "var(--mono)",
+                  fontSize: 14,
+                  fontWeight: 700,
+                  color: hybridLevelColor[hybrid.level] ?? "var(--accent)",
+                  letterSpacing: "0.04em",
+                }}
+              >
+                {hybrid.level}
+              </div>
+              <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 2 }}>
+                Equal weight: Recovery · Training · Nutrition · Consistency
+              </div>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {(
+              [
+                { label: "Recovery",    value: hybrid.components.recovery,    color: "var(--green)"  },
+                { label: "Training",    value: hybrid.components.training,     color: "var(--accent)" },
+                { label: "Nutrition",   value: hybrid.components.nutrition,    color: "var(--yellow)" },
+                { label: "Consistency", value: hybrid.components.consistency,  color: "var(--purple)" },
+              ] as const
+            ).map(({ label, value, color }) => (
+              <div
+                key={label}
+                style={{
+                  flex: "1 1 90px",
+                  padding: "10px 12px",
+                  background: "var(--surface2)",
+                  border: "1px solid var(--border2)",
+                  borderRadius: 8,
+                }}
+              >
+                <div
+                  style={{
+                    fontFamily: "var(--mono)",
+                    fontSize: 20,
+                    fontWeight: 700,
+                    color,
+                    lineHeight: 1,
+                  }}
+                >
+                  {value}
+                </div>
+                <div
+                  style={{
+                    fontSize: 9,
+                    color: "var(--text-dim)",
+                    letterSpacing: "0.1em",
+                    textTransform: "uppercase",
+                    marginTop: 4,
+                  }}
+                >
+                  {label}
+                </div>
+                <div
+                  style={{
+                    height: 3,
+                    background: "var(--border2)",
+                    borderRadius: 2,
+                    marginTop: 6,
+                    overflow: "hidden",
+                  }}
+                >
+                  <div
+                    style={{
+                      height: "100%",
+                      width: `${value}%`,
+                      background: color,
+                      borderRadius: 2,
+                      transition: "width 0.4s ease",
+                    }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+          <div
+            style={{
+              fontSize: 10,
+              color: "var(--text-dim)",
+              marginTop: 10,
+              fontFamily: "var(--mono)",
+              lineHeight: 1.5,
+            }}
+          >
+            Nutrition shows 50 until daily logging is active. Log check-ins and sessions consistently to raise Consistency.
+          </div>
+        </Card>
+      )}
 
       <Card>
         <div
@@ -457,7 +637,7 @@ export default function ProfilePage() {
             lineHeight: 1.5,
           }}
         >
-          BMI is a rough screening number — it doesn't separate muscle from fat,
+          BMI is a rough screening number — it doesn&apos;t separate muscle from fat,
           so it can read high for muscular athletes. Treat it as a reference
           point, not a target.
         </div>
@@ -612,7 +792,7 @@ export default function ProfilePage() {
             fontFamily: "var(--mono)",
           }}
         >
-          Used with your current weight, height, and today's sessions to
+          Used with your current weight, height, and today&apos;s sessions to
           calculate daily calorie, macro, and water targets on the Nutrition
           page.
         </div>
