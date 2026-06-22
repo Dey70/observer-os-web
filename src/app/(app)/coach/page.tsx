@@ -8,32 +8,32 @@ import { calcCheckinStreak, calcSessionStreak, isSunday } from "@/lib/utils";
 import { Badge, TypingDots } from "@/components/ui";
 import type { ChatMessage, DailyLog, Session } from "@/types";
 import { Activity, BarChart2, CalendarDays, Target } from "lucide-react";
-import { computeRecoveryScore } from "@/lib/recoveryScore";
-import { computeCTLATLTSB } from "@/lib/trainingLoad";
+import { computeRecoveryScore }   from "@/lib/recoveryScore";
+import { computeCTLATLTSB }       from "@/lib/trainingLoad";
 import type { TrainingMetricRow } from "@/lib/trainingLoad";
-import { computeReadiness } from "@/lib/readiness";
-import type { ReadinessOutput } from "@/lib/readiness";
-import { runCoachEngine } from "@/lib/coachEngine";
+import { computeReadiness }       from "@/lib/readiness";
+import type { ReadinessOutput }   from "@/lib/readiness";
+import { runCoachEngine }         from "@/lib/coachEngine";
 import type { CoachOutput, GoalProgress } from "@/lib/coachEngine";
-import { computeHybridScore } from "@/lib/hybridScore";
+import { computeHybridScore }     from "@/lib/hybridScore";
 import type { HybridScoreOutput } from "@/lib/hybridScore";
-import { calculateDailyTargets } from "@/lib/nutritionEngine";
+import { calculateDailyTargets }  from "@/lib/nutritionEngine";
 import type { NutritionProfileInputs } from "@/lib/nutritionEngine";
-import type { RunningActivity } from "@/types";
+import type { RunningActivity }   from "@/types";
 
 export const dynamic = "force-dynamic";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
 type ProfileRow = {
-  weekly_run_km_target:   number | null;
+  weekly_run_km_target:    number | null;
   weekly_run_count_target: number | null;
-  weekly_gym_target:      number | null;
-  sex:                    "male" | "female" | null;
-  age:                    number | null;
-  height_cm:              number | null;
-  nutrition_goal_type:    string | null;
-  target_weight:          number | null;
+  weekly_gym_target:       number | null;
+  sex:                     "male" | "female" | null;
+  age:                     number | null;
+  height_cm:               number | null;
+  nutrition_goal_type:     string | null;
+  target_weight:           number | null;
 };
 
 type Intelligence = {
@@ -51,14 +51,27 @@ type Intelligence = {
   };
 };
 
-// ── Sub-components ─────────────────────────────────────────────────────────
+// AI-generated recommendations from /api/coach/recommend
+type RecommendResponse = {
+  training:     string;
+  recovery:     string;
+  nutrition:    string;
+  primaryFocus: string;
+  goalInsight:  string;
+  source:       "ai" | "deterministic";
+};
+
+// ── Constants ──────────────────────────────────────────────────────────────
+
+// Max messages sent to Groq per turn to avoid token overflow
+const CONTEXT_WINDOW = 15;
 
 const QUICK_PROMPTS = [
-  { label: "Recovery",      msg: "Pull my last 7 days and tell me how my recovery looks." },
-  { label: "Train today?",  msg: "Look at my recent readiness — should I train hard today or rest?" },
-  { label: "Sleep",         msg: "Analyze my sleep trends and how they affect my training." },
-  { label: "Load vs recovery", msg: "Analyze training load vs recovery scores over 2 weeks." },
-  { label: "Patterns",     msg: "What patterns do you see across sleep, mood, energy, training?" },
+  { label: "Recovery",          msg: "Pull my last 7 days and tell me how my recovery looks." },
+  { label: "Train today?",      msg: "Look at my recent readiness — should I train hard today or rest?" },
+  { label: "Sleep",             msg: "Analyze my sleep trends and how they affect my training." },
+  { label: "Load vs recovery",  msg: "Analyze training load vs recovery scores over 2 weeks." },
+  { label: "Patterns",          msg: "What patterns do you see across sleep, mood, energy, training?" },
 ];
 
 const INITIAL_MESSAGE: ChatMessage = {
@@ -66,6 +79,8 @@ const INITIAL_MESSAGE: ChatMessage = {
   content:
     "Observer OS loaded. I have access to your data — check-ins, sessions, goals, weight logs. Ask me anything.",
 };
+
+// ── Sub-components ─────────────────────────────────────────────────────────
 
 function SideLabel({ children }: { children: React.ReactNode }) {
   return (
@@ -84,50 +99,21 @@ function SideLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-function MiniBar({
-  value,
-  color,
-  label,
-}: {
-  value: number;
-  color: string;
-  label: string;
-}) {
+function MiniBar({ value, color, label }: { value: number; color: string; label: string }) {
   return (
     <div>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          marginBottom: 3,
-        }}
-      >
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
         <span style={{ fontSize: 10, color: "var(--text-dim)" }}>{label}</span>
         <span style={{ fontFamily: "var(--mono)", fontSize: 10, color }}>{value}</span>
       </div>
       <div style={{ height: 3, background: "var(--border2)", borderRadius: 2, overflow: "hidden" }}>
-        <div
-          style={{
-            height: "100%",
-            width: `${Math.min(100, value)}%`,
-            background: color,
-            borderRadius: 2,
-          }}
-        />
+        <div style={{ height: "100%", width: `${Math.min(100, value)}%`, background: color, borderRadius: 2 }} />
       </div>
     </div>
   );
 }
 
-function GoalLine({
-  label,
-  pct,
-  color,
-}: {
-  label: string;
-  pct: number;
-  color: string;
-}) {
+function GoalLine({ label, pct, color }: { label: string; pct: number; color: string }) {
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
@@ -193,7 +179,17 @@ function ShortcutButton({
   );
 }
 
-function IntelligencePanel({ intel, loading }: { intel: Intelligence | null; loading: boolean }) {
+function IntelligencePanel({
+  intel,
+  loading,
+  aiRec,
+  aiRecLoading,
+}: {
+  intel:        Intelligence     | null;
+  loading:      boolean;
+  aiRec:        RecommendResponse | null;
+  aiRecLoading: boolean;
+}) {
   if (loading || !intel) {
     return (
       <div style={{ color: "var(--text-dim)", fontFamily: "var(--mono)", fontSize: 11, padding: "12px 0" }}>
@@ -202,42 +198,49 @@ function IntelligencePanel({ intel, loading }: { intel: Intelligence | null; loa
     );
   }
 
+  // AI recs take priority; deterministic coach output is the fallback
+  const trainText  = aiRec?.training     ?? intel.coach?.trainingRecommendation  ?? "";
+  const recovText  = aiRec?.recovery     ?? intel.coach?.recoveryRecommendation  ?? "";
+  const nutText    = aiRec?.nutrition    ?? intel.coach?.nutritionRecommendation ?? "";
+  const goalText   = aiRec?.goalInsight  ?? intel.coach?.goalRecommendation      ?? "";
+  const focusLabel = aiRec?.primaryFocus ?? intel.coach?.primaryFocus            ?? "";
+
   const goalStatusColor: Record<string, string> = {
-    Exceeded: "var(--green)",
+    Exceeded:  "var(--green)",
     "On Track": "var(--accent)",
-    Behind: "var(--red)",
+    Behind:    "var(--red)",
   };
+
+  const recBlock = (text: string) => (
+    <div
+      style={{
+        fontSize: 10,
+        color: aiRecLoading && !aiRec ? "var(--text-dim)" : "var(--text-muted)",
+        lineHeight: 1.5,
+        padding: "6px 8px",
+        background: "var(--surface2)",
+        borderRadius: 6,
+        fontStyle: aiRecLoading && !aiRec ? "italic" : "normal",
+      }}
+    >
+      {aiRecLoading && !aiRec ? "Generating AI recommendations..." : text}
+    </div>
+  );
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
-      {/* 1. Readiness */}
+      {/* 1 · Readiness */}
       <div>
         <SideLabel>Readiness</SideLabel>
         {intel.readiness ? (
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-              <span
-                style={{
-                  fontFamily: "var(--mono)",
-                  fontSize: 24,
-                  fontWeight: 700,
-                  color: intel.readiness.color,
-                  lineHeight: 1,
-                }}
-              >
+              <span style={{ fontFamily: "var(--mono)", fontSize: 24, fontWeight: 700, color: intel.readiness.color, lineHeight: 1 }}>
                 {intel.readiness.score}
               </span>
               <div>
-                <div
-                  style={{
-                    fontFamily: "var(--mono)",
-                    fontSize: 9,
-                    fontWeight: 700,
-                    letterSpacing: "0.1em",
-                    color: intel.readiness.color,
-                  }}
-                >
+                <div style={{ fontFamily: "var(--mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.1em", color: intel.readiness.color }}>
                   {intel.readiness.grade}
                 </div>
                 <div style={{ fontSize: 9, color: "var(--text-dim)", marginTop: 1 }}>
@@ -245,17 +248,9 @@ function IntelligencePanel({ intel, loading }: { intel: Intelligence | null; loa
                 </div>
               </div>
             </div>
-            {intel.coach && (
-              <div
-                style={{
-                  fontFamily: "var(--mono)",
-                  fontSize: 9,
-                  color: "var(--accent)",
-                  letterSpacing: "0.04em",
-                  marginTop: 2,
-                }}
-              >
-                Focus: {intel.coach.primaryFocus}
+            {focusLabel && (
+              <div style={{ fontFamily: "var(--mono)", fontSize: 9, color: "var(--accent)", letterSpacing: "0.04em", marginTop: 2 }}>
+                Focus: {focusLabel}
               </div>
             )}
           </div>
@@ -268,7 +263,7 @@ function IntelligencePanel({ intel, loading }: { intel: Intelligence | null; loa
 
       <div style={{ height: 1, background: "var(--border2)" }} />
 
-      {/* 2. Training Load */}
+      {/* 2 · Training Load */}
       <div>
         <SideLabel>Training Load</SideLabel>
         <div style={{ display: "flex", gap: 10, marginBottom: 8 }}>
@@ -278,40 +273,19 @@ function IntelligencePanel({ intel, loading }: { intel: Intelligence | null; loa
             { label: "TSB", value: intel.tsb > 0 ? `+${intel.tsb}` : String(intel.tsb), color: "var(--accent)" },
           ].map(({ label, value, color }) => (
             <div key={label} style={{ flex: 1, textAlign: "center" }}>
-              <div
-                style={{
-                  fontFamily: "var(--mono)",
-                  fontSize: 16,
-                  fontWeight: 700,
-                  color,
-                  lineHeight: 1,
-                }}
-              >
+              <div style={{ fontFamily: "var(--mono)", fontSize: 16, fontWeight: 700, color, lineHeight: 1 }}>
                 {value}
               </div>
               <div style={{ fontSize: 9, color: "var(--text-dim)", marginTop: 3 }}>{label}</div>
             </div>
           ))}
         </div>
-        {intel.coach && (
-          <div
-            style={{
-              fontSize: 10,
-              color: "var(--text-muted)",
-              lineHeight: 1.5,
-              padding: "6px 8px",
-              background: "var(--surface2)",
-              borderRadius: 6,
-            }}
-          >
-            {intel.coach.trainingRecommendation}
-          </div>
-        )}
+        {recBlock(trainText)}
       </div>
 
       <div style={{ height: 1, background: "var(--border2)" }} />
 
-      {/* 3. Goal Progress */}
+      {/* 3 · Goal Progress */}
       <div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
           <SideLabel>Goal Progress</SideLabel>
@@ -330,41 +304,27 @@ function IntelligencePanel({ intel, loading }: { intel: Intelligence | null; loa
           )}
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {intel.goalProgress.hasKmGoal && (
-            <GoalLine label="Distance" pct={intel.goalProgress.weeklyKmPct}  color="var(--accent)" />
-          )}
-          {intel.goalProgress.hasRunGoal && (
-            <GoalLine label="Runs"     pct={intel.goalProgress.weeklyRunPct} color="var(--accent)" />
-          )}
-          {intel.goalProgress.hasGymGoal && (
-            <GoalLine label="Gym"      pct={intel.goalProgress.weeklyGymPct} color="var(--purple)" />
-          )}
+          {intel.goalProgress.hasKmGoal  && <GoalLine label="Distance" pct={intel.goalProgress.weeklyKmPct}  color="var(--accent)" />}
+          {intel.goalProgress.hasRunGoal && <GoalLine label="Runs"     pct={intel.goalProgress.weeklyRunPct} color="var(--accent)" />}
+          {intel.goalProgress.hasGymGoal && <GoalLine label="Gym"      pct={intel.goalProgress.weeklyGymPct} color="var(--purple)" />}
           {!intel.goalProgress.hasKmGoal && !intel.goalProgress.hasRunGoal && !intel.goalProgress.hasGymGoal && (
             <div style={{ fontSize: 10, color: "var(--text-dim)" }}>Set targets in Profile.</div>
           )}
         </div>
-        {intel.coach && (
+        {goalText && (
           <div style={{ fontSize: 10, color: "var(--text-muted)", lineHeight: 1.5, marginTop: 8 }}>
-            {intel.coach.goalRecommendation}
+            {aiRecLoading && !aiRec ? "Generating..." : goalText}
           </div>
         )}
       </div>
 
       <div style={{ height: 1, background: "var(--border2)" }} />
 
-      {/* 4. Hybrid Athlete Score */}
+      {/* 4 · Hybrid Athlete Score */}
       <div>
         <SideLabel>Hybrid Athlete Score</SideLabel>
         <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 10 }}>
-          <span
-            style={{
-              fontFamily: "var(--mono)",
-              fontSize: 22,
-              fontWeight: 700,
-              color: "var(--accent)",
-              lineHeight: 1,
-            }}
-          >
+          <span style={{ fontFamily: "var(--mono)", fontSize: 22, fontWeight: 700, color: "var(--accent)", lineHeight: 1 }}>
             {intel.hybrid.score}
           </span>
           <span style={{ fontFamily: "var(--mono)", fontSize: 9, color: "var(--accent)" }}>
@@ -381,14 +341,14 @@ function IntelligencePanel({ intel, loading }: { intel: Intelligence | null; loa
 
       <div style={{ height: 1, background: "var(--border2)" }} />
 
-      {/* 5. Weekly Recommendations */}
-      {intel.coach && (
+      {/* 5 · Recovery & Nutrition Recommendations */}
+      {(recovText || nutText) && (
         <div>
-          <SideLabel>Weekly Recommendations</SideLabel>
+          <SideLabel>Recommendations</SideLabel>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {[
-              { tag: "RECOV", text: intel.coach.recoveryRecommendation },
-              { tag: "NUT",   text: intel.coach.nutritionRecommendation },
+              { tag: "RECOV", text: recovText },
+              { tag: "NUT",   text: nutText },
             ].map(({ tag, text }) => (
               <div
                 key={tag}
@@ -399,19 +359,11 @@ function IntelligencePanel({ intel, loading }: { intel: Intelligence | null; loa
                   borderLeft: "2px solid var(--border)",
                 }}
               >
-                <div
-                  style={{
-                    fontFamily: "var(--mono)",
-                    fontSize: 8,
-                    color: "var(--text-dim)",
-                    letterSpacing: "0.1em",
-                    marginBottom: 3,
-                  }}
-                >
+                <div style={{ fontFamily: "var(--mono)", fontSize: 8, color: "var(--text-dim)", letterSpacing: "0.1em", marginBottom: 3 }}>
                   {tag}
                 </div>
-                <div style={{ fontSize: 10, color: "var(--text-muted)", lineHeight: 1.5 }}>
-                  {text}
+                <div style={{ fontSize: 10, color: aiRecLoading && !aiRec ? "var(--text-dim)" : "var(--text-muted)", lineHeight: 1.5, fontStyle: aiRecLoading && !aiRec ? "italic" : "normal" }}>
+                  {aiRecLoading && !aiRec ? "Generating..." : text}
                 </div>
               </div>
             ))}
@@ -444,13 +396,16 @@ export default function CoachPage() {
   const sb     = createClient();
   const router = useRouter();
 
-  const [messages, setMessages]     = useState<ChatMessage[]>([INITIAL_MESSAGE]);
-  const [input, setInput]           = useState("");
-  const [chatLoading, setChatLoading] = useState(false);
-  const [mounted, setMounted]       = useState(false);
-  const [sheetOpen, setSheetOpen]   = useState(false);
-  const [intel, setIntel]           = useState<Intelligence | null>(null);
+  const [messages, setMessages]         = useState<ChatMessage[]>([INITIAL_MESSAGE]);
+  const [input, setInput]               = useState("");
+  const [chatLoading, setChatLoading]   = useState(false);
+  const [mounted, setMounted]           = useState(false);
+  const [sheetOpen, setSheetOpen]       = useState(false);
+  const [intel, setIntel]               = useState<Intelligence | null>(null);
   const [intelLoading, setIntelLoading] = useState(true);
+  // AI recommendations for the Intelligence Panel
+  const [aiRec, setAiRec]               = useState<RecommendResponse | null>(null);
+  const [aiRecLoading, setAiRecLoading] = useState(true);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef       = useRef<HTMLTextAreaElement>(null);
@@ -461,7 +416,51 @@ export default function CoachPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, chatLoading]);
 
-  // ── Load all intelligence data ──────────────────────────────────────────
+  // ── Load conversation history from persistent storage ───────────────────
+
+  const loadConvHistory = useCallback(async () => {
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data } = await (sb as any)
+      .from("coach_conversations")
+      .select("role, content, created_at")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(20);
+
+    if (!data?.length) return;
+
+    const history = ([...data] as { role: string; content: string; created_at: string }[])
+      .reverse()
+      .map((r) => ({
+        role:      r.role as "user" | "assistant",
+        content:   r.content,
+        timestamp: r.created_at,
+      }));
+
+    setMessages([INITIAL_MESSAGE, ...history]);
+  }, []);
+
+  useEffect(() => {
+    loadConvHistory();
+  }, [loadConvHistory]);
+
+  // ── Fetch AI recommendations (non-blocking; deterministic is the fallback) ─
+
+  useEffect(() => {
+    setAiRecLoading(true);
+    fetch("/api/coach/recommend", { method: "POST" })
+      .then((r) => r.json())
+      .then((data: unknown) => {
+        const d = data as Record<string, unknown>;
+        if (!d.error) setAiRec(d as RecommendResponse);
+      })
+      .catch(() => {})
+      .finally(() => setAiRecLoading(false));
+  }, []);
+
+  // ── Load deterministic intelligence data ────────────────────────────────
 
   const loadIntelligence = useCallback(async () => {
     const { data: { user } } = await sb.auth.getUser();
@@ -504,22 +503,16 @@ export default function CoachPage() {
     const runs     = (rawRuns ?? []) as Pick<RunningActivity, "distance_meters" | "moving_time_seconds" | "activity_date">[];
     const weights  = (rawWeights ?? []) as { weight: number }[];
 
-    // Streaks
     const checkinStreak = calcCheckinStreak(logs);
     const sessionStreak = calcSessionStreak(sessions);
 
-    // CTL / ATL / TSB
     const { ctl, atl, tsb } = metrics.length > 0
       ? computeCTLATLTSB(metrics)
       : { ctl: 0, atl: 0, tsb: 0 };
 
-    // Today's log
-    const todayLog = logs.find((l) => l.date === todayStr) ?? null;
-
-    // Recovery
+    const todayLog      = logs.find((l) => l.date === todayStr) ?? null;
     const recoveryScore = computeRecoveryScore(todayLog, tsb);
 
-    // Goal progress
     const weekDistM    = runs.reduce((s, r) => s + r.distance_meters, 0);
     const weekRunCount = runs.length;
     const weekGymCount = sessions.filter((s) => s.type === "lift" && s.date >= weekStart).length;
@@ -537,7 +530,6 @@ export default function CoachPage() {
       hasGymGoal,
     };
 
-    // Readiness + coach engine (requires check-in)
     let readiness: ReadinessOutput | null = null;
     let coach:     CoachOutput | null     = null;
     let proteinTarget = 140;
@@ -547,22 +539,18 @@ export default function CoachPage() {
 
     if (todayLog && recoveryScore !== null) {
       readiness = computeReadiness(
-        recoveryScore,
-        tsb,
-        todayLog.sleep_quality,
-        todayLog.fatigue,
-        todayLog.energy,
+        recoveryScore, tsb, todayLog.sleep_quality, todayLog.fatigue, todayLog.energy,
       );
 
       if (profile?.sex && profile?.age && profile?.height_cm && currentWeight) {
         const todaySessions = sessions.filter((s) => s.date === todayStr);
         const targets = calculateDailyTargets(
           {
-            sex:       profile.sex as NutritionProfileInputs["sex"],
-            age:       profile.age,
-            height_cm: profile.height_cm,
-            weight_kg: currentWeight,
-            goal_type: (profile.nutrition_goal_type ?? "maintain") as NutritionProfileInputs["goal_type"],
+            sex:              profile.sex as NutritionProfileInputs["sex"],
+            age:              profile.age,
+            height_cm:        profile.height_cm,
+            weight_kg:        currentWeight,
+            goal_type:        (profile.nutrition_goal_type ?? "maintain") as NutritionProfileInputs["goal_type"],
             target_weight_kg: profile.target_weight ?? null,
           },
           todaySessions,
@@ -578,9 +566,7 @@ export default function CoachPage() {
         recoveryScore,
         readinessScore: readiness.score,
         readinessGrade: readiness.grade,
-        ctl,
-        atl,
-        tsb,
+        ctl, atl, tsb,
         sleepQuality: todayLog.sleep_quality,
         energy:       todayLog.energy,
         mood:         todayLog.mood,
@@ -591,43 +577,30 @@ export default function CoachPage() {
         waterTargetMl,
       });
     } else {
-      // Goal-only coach output (no check-in)
       coach = runCoachEngine({
         recoveryScore:  null,
         readinessScore: 50,
         readinessGrade: "YELLOW",
-        ctl,
-        atl,
-        tsb,
-        sleepQuality: 7,
-        energy:       5,
-        mood:         5,
-        fatigue:      5,
-        soreness:     5,
+        ctl, atl, tsb,
+        sleepQuality: 7, energy: 5, mood: 5, fatigue: 5, soreness: 5,
         goalProgress,
         proteinTarget,
         waterTargetMl,
       });
     }
 
-    // Hybrid score
     const hybrid = computeHybridScore(recoveryScore, ctl, null, checkinStreak, sessionStreak);
 
-    // Weekly stats for sheet header
     const last7Logs = logs.filter((l) => l.date >= since7);
-    const avgSleep = last7Logs.length
+    const avgSleep  = last7Logs.length
       ? Math.round((last7Logs.reduce((s, l) => s + l.sleep_hours, 0) / last7Logs.length) * 10) / 10
       : null;
     const avgReadiness = last7Logs.length
       ? Math.round(
           last7Logs.reduce(
             (s, l) =>
-              s +
-              (l.sleep_quality * 0.3 +
-                l.mood * 0.2 +
-                l.energy * 0.2 +
-                (10 - l.soreness) * 0.15 +
-                (10 - l.fatigue) * 0.15),
+              s + (l.sleep_quality * 0.3 + l.mood * 0.2 + l.energy * 0.2 +
+                (10 - l.soreness) * 0.15 + (10 - l.fatigue) * 0.15),
             0,
           ) / last7Logs.length * 10,
         ) / 10
@@ -654,7 +627,7 @@ export default function CoachPage() {
     loadIntelligence();
   }, [loadIntelligence]);
 
-  // ── Chat ───────────────────────────────────────────────────────────────
+  // ── Chat ────────────────────────────────────────────────────────────────
 
   const sendMessage = useCallback(
     async (text: string) => {
@@ -669,8 +642,10 @@ export default function CoachPage() {
       setInput("");
       setChatLoading(true);
 
+      // Trim to context window before sending (newest messages take priority)
       const apiMessages = newHistory
         .filter((m, i) => !(i === 0 && m.role === "assistant"))
+        .slice(-CONTEXT_WINDOW)
         .map((m) => ({ role: m.role, content: m.content }));
 
       try {
@@ -681,10 +656,21 @@ export default function CoachPage() {
         });
         if (!res.ok) throw new Error("API error");
         const data = await res.json();
+        const assistantContent: string = data.content;
         setMessages((prev) => [
           ...prev,
-          { role: "assistant", content: data.content, timestamp: new Date().toISOString() },
+          { role: "assistant", content: assistantContent, timestamp: new Date().toISOString() },
         ]);
+
+        // Persist to coach_conversations (fire-and-forget)
+        sb.auth.getUser().then(({ data: { user } }) => {
+          if (!user) return;
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (sb as any).from("coach_conversations").insert([
+            { user_id: user.id, role: "user",      content: text.trim() },
+            { user_id: user.id, role: "assistant",  content: assistantContent },
+          ]).then(() => {}).catch(() => {});
+        }).catch(() => {});
       } catch (err) {
         setMessages((prev) => [
           ...prev,
@@ -783,6 +769,14 @@ export default function CoachPage() {
 
   // ── Render ─────────────────────────────────────────────────────────────
 
+  const sourceLabel = aiRecLoading
+    ? null
+    : aiRec?.source === "ai"
+      ? "AI"
+      : "RULE";
+
+  const sourceColor = aiRec?.source === "ai" ? "var(--green)" : "var(--text-dim)";
+
   return (
     <>
       <style>{`
@@ -794,9 +788,7 @@ export default function CoachPage() {
           background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
           overflow: hidden;
         }
-        .coach-sidebar-scroll {
-          flex: 1; overflow-y: auto; padding: 14px;
-        }
+        .coach-sidebar-scroll { flex: 1; overflow-y: auto; padding: 14px; }
         .coach-sidebar-actions {
           padding: 10px 14px; border-top: 1px solid var(--border2);
           display: flex; flex-direction: column; gap: 6px;
@@ -1010,6 +1002,9 @@ export default function CoachPage() {
                 padding: "12px 14px 10px",
                 borderBottom: "1px solid var(--border2)",
                 flexShrink: 0,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
               }}
             >
               <div
@@ -1024,9 +1019,30 @@ export default function CoachPage() {
               >
                 Intelligence Panel
               </div>
+              {sourceLabel && (
+                <div
+                  style={{
+                    fontFamily: "var(--mono)",
+                    fontSize: 8,
+                    fontWeight: 700,
+                    letterSpacing: "0.12em",
+                    color: sourceColor,
+                    padding: "2px 6px",
+                    border: `1px solid ${sourceColor}`,
+                    borderRadius: 3,
+                  }}
+                >
+                  {sourceLabel}
+                </div>
+              )}
             </div>
             <div className="coach-sidebar-scroll">
-              <IntelligencePanel intel={intel} loading={intelLoading} />
+              <IntelligencePanel
+                intel={intel}
+                loading={intelLoading}
+                aiRec={aiRec}
+                aiRecLoading={aiRecLoading}
+              />
             </div>
             <div className="coach-sidebar-actions">
               <ShortcutButton
@@ -1090,7 +1106,12 @@ export default function CoachPage() {
                 margin: "0 auto 16px",
               }}
             />
-            <IntelligencePanel intel={intel} loading={intelLoading} />
+            <IntelligencePanel
+              intel={intel}
+              loading={intelLoading}
+              aiRec={aiRec}
+              aiRecLoading={aiRecLoading}
+            />
             <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 16 }}>
               <ShortcutButton
                 icon={BarChart2}

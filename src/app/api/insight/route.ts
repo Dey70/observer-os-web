@@ -14,6 +14,7 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     const {
+      // Basic metrics (always present when called)
       avgSleep7d,
       todaySleep,
       avgMood7d,
@@ -26,10 +27,16 @@ export async function POST(req: NextRequest) {
       checkinStreak,
       thisWeekSessions,
       weeklyGoal,
+      // Phase 3 metrics (optional — richer insight when available)
+      readinessScore,
+      readinessGrade,
+      tsb,
+      ctl,
+      hybridScore,
+      hybridLevel,
     } = body;
 
-    // Need at least some data to generate a useful insight
-    if (!avgSleep7d && !thisWeekSessions && !todayCals) {
+    if (!avgSleep7d && !thisWeekSessions && !todayCals && !readinessScore) {
       return NextResponse.json({ insight: null });
     }
 
@@ -41,11 +48,16 @@ export async function POST(req: NextRequest) {
         ? `Weight: ${latestWeight} kg${weightChange7d != null ? " (" + (weightChange7d > 0 ? "+" : "") + weightChange7d + "kg vs last week)" : ""}`
         : null,
       `Check-in streak: ${checkinStreak} days`,
+      // Phase 3 additions
+      readinessScore != null ? `Readiness: ${readinessScore}/100 — ${readinessGrade ?? "unknown"}` : null,
+      tsb != null           ? `TSB (training form): ${tsb > 0 ? "+" : ""}${tsb}` : null,
+      ctl != null           ? `CTL (fitness): ${ctl}` : null,
+      hybridScore != null   ? `Hybrid Athlete Score: ${hybridScore}/100 — ${hybridLevel ?? ""}` : null,
     ]
       .filter(Boolean)
       .join("\n");
 
-    const prompt = `You are Observer OS Coach — an elite AI performance coach. Give ONE specific, data-driven insight based on this athlete's numbers. Exactly 1-2 sentences. Lead with the key finding, reference actual numbers. No encouragement, no fluff — just the insight.
+    const prompt = `You are Observer OS Coach — an elite AI performance coach. Give ONE specific, data-driven insight based on this athlete's numbers. Exactly 1–2 sentences. Lead with the key finding, reference actual numbers. No encouragement, no generic wellness language — just the insight.
 
 ${lines}`;
 
@@ -56,9 +68,9 @@ ${lines}`;
         Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
-        max_tokens: 120,
-        temperature: 0.6,
+        model:       "llama-3.3-70b-versatile",
+        max_tokens:  130,
+        temperature: 0.55,
         messages: [{ role: "user", content: prompt }],
       }),
     });

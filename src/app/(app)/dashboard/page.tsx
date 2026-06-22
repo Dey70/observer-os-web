@@ -182,6 +182,7 @@ export default function DashboardPage() {
   const [trainingMetrics, setTrainingMetrics]   = useState<TrainingMetricRow[]>([]);
   const [todayNetCals, setTodayNetCals] = useState<{ eaten: number; burned: number } | null>(null);
   const [profile, setProfile]           = useState<ProfileRow | null>(null);
+  const [aiInsight, setAiInsight]       = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const {
@@ -254,6 +255,74 @@ export default function DashboardPage() {
     setCheckinStreak(calcCheckinStreak(logsData));
     setSessionStreak(calcSessionStreak(sessData));
     setLoading(false);
+
+    // ── AI Insight (fire-and-forget after state is settled) ─────────────
+    const last7Logs  = logsData.filter((l) => l.date >= weekStart);
+    const todayLogAi = logsData.find((l) => l.date === todayStr2) ?? null;
+    const avgOf = (arr: number[]) => arr.length ? Math.round(arr.reduce((s, v) => s + v, 0) / arr.length * 10) / 10 : null;
+
+    const metricsArr = (metricsData ?? []) as TrainingMetricRow[];
+    const { ctl: ctlAi, tsb: tsbAi } = metricsArr.length > 0
+      ? computeCTLATLTSB(metricsArr)
+      : { ctl: 0, tsb: 0 };
+
+    let readinessScoreAi: number | null = null;
+    let readinessGradeAi: string | null = null;
+    if (todayLogAi) {
+      const recovAi = computeRecoveryScore(todayLogAi, tsbAi);
+      if (recovAi !== null) {
+        const rAi = computeReadiness(recovAi, tsbAi, todayLogAi.sleep_quality, todayLogAi.fatigue, todayLogAi.energy);
+        readinessScoreAi = rAi.score;
+        readinessGradeAi = rAi.grade;
+      }
+    }
+
+    const checkinStrAi = calcCheckinStreak(logsData);
+    const sessionStrAi = calcSessionStreak(sessData);
+    const recovForHybrid = todayLogAi ? computeRecoveryScore(todayLogAi, tsbAi) : null;
+    const hybridAi = computeHybridScore(recovForHybrid, ctlAi, null, checkinStrAi, sessionStrAi);
+
+    const weekSessAi = sessData.filter((s) => s.date >= weekStart);
+    const sessionTypesAi = { run: 0, lift: 0, study: 0 };
+    weekSessAi.forEach((s) => {
+      if (s.type === "run")   sessionTypesAi.run++;
+      if (s.type === "lift")  sessionTypesAi.lift++;
+      if (s.type === "study") sessionTypesAi.study++;
+    });
+
+    const nutRowsAi = (nutData ?? []) as { calories: number }[];
+    const todayCaloriesAi = nutRowsAi.length > 0
+      ? nutRowsAi.reduce((s, r) => s + (r.calories ?? 0), 0)
+      : null;
+
+    fetch("/api/insight", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        avgSleep7d:       avgOf(last7Logs.map((l) => l.sleep_hours)),
+        todaySleep:       todayLogAi?.sleep_hours ?? null,
+        avgMood7d:        avgOf(last7Logs.map((l) => l.mood)),
+        avgEnergy7d:      avgOf(last7Logs.map((l) => l.energy)),
+        sessionTypes:     sessionTypesAi,
+        todayCals:        todayCaloriesAi,
+        calTarget:        null,
+        latestWeight:     wData[0]?.weight ?? null,
+        weightChange7d:   null,
+        checkinStreak:    checkinStrAi,
+        thisWeekSessions: weekSessAi.length,
+        weeklyGoal:       null,
+        readinessScore:   readinessScoreAi,
+        readinessGrade:   readinessGradeAi,
+        tsb:              tsbAi,
+        ctl:              ctlAi,
+        hybridScore:      hybridAi.score,
+        hybridLevel:      hybridAi.level,
+      }),
+    })
+      .then((r) => r.json())
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .then((d: any) => { if (d.insight) setAiInsight(d.insight); })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -595,6 +664,36 @@ export default function DashboardPage() {
             </span>
           </div>
         )
+      )}
+
+      {/* AI Insight */}
+      {aiInsight && (
+        <div
+          style={{
+            marginBottom: 16,
+            padding: "14px 20px",
+            background: "var(--surface)",
+            border: "1px solid var(--border)",
+            borderLeft: "3px solid var(--accent)",
+            borderRadius: 12,
+          }}
+        >
+          <div
+            style={{
+              fontFamily: "var(--mono)",
+              fontSize: 9,
+              letterSpacing: "0.15em",
+              textTransform: "uppercase",
+              color: "var(--text-dim)",
+              marginBottom: 8,
+            }}
+          >
+            AI Insight · Groq
+          </div>
+          <p style={{ fontSize: 13, color: "var(--text-muted)", margin: 0, lineHeight: 1.65 }}>
+            {aiInsight}
+          </p>
+        </div>
       )}
 
       {/* Main stats — 2 cols on mobile, 4 on desktop */}
