@@ -8,7 +8,6 @@ import {
   calcSessionStreak,
   formatDuration,
   getLast14Days,
-  rpeToLabel,
 } from "@/lib/utils";
 import {
   Card,
@@ -22,6 +21,9 @@ import {
   EmptyState,
 } from "@/components/ui";
 import { formatDistance, formatDuration as fmtDur, formatPace, activityTypeLabel, activityTypeColor } from "@/lib/strava";
+import { computeRecoveryScore, getRecoveryStatus, getRecoveryBanner } from "@/lib/recoveryScore";
+import { computeCTLATLTSB } from "@/lib/trainingLoad";
+import type { TrainingMetricRow } from "@/lib/trainingLoad";
 import type { DailyLog, Session, WeightLog, DashboardStats, RunningActivity } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -40,6 +42,12 @@ export default function DashboardPage() {
   const [weekRuns, setWeekRuns] = useState<RunningActivity[]>([]);
   const [recentActivities, setRecentActivities] = useState<RunningActivity[]>([]);
   const [stravaConnected, setStravaConnected] = useState(false);
+  const [trainingMetrics, setTrainingMetrics] = useState<TrainingMetricRow[]>([]);
+  const [profile, setProfile] = useState<{
+    weekly_run_km_target: number;
+    weekly_run_count_target: number;
+    weekly_gym_target: number;
+  } | null>(null);
 
   const load = useCallback(async () => {
     const {
@@ -48,44 +56,62 @@ export default function DashboardPage() {
     if (!user) return;
     const since = getLast14Days();
     // Rolling 7-day window so a Sunday run is never dropped when viewed on Monday.
-    // A Mon-anchored week start (getWeekStart) would exclude it on that edge day.
     const weekStart = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
       .toISOString()
       .split("T")[0];
+    const metrics42Since = new Date(Date.now() - 42 * 86400000).toISOString().split("T")[0];
 
-    const [{ data: l }, { data: s }, { data: w }, { data: runs }, { data: recent }] =
-      await Promise.all([
-        sb
-          .from("daily_logs")
-          .select("*")
-          .eq("user_id", user.id)
-          .gte("date", since)
-          .order("date"),
-        sb
-          .from("sessions")
-          .select("*")
-          .eq("user_id", user.id)
-          .gte("date", since)
-          .order("date", { ascending: false }),
-        sb
-          .from("weight_logs")
-          .select("*")
-          .eq("user_id", user.id)
-          .order("date", { ascending: false })
-          .limit(14),
-        (sb as any)
-          .from("running_activities")
-          .select("*")
-          .eq("user_id", user.id)
-          .gte("activity_date", weekStart)
-          .order("activity_date", { ascending: false }),
-        (sb as any)
-          .from("running_activities")
-          .select("*")
-          .eq("user_id", user.id)
-          .order("activity_date", { ascending: false })
-          .limit(5),
-      ]);
+    const [
+      { data: l },
+      { data: s },
+      { data: w },
+      { data: runs },
+      { data: recent },
+      { data: metricsData },
+      { data: profileData },
+    ] = await Promise.all([
+      sb
+        .from("daily_logs")
+        .select("*")
+        .eq("user_id", user.id)
+        .gte("date", since)
+        .order("date"),
+      sb
+        .from("sessions")
+        .select("*")
+        .eq("user_id", user.id)
+        .gte("date", since)
+        .order("date", { ascending: false }),
+      sb
+        .from("weight_logs")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("date", { ascending: false })
+        .limit(14),
+      (sb as any)
+        .from("running_activities")
+        .select("*")
+        .eq("user_id", user.id)
+        .gte("activity_date", weekStart)
+        .order("activity_date", { ascending: false }),
+      (sb as any)
+        .from("running_activities")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("activity_date", { ascending: false })
+        .limit(5),
+      (sb as any)
+        .from("training_metrics")
+        .select("activity_date, tss, trimp, pace_seconds_per_km, load_score, source")
+        .eq("user_id", user.id)
+        .gte("activity_date", metrics42Since)
+        .order("activity_date"),
+      sb
+        .from("profiles")
+        .select("weekly_run_km_target, weekly_run_count_target, weekly_gym_target")
+        .eq("user_id", user.id)
+        .maybeSingle(),
+    ]);
 
     const logsData = (l ?? []) as DailyLog[];
     const sessData = (s ?? []) as Session[];
@@ -99,6 +125,8 @@ export default function DashboardPage() {
     setWeekRuns(runsData);
     setRecentActivities(recentData);
     setStravaConnected(recentData.length > 0);
+    setTrainingMetrics((metricsData ?? []) as TrainingMetricRow[]);
+    setProfile(profileData as typeof profile);
     setStats(calcDashboardStats(logsData, sessData, wData));
     setCheckinStreak(calcCheckinStreak(logsData));
     setSessionStreak(calcSessionStreak(sessData));
@@ -131,6 +159,17 @@ export default function DashboardPage() {
     setSavingWeight(false);
     load();
   }
+
+  const weekStartDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+  const todayStr = new Date().toISOString().split("T")[0];
+  const todayLog = logs.find((l) => l.date === todayStr) ?? null;
+  const { tsb } = trainingMetrics.length > 0 ? computeCTLATLTSB(trainingMetrics) : { tsb: 0 };
+  const recoveryScore = computeRecoveryScore(todayLog, tsb);
+  const recoveryStatus = recoveryScore !== null ? getRecoveryStatus(recoveryScore) : null;
+  const recoveryBanner = getRecoveryBanner(todayLog, recoveryScore);
+
+  const weekDistM = weekRuns.reduce((s, r) => s + r.distance_meters, 0);
+  const weekGymCount = sessions.filter((s) => s.type === "lift" && s.date >= weekStartDate).length;
 
   const typeColor: Record<string, string> = {
     run: "var(--green)",
@@ -180,6 +219,35 @@ export default function DashboardPage() {
     <div>
       <PageHeader title="DASHBOARD" subtitle="Last 14 days" />
 
+      {/* Recovery Banner */}
+      {recoveryBanner.show && (
+        <div
+          style={{
+            padding: "12px 16px",
+            marginBottom: 14,
+            borderRadius: 10,
+            border: `1px solid ${recoveryBanner.color}`,
+            background: `${recoveryBanner.color}10`,
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+          }}
+        >
+          <div
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: "50%",
+              background: recoveryBanner.color,
+              flexShrink: 0,
+            }}
+          />
+          <span style={{ fontSize: 13, color: recoveryBanner.color }}>
+            {recoveryBanner.message}
+          </span>
+        </div>
+      )}
+
       {/* Main stats — 2 cols on mobile, 4 on desktop */}
       <div className="grid-4" style={{ marginBottom: 12 }}>
         <StatCard value={stats?.avgSleep ?? "—"} label="Avg Sleep (hrs)" />
@@ -222,6 +290,86 @@ export default function DashboardPage() {
           color="var(--red)"
         />
       </div>
+
+      {/* Recovery Score */}
+      {recoveryStatus && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "stretch",
+            gap: 12,
+            marginBottom: 16,
+            padding: "18px 20px",
+            background: "var(--surface)",
+            border: `1px solid ${recoveryStatus.color}`,
+            borderRadius: 12,
+          }}
+        >
+          <div style={{ flex: 1 }}>
+            <div
+              style={{
+                fontSize: 10,
+                color: "var(--text-muted)",
+                letterSpacing: "0.1em",
+                textTransform: "uppercase",
+                marginBottom: 4,
+              }}
+            >
+              Recovery Score · Today
+            </div>
+            <div
+              style={{
+                fontFamily: "var(--mono)",
+                fontSize: 28,
+                fontWeight: 700,
+                color: recoveryStatus.color,
+                lineHeight: 1,
+              }}
+            >
+              {recoveryStatus.score}
+              <span style={{ fontSize: 14, fontWeight: 400, marginLeft: 2 }}>/100</span>
+            </div>
+            <div
+              style={{
+                fontFamily: "var(--mono)",
+                fontSize: 11,
+                color: recoveryStatus.color,
+                marginTop: 6,
+                letterSpacing: "0.06em",
+              }}
+            >
+              {recoveryStatus.label}
+            </div>
+            <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>
+              {recoveryStatus.description}
+            </div>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", justifyContent: "flex-end", alignItems: "flex-end" }}>
+            <div
+              style={{
+                width: 6,
+                height: 70,
+                borderRadius: 3,
+                background: "var(--border2)",
+                position: "relative",
+                overflow: "hidden",
+              }}
+            >
+              <div
+                style={{
+                  position: "absolute",
+                  bottom: 0,
+                  width: "100%",
+                  height: `${recoveryStatus.score}%`,
+                  background: recoveryStatus.color,
+                  borderRadius: 3,
+                  transition: "height 0.4s ease",
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Running Summary — only shown when Strava activities exist */}
       {stravaConnected && (
@@ -406,6 +554,69 @@ export default function DashboardPage() {
               ))}
             </div>
           )}
+        </Card>
+      )}
+
+      {/* Weekly Goals */}
+      {profile && (profile.weekly_run_km_target > 0 || profile.weekly_run_count_target > 0 || profile.weekly_gym_target > 0) && (
+        <Card style={{ marginBottom: 16 }}>
+          <SectionLabel>Weekly Goals</SectionLabel>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 4 }}>
+            {profile.weekly_run_km_target > 0 && (() => {
+              const current = weekDistM / 1000;
+              const pct = Math.min(1, current / profile.weekly_run_km_target);
+              const done = pct >= 1;
+              return (
+                <div key="km">
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                    <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Weekly Distance</span>
+                    <span style={{ fontFamily: "var(--mono)", fontSize: 12, color: done ? "var(--green)" : "var(--text)" }}>
+                      {current.toFixed(1)} / {profile.weekly_run_km_target} km
+                    </span>
+                  </div>
+                  <div style={{ height: 6, background: "var(--border2)", borderRadius: 3, overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${pct * 100}%`, background: done ? "var(--green)" : "var(--accent)", borderRadius: 3, transition: "width 0.4s ease" }} />
+                  </div>
+                </div>
+              );
+            })()}
+            {profile.weekly_run_count_target > 0 && (() => {
+              const current = weekRuns.length;
+              const pct = Math.min(1, current / profile.weekly_run_count_target);
+              const done = pct >= 1;
+              return (
+                <div key="runs">
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                    <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Runs</span>
+                    <span style={{ fontFamily: "var(--mono)", fontSize: 12, color: done ? "var(--green)" : "var(--text)" }}>
+                      {current} / {profile.weekly_run_count_target}
+                    </span>
+                  </div>
+                  <div style={{ height: 6, background: "var(--border2)", borderRadius: 3, overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${pct * 100}%`, background: done ? "var(--green)" : "var(--accent)", borderRadius: 3, transition: "width 0.4s ease" }} />
+                  </div>
+                </div>
+              );
+            })()}
+            {profile.weekly_gym_target > 0 && (() => {
+              const current = weekGymCount;
+              const pct = Math.min(1, current / profile.weekly_gym_target);
+              const done = pct >= 1;
+              return (
+                <div key="gym">
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                    <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Gym Sessions</span>
+                    <span style={{ fontFamily: "var(--mono)", fontSize: 12, color: done ? "var(--green)" : "var(--text)" }}>
+                      {current} / {profile.weekly_gym_target}
+                    </span>
+                  </div>
+                  <div style={{ height: 6, background: "var(--border2)", borderRadius: 3, overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${pct * 100}%`, background: done ? "var(--green)" : "var(--purple)", borderRadius: 3, transition: "width 0.4s ease" }} />
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
         </Card>
       )}
 

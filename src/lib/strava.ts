@@ -1,4 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  calcIntensityFactor,
+  calcRunTSS,
+  calcTRIMP,
+  calcSessionTSSProxy,
+} from "@/lib/trainingLoad";
 
 // ─── Strava API Types ─────────────────────────────────────────────────────────
 
@@ -260,7 +266,15 @@ export async function syncActivities(
       });
   }
 
-  // 6. Auto-create sessions for run-type activities
+  // 6. Fetch threshold pace for TSS calculation (default 5:30/km = 330 s/km)
+  const { data: profileData } = await supabase
+    .from("profiles")
+    .select("threshold_pace_seconds")
+    .eq("user_id", userId)
+    .maybeSingle();
+  const thresholdPace = (profileData as any)?.threshold_pace_seconds ?? 330;
+
+  // 7. Auto-create sessions for run-type activities
   let sessionsCreated = 0;
   const runActivities = relevant.filter((a) =>
     RUN_SPORT_TYPES.has(a.sport_type ?? a.type),
@@ -305,10 +319,60 @@ export async function syncActivities(
     if (sessionRows.length > 0) {
       await supabase.from("sessions").insert(sessionRows);
       sessionsCreated = sessionRows.length;
+
+      // Fetch back the DB-assigned session IDs so we can create training_metrics
+      const { data: insertedSessions } = await supabase
+        .from("sessions")
+        .select("id, strava_activity_id")
+        .eq("user_id", userId)
+        .in("strava_activity_id", sessionRows.map((s) => s.strava_activity_id));
+
+      const sessionIdMap = new Map(
+        (
+          (insertedSessions ?? []) as {
+            id: number;
+            strava_activity_id: number;
+          }[]
+        ).map((s) => [s.strava_activity_id, s.id]),
+      );
+
+      const metricRows = sessionRows
+        .filter((s) => sessionIdMap.has(s.strava_activity_id))
+        .map((s) => {
+          const sessionId = sessionIdMap.get(s.strava_activity_id)!;
+          let tss: number;
+          let trimp: number;
+
+          if (s.pace_per_km_seconds && s.pace_per_km_seconds > 0) {
+            const IF = calcIntensityFactor(s.pace_per_km_seconds, thresholdPace);
+            tss = calcRunTSS(s.duration * 60, s.pace_per_km_seconds, thresholdPace);
+            trimp = calcTRIMP(s.duration * 60, IF);
+          } else {
+            tss = calcSessionTSSProxy(s.duration, s.rpe);
+            trimp = Math.round(s.duration * (s.rpe / 10));
+          }
+
+          return {
+            user_id: userId,
+            session_id: sessionId,
+            activity_date: s.date,
+            trimp,
+            tss,
+            pace_seconds_per_km: s.pace_per_km_seconds ?? null,
+            load_score: tss,
+            source: "strava",
+          };
+        });
+
+      if (metricRows.length > 0) {
+        await (supabase as any)
+          .from("training_metrics")
+          .upsert(metricRows, { onConflict: "user_id,session_id" });
+      }
     }
   }
 
-  // 7. Sync Strava-derived personal records from all-time run history
+  // 8. Sync Strava-derived personal records from all-time run history
   const { data: allRunData } = await supabase
     .from("running_activities")
     .select("distance_meters, moving_time_seconds, activity_date, activity_type")
@@ -384,7 +448,7 @@ export async function syncActivities(
     }
   }
 
-  // 8. Update last_synced_at
+  // 9. Update last_synced_at
   await supabase
     .from("strava_connections")
     .update({
