@@ -83,6 +83,10 @@ export default function ProfilePage() {
   const [heightCm, setHeightCm] = useState("");
   const [nutritionGoalType, setNutritionGoalType] = useState("maintain");
   const [currentWeight, setCurrentWeight] = useState<number | null>(null);
+  const [weeklyRunKm, setWeeklyRunKm] = useState("");
+  const [weeklyRunCount, setWeeklyRunCount] = useState("");
+  const [weeklyGym, setWeeklyGym] = useState("");
+  const [thresholdPaceInput, setThresholdPaceInput] = useState("5:30");
   const [city, setCity] = useState("");
   const [storedLat, setStoredLat] = useState<number | null>(null);
   const [storedLon, setStoredLon] = useState<number | null>(null);
@@ -123,6 +127,10 @@ export default function ProfilePage() {
       latitude: number | null;
       longitude: number | null;
       city_name: string | null;
+      weekly_run_km_target: number | null;
+      weekly_run_count_target: number | null;
+      weekly_gym_target: number | null;
+      threshold_pace_seconds: number | null;
     } | null;
     if (data) {
       setName(data.name ?? "");
@@ -138,6 +146,11 @@ export default function ProfilePage() {
       setStoredLat(data.latitude ?? null);
       setStoredLon(data.longitude ?? null);
       setResolvedLocation(data.city_name ?? null);
+      setWeeklyRunKm(data.weekly_run_km_target?.toString() ?? "");
+      setWeeklyRunCount(data.weekly_run_count_target?.toString() ?? "");
+      setWeeklyGym(data.weekly_gym_target?.toString() ?? "");
+      const secs = data.threshold_pace_seconds ?? 330;
+      setThresholdPaceInput(`${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`);
     }
 
     const weights = (rawWeights ?? []) as { weight: number }[];
@@ -182,6 +195,11 @@ export default function ProfilePage() {
       }
     }
 
+    const paceParts = thresholdPaceInput.split(":");
+    const paceMinutes = parseInt(paceParts[0] ?? "5") || 5;
+    const paceSeconds = parseInt(paceParts[1] ?? "30") || 0;
+    const thresholdSecs = paceMinutes * 60 + paceSeconds;
+
     await (sb as any).from("profiles").upsert(
       {
         user_id: user.id,
@@ -197,6 +215,10 @@ export default function ProfilePage() {
         latitude,
         longitude,
         city_name: cityName,
+        weekly_run_km_target: weeklyRunKm ? parseFloat(weeklyRunKm) : 0,
+        weekly_run_count_target: weeklyRunCount ? parseInt(weeklyRunCount) : 0,
+        weekly_gym_target: weeklyGym ? parseInt(weeklyGym) : 0,
+        threshold_pace_seconds: thresholdSecs,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "user_id" },
@@ -485,6 +507,77 @@ export default function ProfilePage() {
               />
             </Field>
           </div>
+        </div>
+
+        <div
+          style={{
+            fontSize: 10,
+            color: "var(--text-muted)",
+            letterSpacing: "0.12em",
+            textTransform: "uppercase",
+            marginBottom: 16,
+            marginTop: 24,
+          }}
+        >
+          Running Goals
+        </div>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+          <div style={{ flex: "1 1 110px" }}>
+            <Field label="Weekly km target">
+              <Input
+                type="number"
+                step={0.5}
+                min={0}
+                placeholder="30"
+                value={weeklyRunKm}
+                onChange={(e) => setWeeklyRunKm(e.target.value)}
+              />
+            </Field>
+          </div>
+          <div style={{ flex: "1 1 110px" }}>
+            <Field label="Weekly runs target">
+              <Input
+                type="number"
+                min={0}
+                max={14}
+                placeholder="4"
+                value={weeklyRunCount}
+                onChange={(e) => setWeeklyRunCount(e.target.value)}
+              />
+            </Field>
+          </div>
+          <div style={{ flex: "1 1 110px" }}>
+            <Field label="Weekly gym target">
+              <Input
+                type="number"
+                min={0}
+                max={14}
+                placeholder="3"
+                value={weeklyGym}
+                onChange={(e) => setWeeklyGym(e.target.value)}
+              />
+            </Field>
+          </div>
+        </div>
+        <Field label="Threshold pace (MM:SS /km)">
+          <Input
+            type="text"
+            placeholder="5:30"
+            value={thresholdPaceInput}
+            onChange={(e) => setThresholdPaceInput(e.target.value)}
+          />
+        </Field>
+        <div
+          style={{
+            fontSize: 11,
+            color: "var(--text-dim)",
+            marginBottom: 4,
+            fontFamily: "var(--mono)",
+            lineHeight: 1.5,
+          }}
+        >
+          Threshold pace is used to calculate TSS (Training Stress Score) for your Strava runs. Default 5:30/km.
+          Weekly goals appear as progress bars on the Dashboard.
         </div>
 
         <div

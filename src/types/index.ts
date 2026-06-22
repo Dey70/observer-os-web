@@ -113,6 +113,19 @@ export interface RunningActivity {
   created_at: string;
 }
 
+export interface TrainingMetric {
+  id: string;
+  user_id: string;
+  session_id: number;
+  activity_date: string;
+  trimp: number;
+  tss: number;
+  pace_seconds_per_km: number | null;
+  load_score: number;
+  source: string;
+  created_at: string;
+}
+
 export type ReadinessLevel = "high" | "moderate" | "low";
 
 export interface ReadinessScore {
