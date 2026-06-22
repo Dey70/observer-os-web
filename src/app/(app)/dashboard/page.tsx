@@ -8,7 +8,6 @@ import {
   calcSessionStreak,
   formatDuration,
   getLast14Days,
-  getWeekStart,
   rpeToLabel,
 } from "@/lib/utils";
 import {
@@ -48,7 +47,11 @@ export default function DashboardPage() {
     } = await sb.auth.getUser();
     if (!user) return;
     const since = getLast14Days();
-    const weekStart = getWeekStart();
+    // Rolling 7-day window so a Sunday run is never dropped when viewed on Monday.
+    // A Mon-anchored week start (getWeekStart) would exclude it on that edge day.
+    const weekStart = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .split("T")[0];
 
     const [{ data: l }, { data: s }, { data: w }, { data: runs }, { data: recent }] =
       await Promise.all([
