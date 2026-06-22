@@ -386,11 +386,110 @@ export async function syncActivities(
       });
 
     if (metricRows.length > 0) {
-      // onConflict targets the partial unique index added in the dedup migration.
-      // If that index doesn't exist yet, the upsert falls through to session_id.
       await (supabase as any)
         .from("training_metrics")
         .upsert(metricRows, { onConflict: "user_id,strava_activity_id" });
+    }
+  }
+
+  // 7b. Backfill training_metrics for all historical run sessions that are missing them.
+  //     Step 7 above only covers the current sync batch (bounded by the cursor from Step 3).
+  //     If training_metrics was created (Phase 2B) AFTER previous syncs had already populated
+  //     running_activities, those sessions were never assigned metric rows. This step is
+  //     idempotent: it queries which strava_activity_ids already have a row and only inserts
+  //     the missing ones. On subsequent syncs after backfill it becomes a fast no-op.
+  {
+    const { data: allRunSessionsRaw } = await supabase
+      .from("sessions")
+      .select("id, strava_activity_id, duration, rpe, date, pace_per_km_seconds")
+      .eq("user_id", userId)
+      .eq("type", "run")
+      .not("strava_activity_id", "is", null);
+
+    const allRunSessions = (allRunSessionsRaw ?? []) as {
+      id: number;
+      strava_activity_id: number;
+      duration: number;
+      rpe: number;
+      date: string;
+      pace_per_km_seconds: number | null;
+    }[];
+
+    if (allRunSessions.length > 0) {
+      const { data: existingMetricRaw } = await (supabase as any)
+        .from("training_metrics")
+        .select("strava_activity_id")
+        .eq("user_id", userId)
+        .not("strava_activity_id", "is", null);
+
+      const coveredStravaIds = new Set(
+        ((existingMetricRaw ?? []) as { strava_activity_id: number }[]).map(
+          (m) => Number(m.strava_activity_id),
+        ),
+      );
+
+      const toBackfill = allRunSessions.filter(
+        (s) => !coveredStravaIds.has(Number(s.strava_activity_id)),
+      );
+
+      if (toBackfill.length > 0) {
+        const backfillStravaIds = toBackfill.map((s) => s.strava_activity_id);
+
+        const { data: raRaw } = await supabase
+          .from("running_activities")
+          .select("strava_activity_id, moving_time_seconds, distance_meters")
+          .eq("user_id", userId)
+          .in("strava_activity_id", backfillStravaIds);
+
+        const raByStravaId = new Map(
+          (
+            (raRaw ?? []) as {
+              strava_activity_id: number;
+              moving_time_seconds: number;
+              distance_meters: number;
+            }[]
+          ).map((r) => [Number(r.strava_activity_id), r]),
+        );
+
+        const backfillRows = toBackfill
+          .filter((s) => raByStravaId.has(Number(s.strava_activity_id)))
+          .map((sess) => {
+            const ra = raByStravaId.get(Number(sess.strava_activity_id))!;
+            const distKm = (ra.distance_meters ?? 0) > 0 ? ra.distance_meters / 1000 : 0;
+            const movingTimeSec = ra.moving_time_seconds ?? 0;
+            const paceSecPerKm =
+              distKm > 0 ? Math.round(movingTimeSec / distKm) : null;
+
+            let tss: number;
+            let trimp: number;
+            if (paceSecPerKm && paceSecPerKm > 0) {
+              const IF = calcIntensityFactor(paceSecPerKm, thresholdPace);
+              tss = calcRunTSS(movingTimeSec, paceSecPerKm, thresholdPace);
+              trimp = calcTRIMP(movingTimeSec, IF);
+            } else {
+              tss = calcSessionTSSProxy(sess.duration, sess.rpe);
+              trimp = Math.round(sess.duration * (sess.rpe / 10));
+            }
+
+            return {
+              user_id: userId,
+              session_id: sess.id,
+              strava_activity_id: Number(sess.strava_activity_id),
+              activity_date: sess.date,
+              trimp,
+              tss,
+              pace_seconds_per_km: paceSecPerKm ?? null,
+              load_score: tss,
+              source: "strava",
+            };
+          });
+
+        if (backfillRows.length > 0) {
+          await (supabase as any)
+            .from("training_metrics")
+            .upsert(backfillRows, { onConflict: "user_id,strava_activity_id" });
+        }
+      }
     }
   }
 
