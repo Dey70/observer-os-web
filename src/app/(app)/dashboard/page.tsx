@@ -59,7 +59,7 @@ export default function DashboardPage() {
     const weekStart = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
       .toISOString()
       .split("T")[0];
-    const metrics42Since = new Date(Date.now() - 42 * 86400000).toISOString().split("T")[0];
+    const metrics42Since = new Date(Date.now() - 90 * 86400000).toISOString().split("T")[0];
 
     const [
       { data: l },
@@ -419,38 +419,23 @@ export default function DashboardPage() {
               <>
                 <div
                   style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(5, 1fr)",
+                    display: "flex",
+                    flexWrap: "wrap",
                     gap: 8,
                     marginBottom: weekRuns.length > 0 ? 16 : 0,
                   }}
-                  className="grid-running-stats"
                 >
-                  <StatCard
-                    value={weekRuns.length > 0 ? `${(weekDistM / 1000).toFixed(1)} km` : "—"}
-                    label="Weekly km"
-                    color="var(--green)"
-                  />
-                  <StatCard
-                    value={weekRuns.length}
-                    label="Runs"
-                    color="var(--green)"
-                  />
-                  <StatCard
-                    value={longestM > 0 ? `${(longestM / 1000).toFixed(1)} km` : "—"}
-                    label="Longest"
-                    color="var(--green)"
-                  />
-                  <StatCard
-                    value={avgPace > 0 ? formatPace(1000 / avgPace) : "—"}
-                    label="Avg Pace"
-                    color="var(--green)"
-                  />
-                  <StatCard
-                    value={lastRunLabel}
-                    label="Last Run"
-                    color="var(--green)"
-                  />
+                  {[
+                    { value: weekRuns.length > 0 ? `${(weekDistM / 1000).toFixed(1)} km` : "—", label: "Weekly km" },
+                    { value: weekRuns.length, label: "Runs" },
+                    { value: longestM > 0 ? `${(longestM / 1000).toFixed(1)} km` : "—", label: "Longest" },
+                    { value: avgPace > 0 ? formatPace(1000 / avgPace) : "—", label: "Avg Pace" },
+                    { value: lastRunLabel, label: "Last Run" },
+                  ].map(({ value, label }) => (
+                    <div key={label} style={{ flex: "1 1 130px", minWidth: 0 }}>
+                      <StatCard value={value} label={label} color="var(--green)" />
+                    </div>
+                  ))}
                 </div>
               </>
             );

@@ -32,6 +32,8 @@ export function calcIntensityFactor(
  * TSS for a run with known pace.
  * TSS = (moving_time_sec × IF² × 100) / 3600
  * Exactly one hour at threshold pace = 100 TSS.
+ * Capped at 400 — equivalent to a ~4-hour race-effort run — to prevent
+ * data-corruption spikes from inflating the EMA.
  */
 export function calcRunTSS(
   movingTimeSec: number,
@@ -39,7 +41,7 @@ export function calcRunTSS(
   thresholdPaceSec = DEFAULT_THRESHOLD_PACE_SEC,
 ): number {
   const IF = calcIntensityFactor(paceSecPerKm, thresholdPaceSec);
-  return Math.round((movingTimeSec * IF * IF * 100) / 3600);
+  return Math.min(400, Math.round((movingTimeSec * IF * IF * 100) / 3600));
 }
 
 /**
@@ -88,13 +90,21 @@ function buildDailyTSS(metrics: TrainingMetricRow[], days: number): number[] {
  *
  * EMA decay: e^(-1/tau) where tau is the time constant in days.
  * One hour at threshold = 100 TSS → meaningful scale.
+ *
+ * lookbackDays controls how many days of history are used to warm up the EMA.
+ * More history → more accurate CTL (which has a 42-day time constant and needs
+ * at least 84–126 days to fully converge from a cold start). Default: 90 days
+ * reaches ~88% of the true steady-state CTL value.
  */
-export function computeCTLATLTSB(metrics: TrainingMetricRow[]): {
+export function computeCTLATLTSB(
+  metrics: TrainingMetricRow[],
+  lookbackDays = 90,
+): {
   ctl: number;
   atl: number;
   tsb: number;
 } {
-  const dailyTSS = buildDailyTSS(metrics, 42);
+  const dailyTSS = buildDailyTSS(metrics, lookbackDays);
   const kCtl = Math.exp(-1 / 42);
   const kAtl = Math.exp(-1 / 7);
   let ctl = 0;

@@ -274,7 +274,10 @@ export async function syncActivities(
     .maybeSingle();
   const thresholdPace = (profileData as any)?.threshold_pace_seconds ?? 330;
 
-  // 7. Auto-create sessions for run-type activities
+  // 7. Auto-create sessions + training_metrics for run-type activities.
+  //    This step is fully idempotent: it always fetches existing sessions first
+  //    and uses strava_activity_id as the dedup key for training_metrics so
+  //    re-syncing never creates duplicate rows or inflated TSS values.
   let sessionsCreated = 0;
   const runActivities = relevant.filter((a) =>
     RUN_SPORT_TYPES.has(a.sport_type ?? a.type),
@@ -283,19 +286,20 @@ export async function syncActivities(
   if (runActivities.length > 0) {
     const stravaIds = runActivities.map((a) => a.id);
 
-    const { data: existingSessions } = await supabase
+    // Find which activities already have a session
+    const { data: existingSessionData } = await supabase
       .from("sessions")
       .select("strava_activity_id")
       .eq("user_id", userId)
       .in("strava_activity_id", stravaIds);
 
     const existingIds = new Set(
-      ((existingSessions ?? []) as { strava_activity_id: number }[]).map(
+      ((existingSessionData ?? []) as { strava_activity_id: number }[]).map(
         (s) => Number(s.strava_activity_id),
       ),
     );
 
-    const sessionRows = runActivities
+    const sessionRowsToInsert = runActivities
       .filter((a) => !existingIds.has(a.id))
       .map((a) => {
         const distKm = (a.distance ?? 0) > 0 ? a.distance / 1000 : 0;
@@ -316,59 +320,77 @@ export async function syncActivities(
         };
       });
 
-    if (sessionRows.length > 0) {
-      await supabase.from("sessions").insert(sessionRows);
-      sessionsCreated = sessionRows.length;
+    if (sessionRowsToInsert.length > 0) {
+      await supabase.from("sessions").insert(sessionRowsToInsert);
+      sessionsCreated = sessionRowsToInsert.length;
+    }
 
-      // Fetch back the DB-assigned session IDs so we can create training_metrics
-      const { data: insertedSessions } = await supabase
-        .from("sessions")
-        .select("id, strava_activity_id")
-        .eq("user_id", userId)
-        .in("strava_activity_id", sessionRows.map((s) => s.strava_activity_id));
+    // Fetch ALL sessions for these activities (existing + newly inserted).
+    // This ensures training_metrics are created for old sessions that were
+    // synced before Phase 2B existed (they had no metrics row yet).
+    const { data: allSessionData } = await supabase
+      .from("sessions")
+      .select("id, strava_activity_id, duration, rpe, date, pace_per_km_seconds")
+      .eq("user_id", userId)
+      .in("strava_activity_id", stravaIds);
 
-      const sessionIdMap = new Map(
-        (
-          (insertedSessions ?? []) as {
-            id: number;
-            strava_activity_id: number;
-          }[]
-        ).map((s) => [s.strava_activity_id, s.id]),
-      );
+    const sessionByStravaId = new Map(
+      (
+        (allSessionData ?? []) as {
+          id: number;
+          strava_activity_id: number;
+          duration: number;
+          rpe: number;
+          date: string;
+          pace_per_km_seconds: number | null;
+        }[]
+      ).map((s) => [Number(s.strava_activity_id), s]),
+    );
 
-      const metricRows = sessionRows
-        .filter((s) => sessionIdMap.has(s.strava_activity_id))
-        .map((s) => {
-          const sessionId = sessionIdMap.get(s.strava_activity_id)!;
-          let tss: number;
-          let trimp: number;
+    // Build metric rows using raw Strava moving_time (avoids rounding from
+    // the minutes-stored duration field) and tag with strava_activity_id so
+    // the upsert is idempotent even if sessions were somehow duplicated.
+    const metricRows = runActivities
+      .filter((a) => sessionByStravaId.has(a.id))
+      .map((a) => {
+        const sess = sessionByStravaId.get(a.id)!;
+        const distKm = (a.distance ?? 0) > 0 ? a.distance / 1000 : 0;
+        const movingTimeSec = a.moving_time ?? 0;
+        const paceSecPerKm = distKm > 0 ? Math.round(movingTimeSec / distKm) : null;
 
-          if (s.pace_per_km_seconds && s.pace_per_km_seconds > 0) {
-            const IF = calcIntensityFactor(s.pace_per_km_seconds, thresholdPace);
-            tss = calcRunTSS(s.duration * 60, s.pace_per_km_seconds, thresholdPace);
-            trimp = calcTRIMP(s.duration * 60, IF);
-          } else {
-            tss = calcSessionTSSProxy(s.duration, s.rpe);
-            trimp = Math.round(s.duration * (s.rpe / 10));
-          }
+        let tss: number;
+        let trimp: number;
 
-          return {
-            user_id: userId,
-            session_id: sessionId,
-            activity_date: s.date,
-            trimp,
-            tss,
-            pace_seconds_per_km: s.pace_per_km_seconds ?? null,
-            load_score: tss,
-            source: "strava",
-          };
-        });
+        if (paceSecPerKm && paceSecPerKm > 0) {
+          const IF = calcIntensityFactor(paceSecPerKm, thresholdPace);
+          // Use raw moving_time (seconds) directly — avoids the rounding error
+          // that comes from converting the stored duration (minutes) back to seconds.
+          tss = calcRunTSS(movingTimeSec, paceSecPerKm, thresholdPace);
+          trimp = calcTRIMP(movingTimeSec, IF);
+        } else {
+          tss = calcSessionTSSProxy(sess.duration, sess.rpe);
+          trimp = Math.round(sess.duration * (sess.rpe / 10));
+        }
 
-      if (metricRows.length > 0) {
-        await (supabase as any)
-          .from("training_metrics")
-          .upsert(metricRows, { onConflict: "user_id,session_id" });
-      }
+        return {
+          user_id: userId,
+          session_id: sess.id,
+          strava_activity_id: a.id,
+          activity_date: a.start_date_local.split("T")[0],
+          trimp,
+          tss,
+          pace_seconds_per_km: paceSecPerKm ?? null,
+          load_score: tss,
+          source: "strava",
+        };
+      });
+
+    if (metricRows.length > 0) {
+      // onConflict targets the partial unique index added in the dedup migration.
+      // If that index doesn't exist yet, the upsert falls through to session_id.
+      await (supabase as any)
+        .from("training_metrics")
+        .upsert(metricRows, { onConflict: "user_id,strava_activity_id" });
     }
   }
 
