@@ -978,6 +978,37 @@ export default function NutritionPage() {
                 targetMl={targets.water}
               />
             </div>
+            {targets.exercise_calories > 0 && (
+              <div
+                style={{
+                  marginTop: 14,
+                  padding: "10px 14px",
+                  borderRadius: 10,
+                  background: "rgba(0,230,118,0.05)",
+                  border: "1px solid rgba(0,230,118,0.15)",
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr 1fr",
+                  gap: 8,
+                  textAlign: "center",
+                }}
+              >
+                {[
+                  { label: "Consumed", value: Math.round(consumed.calories), color: "var(--accent)" },
+                  { label: "Burned", value: Math.round(targets.exercise_calories), color: "var(--green)" },
+                  { label: "Net", value: Math.round(consumed.calories - targets.exercise_calories), color: "var(--text)" },
+                ].map(({ label, value, color }) => (
+                  <div key={label}>
+                    <div style={{ fontFamily: "var(--mono)", fontSize: 16, fontWeight: 700, color }}>
+                      {value.toLocaleString()}
+                    </div>
+                    <div style={{ fontSize: 9, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginTop: 2, fontFamily: "var(--mono)" }}>
+                      {label} kcal
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
             <div
               style={{
                 marginTop: 14,

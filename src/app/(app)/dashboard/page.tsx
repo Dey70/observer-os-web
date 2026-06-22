@@ -22,7 +22,7 @@ import {
   Input,
   EmptyState,
 } from "@/components/ui";
-import { formatDistance, formatDuration as fmtDur, activityTypeLabel, activityTypeColor } from "@/lib/strava";
+import { formatDistance, formatDuration as fmtDur, formatPace, activityTypeLabel, activityTypeColor } from "@/lib/strava";
 import type { DailyLog, Session, WeightLog, DashboardStats, RunningActivity } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -39,6 +39,7 @@ export default function DashboardPage() {
   const [weightInput, setWeightInput] = useState("");
   const [savingWeight, setSavingWeight] = useState(false);
   const [weekRuns, setWeekRuns] = useState<RunningActivity[]>([]);
+  const [recentActivities, setRecentActivities] = useState<RunningActivity[]>([]);
   const [stravaConnected, setStravaConnected] = useState(false);
 
   const load = useCallback(async () => {
@@ -49,7 +50,7 @@ export default function DashboardPage() {
     const since = getLast14Days();
     const weekStart = getWeekStart();
 
-    const [{ data: l }, { data: s }, { data: w }, { data: runs }] =
+    const [{ data: l }, { data: s }, { data: w }, { data: runs }, { data: recent }] =
       await Promise.all([
         sb
           .from("daily_logs")
@@ -75,18 +76,26 @@ export default function DashboardPage() {
           .eq("user_id", user.id)
           .gte("activity_date", weekStart)
           .order("activity_date", { ascending: false }),
+        (sb as any)
+          .from("running_activities")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("activity_date", { ascending: false })
+          .limit(5),
       ]);
 
     const logsData = (l ?? []) as DailyLog[];
     const sessData = (s ?? []) as Session[];
     const wData = (w ?? []) as WeightLog[];
     const runsData = (runs ?? []) as RunningActivity[];
+    const recentData = (recent ?? []) as RunningActivity[];
 
     setLogs(logsData);
     setSessions(sessData);
     setWeights(wData);
     setWeekRuns(runsData);
-    setStravaConnected(runsData.length > 0);
+    setRecentActivities(recentData);
+    setStravaConnected(recentData.length > 0);
     setStats(calcDashboardStats(logsData, sessData, wData));
     setCheckinStreak(calcCheckinStreak(logsData));
     setSessionStreak(calcSessionStreak(sessData));
@@ -211,8 +220,8 @@ export default function DashboardPage() {
         />
       </div>
 
-      {/* Running Summary — only shown when Strava activities exist this week */}
-      {(stravaConnected || weekRuns.length > 0) && (
+      {/* Running Summary — only shown when Strava activities exist */}
+      {stravaConnected && (
         <Card style={{ marginBottom: 16 }}>
           <div
             style={{
@@ -238,134 +247,161 @@ export default function DashboardPage() {
             </span>
           </div>
 
-          {weekRuns.length === 0 ? (
-            <div
-              style={{
-                fontSize: 12,
-                color: "var(--text-dim)",
-                fontFamily: "var(--mono)",
-                textAlign: "center",
-                padding: "16px 0",
-              }}
-            >
-              No activities this week yet
-            </div>
-          ) : (
-            <>
-              {/* Stats grid */}
-              <div className="grid-4" style={{ marginBottom: 16 }}>
-                <StatCard
-                  value={`${(weekRuns.reduce((s, r) => s + r.distance_meters, 0) / 1000).toFixed(1)} km`}
-                  label="Total Distance"
-                  color="var(--green)"
-                />
-                <StatCard
-                  value={weekRuns.length}
-                  label="Activities"
-                  color="var(--green)"
-                />
-                <StatCard
-                  value={`${(Math.max(...weekRuns.map((r) => r.distance_meters)) / 1000).toFixed(1)} km`}
-                  label="Longest"
-                  color="var(--green)"
-                />
-                <StatCard
-                  value={fmtDur(
-                    weekRuns.reduce((s, r) => s + r.moving_time_seconds, 0),
-                  )}
-                  label="Moving Time"
-                  color="var(--green)"
-                />
-              </div>
+          {/* Weekly stats grid */}
+          {(() => {
+            const weekDistM = weekRuns.reduce((s, r) => s + r.distance_meters, 0);
+            const weekTotalTime = weekRuns.reduce((s, r) => s + r.moving_time_seconds, 0);
+            const longestM = weekRuns.length > 0 ? Math.max(...weekRuns.map((r) => r.distance_meters)) : 0;
+            const avgPace = weekDistM > 0 ? weekTotalTime / (weekDistM / 1000) : 0; // sec/km
+            const lastRun = recentActivities[0];
+            const lastRunLabel = (() => {
+              if (!lastRun) return "—";
+              const diffDays = Math.floor(
+                (Date.now() - new Date(lastRun.activity_date + "T00:00:00").getTime()) / 86400000,
+              );
+              if (diffDays === 0) return "Today";
+              if (diffDays === 1) return "Yesterday";
+              return `${diffDays}d ago`;
+            })();
 
-              {/* Recent activities list */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {weekRuns.slice(0, 5).map((run) => (
-                  <div
-                    key={run.id}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      padding: "10px 14px",
-                      background: "var(--surface2)",
-                      border: "1px solid var(--border2)",
-                      borderRadius: 10,
-                      gap: 8,
-                    }}
-                  >
-                    <div
-                      style={{ display: "flex", alignItems: "center", gap: 10 }}
-                    >
-                      <span
-                        style={{
-                          fontFamily: "var(--mono)",
-                          fontSize: 9,
-                          letterSpacing: "0.08em",
-                          padding: "2px 7px",
-                          border: `1px solid ${activityTypeColor(run.activity_type)}`,
-                          color: activityTypeColor(run.activity_type),
-                          borderRadius: 4,
-                          textTransform: "uppercase",
-                          flexShrink: 0,
-                        }}
-                      >
-                        {activityTypeLabel(run.activity_type)}
-                      </span>
-                      <span
-                        style={{
-                          fontSize: 12,
-                          color: "var(--text)",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                          maxWidth: 180,
-                        }}
-                      >
-                        {run.activity_name}
-                      </span>
-                    </div>
-                    <div
+            return (
+              <>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(5, 1fr)",
+                    gap: 8,
+                    marginBottom: weekRuns.length > 0 ? 16 : 0,
+                  }}
+                  className="grid-running-stats"
+                >
+                  <StatCard
+                    value={weekRuns.length > 0 ? `${(weekDistM / 1000).toFixed(1)} km` : "—"}
+                    label="Weekly km"
+                    color="var(--green)"
+                  />
+                  <StatCard
+                    value={weekRuns.length}
+                    label="Runs"
+                    color="var(--green)"
+                  />
+                  <StatCard
+                    value={longestM > 0 ? `${(longestM / 1000).toFixed(1)} km` : "—"}
+                    label="Longest"
+                    color="var(--green)"
+                  />
+                  <StatCard
+                    value={avgPace > 0 ? formatPace(1000 / avgPace) : "—"}
+                    label="Avg Pace"
+                    color="var(--green)"
+                  />
+                  <StatCard
+                    value={lastRunLabel}
+                    label="Last Run"
+                    color="var(--green)"
+                  />
+                </div>
+              </>
+            );
+          })()}
+
+          {/* Recent 5 activities (all-time, not just this week) */}
+          {recentActivities.length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {recentActivities.map((run) => (
+                <div
+                  key={run.id}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "10px 14px",
+                    background: "var(--surface2)",
+                    border: "1px solid var(--border2)",
+                    borderRadius: 10,
+                    gap: 8,
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <span
                       style={{
-                        display: "flex",
-                        gap: 12,
-                        alignItems: "center",
+                        fontFamily: "var(--mono)",
+                        fontSize: 9,
+                        letterSpacing: "0.08em",
+                        padding: "2px 7px",
+                        border: `1px solid ${activityTypeColor(run.activity_type)}`,
+                        color: activityTypeColor(run.activity_type),
+                        borderRadius: 4,
+                        textTransform: "uppercase",
                         flexShrink: 0,
                       }}
                     >
-                      <span
-                        style={{
-                          fontFamily: "var(--mono)",
-                          fontSize: 12,
-                          fontWeight: 600,
-                          color: "var(--green)",
-                        }}
-                      >
-                        {formatDistance(run.distance_meters)} km
-                      </span>
+                      {activityTypeLabel(run.activity_type)}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: 12,
+                        color: "var(--text)",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                        maxWidth: 180,
+                      }}
+                    >
+                      {run.activity_name}
+                    </span>
+                  </div>
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: 12,
+                      alignItems: "center",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontFamily: "var(--mono)",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: "var(--green)",
+                      }}
+                    >
+                      {formatDistance(run.distance_meters)} km
+                    </span>
+                    <span
+                      style={{
+                        fontSize: 11,
+                        color: "var(--text-dim)",
+                        fontFamily: "var(--mono)",
+                      }}
+                    >
+                      {fmtDur(run.moving_time_seconds)}
+                    </span>
+                    {run.average_speed && run.average_speed > 0 && (
                       <span
                         style={{
                           fontSize: 11,
-                          color: "var(--text-dim)",
+                          color: "var(--green)",
                           fontFamily: "var(--mono)",
                         }}
                       >
-                        {fmtDur(run.moving_time_seconds)}
+                        {formatPace(run.average_speed)}
                       </span>
-                      <span
-                        style={{
-                          fontSize: 10,
-                          color: "var(--text-dim)",
-                          fontFamily: "var(--mono)",
-                        }}
-                      >
-                        {run.activity_date.slice(5)}
-                      </span>
-                    </div>
+                    )}
+                    <span
+                      style={{
+                        fontSize: 10,
+                        color: "var(--text-dim)",
+                        fontFamily: "var(--mono)",
+                      }}
+                    >
+                      {run.activity_date.slice(5)}
+                    </span>
                   </div>
-                ))}
-              </div>
-            </>
+                </div>
+              ))}
+            </div>
           )}
         </Card>
       )}

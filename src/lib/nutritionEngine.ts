@@ -28,6 +28,7 @@ export interface DailyTargets {
   water: number; // ml
   bmr: number;
   tdee: number;
+  exercise_calories: number; // kcal burned from today's sessions
   activity_label: "rest" | "moderate" | "heavy";
   breakdown_reason: string;
   bmi: number;
@@ -269,6 +270,7 @@ export function calculateDailyTargets(
     water,
     bmr: Math.round(bmr),
     tdee,
+    exercise_calories: addOn,
     activity_label: activityLabel,
     breakdown_reason,
     bmi,

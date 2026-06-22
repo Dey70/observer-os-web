@@ -87,6 +87,9 @@ const TRACKED_SPORT_TYPES = new Set([
   "Ride", "VirtualRide", "MountainBikeRide",
 ]);
 
+// Only these become sessions (type = 'run')
+const RUN_SPORT_TYPES = new Set(["Run", "TrailRun", "VirtualRun"]);
+
 // ─── OAuth ────────────────────────────────────────────────────────────────────
 
 export function getStravaAuthUrl(state: string): string {
@@ -172,6 +175,7 @@ export async function fetchActivities(
 export interface SyncResult {
   inserted: number;
   fetched: number;
+  sessionsCreated: number;
 }
 
 export async function syncActivities(
@@ -256,7 +260,131 @@ export async function syncActivities(
       });
   }
 
-  // 6. Update last_synced_at
+  // 6. Auto-create sessions for run-type activities
+  let sessionsCreated = 0;
+  const runActivities = relevant.filter((a) =>
+    RUN_SPORT_TYPES.has(a.sport_type ?? a.type),
+  );
+
+  if (runActivities.length > 0) {
+    const stravaIds = runActivities.map((a) => a.id);
+
+    const { data: existingSessions } = await supabase
+      .from("sessions")
+      .select("strava_activity_id")
+      .eq("user_id", userId)
+      .in("strava_activity_id", stravaIds);
+
+    const existingIds = new Set(
+      ((existingSessions ?? []) as { strava_activity_id: number }[]).map(
+        (s) => Number(s.strava_activity_id),
+      ),
+    );
+
+    const sessionRows = runActivities
+      .filter((a) => !existingIds.has(a.id))
+      .map((a) => {
+        const distKm = (a.distance ?? 0) > 0 ? a.distance / 1000 : 0;
+        const durationMin = Math.max(1, Math.round((a.moving_time ?? 0) / 60));
+        const paceSecPerKm =
+          distKm > 0 ? Math.round((a.moving_time ?? 0) / distKm) : null;
+        return {
+          user_id: userId,
+          date: a.start_date_local.split("T")[0],
+          type: "run" as const,
+          duration: durationMin,
+          rpe: 7,
+          notes: `${a.name}${distKm > 0 ? ` · ${distKm.toFixed(2)} km` : ""}`,
+          strava_activity_id: a.id,
+          distance_meters: (a.distance ?? 0) > 0 ? a.distance : null,
+          pace_per_km_seconds: paceSecPerKm,
+          calories_burned: a.calories ?? null,
+        };
+      });
+
+    if (sessionRows.length > 0) {
+      await supabase.from("sessions").insert(sessionRows);
+      sessionsCreated = sessionRows.length;
+    }
+  }
+
+  // 7. Sync Strava-derived personal records from all-time run history
+  const { data: allRunData } = await supabase
+    .from("running_activities")
+    .select("distance_meters, moving_time_seconds, activity_date, activity_type")
+    .eq("user_id", userId)
+    .in("activity_type", ["Run", "TrailRun", "VirtualRun"]);
+
+  const allRuns = ((allRunData ?? []) as {
+    distance_meters: number;
+    moving_time_seconds: number;
+    activity_date: string;
+    activity_type: string;
+  }[]).filter((r) => r.distance_meters > 0 && r.moving_time_seconds > 0);
+
+  if (allRuns.length > 0) {
+    const today = new Date().toISOString().split("T")[0];
+
+    const longestRun = allRuns.reduce((best, r) =>
+      r.distance_meters > best.distance_meters ? r : best,
+    );
+
+    const paceRuns = allRuns.filter((r) => r.distance_meters >= 1000);
+    const bestPaceRun =
+      paceRuns.length > 0
+        ? paceRuns.reduce((best, r) => {
+            const pace = r.moving_time_seconds / (r.distance_meters / 1000);
+            const bestPace = best.moving_time_seconds / (best.distance_meters / 1000);
+            return pace < bestPace ? r : best;
+          })
+        : null;
+
+    const totalKm = allRuns.reduce((sum, r) => sum + r.distance_meters / 1000, 0);
+
+    const recordsToUpsert = [
+      {
+        user_id: userId,
+        type: "run",
+        metric: "strava_longest_km",
+        value: Math.round((longestRun.distance_meters / 1000) * 100) / 100,
+        date: longestRun.activity_date,
+      },
+      {
+        user_id: userId,
+        type: "run",
+        metric: "strava_total_runs",
+        value: allRuns.length,
+        date: today,
+      },
+      {
+        user_id: userId,
+        type: "run",
+        metric: "strava_total_km",
+        value: Math.round(totalKm * 10) / 10,
+        date: today,
+      },
+    ];
+
+    if (bestPaceRun) {
+      recordsToUpsert.push({
+        user_id: userId,
+        type: "run",
+        metric: "strava_best_pace",
+        value: Math.round(
+          bestPaceRun.moving_time_seconds / (bestPaceRun.distance_meters / 1000),
+        ),
+        date: bestPaceRun.activity_date,
+      });
+    }
+
+    for (const record of recordsToUpsert) {
+      await (supabase as any)
+        .from("personal_records")
+        .upsert(record, { onConflict: "user_id,type,metric" });
+    }
+  }
+
+  // 8. Update last_synced_at
   await supabase
     .from("strava_connections")
     .update({
@@ -265,7 +393,7 @@ export async function syncActivities(
     })
     .eq("user_id", userId);
 
-  return { inserted: relevant.length, fetched: activities.length };
+  return { inserted: relevant.length, fetched: activities.length, sessionsCreated };
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

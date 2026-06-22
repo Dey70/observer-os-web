@@ -40,6 +40,26 @@ const METRIC_META: Record<
     label: "Highest Study Load",
     format: (v) => `${v} pts`,
   },
+  strava_longest_km: {
+    label: "Longest Run (Strava)",
+    format: (v) => `${v.toFixed(2)} km`,
+  },
+  strava_best_pace: {
+    label: "Best Pace (Strava)",
+    format: (v) => {
+      const mins = Math.floor(v / 60);
+      const secs = Math.round(v % 60);
+      return `${mins}:${String(secs).padStart(2, "0")} /km`;
+    },
+  },
+  strava_total_runs: {
+    label: "Total Runs",
+    format: (v) => String(Math.round(v)),
+  },
+  strava_total_km: {
+    label: "Total Distance",
+    format: (v) => `${Math.round(v)} km`,
+  },
 };
 
 const TYPE_COLOR: Record<string, string> = {
