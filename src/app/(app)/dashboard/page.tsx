@@ -43,6 +43,7 @@ export default function DashboardPage() {
   const [recentActivities, setRecentActivities] = useState<RunningActivity[]>([]);
   const [stravaConnected, setStravaConnected] = useState(false);
   const [trainingMetrics, setTrainingMetrics] = useState<TrainingMetricRow[]>([]);
+  const [todayNetCals, setTodayNetCals] = useState<{ eaten: number; burned: number } | null>(null);
   const [profile, setProfile] = useState<{
     weekly_run_km_target: number;
     weekly_run_count_target: number;
@@ -61,6 +62,8 @@ export default function DashboardPage() {
       .split("T")[0];
     const metrics42Since = new Date(Date.now() - 90 * 86400000).toISOString().split("T")[0];
 
+    const todayStr2 = new Date().toISOString().split("T")[0];
+
     const [
       { data: l },
       { data: s },
@@ -69,6 +72,7 @@ export default function DashboardPage() {
       { data: recent },
       { data: metricsData },
       { data: profileData },
+      { data: nutData },
     ] = await Promise.all([
       sb
         .from("daily_logs")
@@ -111,6 +115,11 @@ export default function DashboardPage() {
         .select("weekly_run_km_target, weekly_run_count_target, weekly_gym_target")
         .eq("user_id", user.id)
         .maybeSingle(),
+      sb
+        .from("nutrition_logs")
+        .select("calories")
+        .eq("user_id", user.id)
+        .eq("date", todayStr2),
     ]);
 
     const logsData = (l ?? []) as DailyLog[];
@@ -127,6 +136,14 @@ export default function DashboardPage() {
     setStravaConnected(recentData.length > 0);
     setTrainingMetrics((metricsData ?? []) as TrainingMetricRow[]);
     setProfile(profileData as typeof profile);
+
+    const nutRows = (nutData ?? []) as { calories: number }[];
+    const eaten = nutRows.reduce((sum, r) => sum + (r.calories ?? 0), 0);
+    const burned = (sessData as { calories_burned?: number | null; date: string }[])
+      .filter((s) => s.date === todayStr2 && s.calories_burned)
+      .reduce((sum, s) => sum + (s.calories_burned ?? 0), 0);
+    setTodayNetCals(nutRows.length > 0 || burned > 0 ? { eaten, burned } : null);
+
     setStats(calcDashboardStats(logsData, sessData, wData));
     setCheckinStreak(calcCheckinStreak(logsData));
     setSessionStreak(calcSessionStreak(sessData));
@@ -370,6 +387,28 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+
+      {/* Net Calories — only shown when nutrition or burned data exists today */}
+      {todayNetCals !== null && (() => {
+        const net = todayNetCals.eaten - todayNetCals.burned;
+        const netColor = net > 300 ? "var(--yellow)" : net < -300 ? "var(--red)" : "var(--green)";
+        return (
+          <Card style={{ marginBottom: 16 }}>
+            <SectionLabel>Net Calories · Today</SectionLabel>
+            <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+              <div style={{ flex: "1 1 100px" }}>
+                <StatCard value={Math.round(todayNetCals.eaten)} label="Eaten" color="var(--yellow)" />
+              </div>
+              <div style={{ flex: "1 1 100px" }}>
+                <StatCard value={Math.round(todayNetCals.burned)} label="Burned" color="var(--red)" />
+              </div>
+              <div style={{ flex: "1 1 100px" }}>
+                <StatCard value={net > 0 ? `+${Math.round(net)}` : String(Math.round(net))} label="Net" color={netColor} />
+              </div>
+            </div>
+          </Card>
+        );
+      })()}
 
       {/* Running Summary — only shown when Strava activities exist */}
       {stravaConnected && (
