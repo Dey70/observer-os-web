@@ -29,7 +29,10 @@ import {
   BookmarkCheck,
   ChevronLeft,
   ChevronRight,
+  Activity,
+  RefreshCw,
 } from "lucide-react";
+import { activityTypeLabel, activityTypeColor, formatDuration as fmtActivityDur } from "@/lib/strava";
 
 export const dynamic = "force-dynamic";
 
@@ -433,6 +436,14 @@ export default function NutritionPage() {
   const [customWaterAmount, setCustomWaterAmount] = useState("");
   const [loggingWater, setLoggingWater] = useState(false);
   const [pinnedIndices, setPinnedIndices] = useState<Set<number>>(new Set());
+  const [todayActivity, setTodayActivity] = useState<{
+    activity_type: string;
+    activity_name: string;
+    distance_meters: number;
+    moving_time_seconds: number;
+  } | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const todayStr = new Date().toISOString().split("T")[0];
@@ -459,7 +470,9 @@ export default function NutritionPage() {
     } = await sb.auth.getUser();
     if (!user) return;
 
-    const [targetsRes, logsRes, waterRes] = await Promise.all([
+    const isViewingToday = date === new Date().toISOString().split("T")[0];
+
+    const [targetsRes, logsRes, waterRes, actRes] = await Promise.all([
       fetch(`/api/nutrition/targets?date=${date}`).then((r) => r.json()),
       (sb as any)
         .from("nutrition_logs")
@@ -473,6 +486,18 @@ export default function NutritionPage() {
         .eq("user_id", user.id)
         .eq("date", date)
         .order("logged_at", { ascending: true }),
+      isViewingToday
+        ? (sb as any)
+            .from("running_activities")
+            .select(
+              "activity_type, activity_name, distance_meters, moving_time_seconds",
+            )
+            .eq("user_id", user.id)
+            .eq("activity_date", date)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
     ]);
 
     if (targetsRes.error) {
@@ -485,6 +510,7 @@ export default function NutritionPage() {
 
     setLogs((logsRes.data ?? []) as NutritionLogRow[]);
     setWaterLogs((waterRes.data ?? []) as WaterLogRow[]);
+    setTodayActivity(actRes?.data ?? null);
     setLoading(false);
   }, [date]);
 
@@ -506,6 +532,27 @@ export default function NutritionPage() {
   const consumedWaterMl = waterLogs.reduce((s, w) => s + w.amount_ml, 0);
 
   const groupedLogs = groupLogsByMeal(logs);
+
+  async function handleStravaSync() {
+    if (syncing) return;
+    setSyncing(true);
+    setSyncResult(null);
+    try {
+      const res = await fetch("/api/strava/sync", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        setSyncResult(`Error: ${data.error ?? "Sync failed"}`);
+      } else {
+        setSyncResult(`+${data.inserted} activit${data.inserted === 1 ? "y" : "ies"}`);
+        load();
+        setTimeout(() => setSyncResult(null), 4000);
+      }
+    } catch {
+      setSyncResult("Network error");
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   async function handleParse() {
     if (!input.trim() || parsing) return;
@@ -783,7 +830,96 @@ export default function NutritionPage() {
               targets.breakdown_reason.slice(1)
             : "Today's intake"
         }
+        right={
+          <button
+            onClick={handleStravaSync}
+            disabled={syncing}
+            title="Sync Strava activities"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "7px 13px",
+              borderRadius: 8,
+              border: "1px solid rgba(252,76,2,0.4)",
+              background: syncing
+                ? "var(--surface2)"
+                : "rgba(252,76,2,0.08)",
+              color: syncing ? "var(--text-dim)" : "#FC4C02",
+              fontFamily: "var(--mono)",
+              fontSize: 10,
+              letterSpacing: "0.06em",
+              cursor: syncing ? "not-allowed" : "pointer",
+            }}
+          >
+            <RefreshCw
+              size={11}
+              strokeWidth={2.5}
+              style={{ animation: syncing ? "spin 0.8s linear infinite" : "none" }}
+            />
+            {syncing ? "Syncing…" : syncResult ?? "Sync Strava"}
+          </button>
+        }
       />
+
+      {/* Today's Strava activity strip */}
+      {isToday && todayActivity && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            padding: "10px 14px",
+            marginBottom: 12,
+            borderRadius: 10,
+            background: "rgba(0,230,118,0.06)",
+            border: "1px solid rgba(0,230,118,0.18)",
+          }}
+        >
+          <Activity
+            size={13}
+            color={activityTypeColor(todayActivity.activity_type)}
+            strokeWidth={2}
+            style={{ flexShrink: 0 }}
+          />
+          <span
+            style={{
+              fontFamily: "var(--mono)",
+              fontSize: 11,
+              color: activityTypeColor(todayActivity.activity_type),
+              fontWeight: 600,
+              flexShrink: 0,
+            }}
+          >
+            {activityTypeLabel(todayActivity.activity_type)}
+          </span>
+          <span
+            style={{
+              fontFamily: "var(--mono)",
+              fontSize: 11,
+              color: "var(--text-muted)",
+            }}
+          >
+            {(todayActivity.distance_meters / 1000).toFixed(2)} km
+            <span style={{ color: "var(--text-dim)", margin: "0 5px" }}>·</span>
+            {fmtActivityDur(todayActivity.moving_time_seconds)}
+          </span>
+          <span style={{ flex: 1 }} />
+          <span
+            style={{
+              fontSize: 9,
+              fontFamily: "var(--mono)",
+              color: "#FC4C02",
+              letterSpacing: "0.1em",
+              border: "1px solid rgba(252,76,2,0.35)",
+              padding: "2px 7px",
+              borderRadius: 4,
+            }}
+          >
+            STRAVA
+          </span>
+        </div>
+      )}
 
       {targetsError ? (
         <Card style={{ borderColor: "var(--yellow)", marginBottom: 16 }}>

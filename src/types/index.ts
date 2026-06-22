@@ -82,6 +82,37 @@ export interface ToolCall {
   };
 }
 
+export interface StravaConnection {
+  id: string;
+  user_id: string;
+  athlete_id: number;
+  athlete_name: string | null;
+  athlete_avatar: string | null;
+  last_synced_at: string | null;
+  connected_since: string;
+  activity_count: number;
+  week_km: number;
+  week_activities: RunningActivity[];
+}
+
+export interface RunningActivity {
+  id: string;
+  user_id: string;
+  strava_activity_id: number;
+  activity_name: string;
+  activity_type: string;
+  distance_meters: number;
+  moving_time_seconds: number;
+  elapsed_time_seconds: number;
+  calories: number | null;
+  average_speed: number | null;
+  max_speed: number | null;
+  elevation_gain: number | null;
+  activity_date: string;
+  source: string;
+  created_at: string;
+}
+
 export type ReadinessLevel = "high" | "moderate" | "low";
 
 export interface ReadinessScore {

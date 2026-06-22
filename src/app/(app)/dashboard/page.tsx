@@ -8,6 +8,7 @@ import {
   calcSessionStreak,
   formatDuration,
   getLast14Days,
+  getWeekStart,
   rpeToLabel,
 } from "@/lib/utils";
 import {
@@ -21,7 +22,8 @@ import {
   Input,
   EmptyState,
 } from "@/components/ui";
-import type { DailyLog, Session, WeightLog, DashboardStats } from "@/types";
+import { formatDistance, formatDuration as fmtDur, activityTypeLabel, activityTypeColor } from "@/lib/strava";
+import type { DailyLog, Session, WeightLog, DashboardStats, RunningActivity } from "@/types";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +38,8 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [weightInput, setWeightInput] = useState("");
   const [savingWeight, setSavingWeight] = useState(false);
+  const [weekRuns, setWeekRuns] = useState<RunningActivity[]>([]);
+  const [stravaConnected, setStravaConnected] = useState(false);
 
   const load = useCallback(async () => {
     const {
@@ -43,32 +47,46 @@ export default function DashboardPage() {
     } = await sb.auth.getUser();
     if (!user) return;
     const since = getLast14Days();
-    const [{ data: l }, { data: s }, { data: w }] = await Promise.all([
-      sb
-        .from("daily_logs")
-        .select("*")
-        .eq("user_id", user.id)
-        .gte("date", since)
-        .order("date"),
-      sb
-        .from("sessions")
-        .select("*")
-        .eq("user_id", user.id)
-        .gte("date", since)
-        .order("date", { ascending: false }),
-      sb
-        .from("weight_logs")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("date", { ascending: false })
-        .limit(14),
-    ]);
+    const weekStart = getWeekStart();
+
+    const [{ data: l }, { data: s }, { data: w }, { data: runs }] =
+      await Promise.all([
+        sb
+          .from("daily_logs")
+          .select("*")
+          .eq("user_id", user.id)
+          .gte("date", since)
+          .order("date"),
+        sb
+          .from("sessions")
+          .select("*")
+          .eq("user_id", user.id)
+          .gte("date", since)
+          .order("date", { ascending: false }),
+        sb
+          .from("weight_logs")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("date", { ascending: false })
+          .limit(14),
+        (sb as any)
+          .from("running_activities")
+          .select("*")
+          .eq("user_id", user.id)
+          .gte("activity_date", weekStart)
+          .order("activity_date", { ascending: false }),
+      ]);
+
     const logsData = (l ?? []) as DailyLog[];
     const sessData = (s ?? []) as Session[];
     const wData = (w ?? []) as WeightLog[];
+    const runsData = (runs ?? []) as RunningActivity[];
+
     setLogs(logsData);
     setSessions(sessData);
     setWeights(wData);
+    setWeekRuns(runsData);
+    setStravaConnected(runsData.length > 0);
     setStats(calcDashboardStats(logsData, sessData, wData));
     setCheckinStreak(calcCheckinStreak(logsData));
     setSessionStreak(calcSessionStreak(sessData));
@@ -192,6 +210,165 @@ export default function DashboardPage() {
           color="var(--red)"
         />
       </div>
+
+      {/* Running Summary — only shown when Strava activities exist this week */}
+      {(stravaConnected || weekRuns.length > 0) && (
+        <Card style={{ marginBottom: 16 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: 16,
+            }}
+          >
+            <SectionLabel>This Week · Running</SectionLabel>
+            <span
+              style={{
+                fontSize: 9,
+                fontFamily: "var(--mono)",
+                color: "#FC4C02",
+                letterSpacing: "0.1em",
+                border: "1px solid rgba(252,76,2,0.35)",
+                padding: "2px 7px",
+                borderRadius: 4,
+              }}
+            >
+              STRAVA
+            </span>
+          </div>
+
+          {weekRuns.length === 0 ? (
+            <div
+              style={{
+                fontSize: 12,
+                color: "var(--text-dim)",
+                fontFamily: "var(--mono)",
+                textAlign: "center",
+                padding: "16px 0",
+              }}
+            >
+              No activities this week yet
+            </div>
+          ) : (
+            <>
+              {/* Stats grid */}
+              <div className="grid-4" style={{ marginBottom: 16 }}>
+                <StatCard
+                  value={`${(weekRuns.reduce((s, r) => s + r.distance_meters, 0) / 1000).toFixed(1)} km`}
+                  label="Total Distance"
+                  color="var(--green)"
+                />
+                <StatCard
+                  value={weekRuns.length}
+                  label="Activities"
+                  color="var(--green)"
+                />
+                <StatCard
+                  value={`${(Math.max(...weekRuns.map((r) => r.distance_meters)) / 1000).toFixed(1)} km`}
+                  label="Longest"
+                  color="var(--green)"
+                />
+                <StatCard
+                  value={fmtDur(
+                    weekRuns.reduce((s, r) => s + r.moving_time_seconds, 0),
+                  )}
+                  label="Moving Time"
+                  color="var(--green)"
+                />
+              </div>
+
+              {/* Recent activities list */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {weekRuns.slice(0, 5).map((run) => (
+                  <div
+                    key={run.id}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "10px 14px",
+                      background: "var(--surface2)",
+                      border: "1px solid var(--border2)",
+                      borderRadius: 10,
+                      gap: 8,
+                    }}
+                  >
+                    <div
+                      style={{ display: "flex", alignItems: "center", gap: 10 }}
+                    >
+                      <span
+                        style={{
+                          fontFamily: "var(--mono)",
+                          fontSize: 9,
+                          letterSpacing: "0.08em",
+                          padding: "2px 7px",
+                          border: `1px solid ${activityTypeColor(run.activity_type)}`,
+                          color: activityTypeColor(run.activity_type),
+                          borderRadius: 4,
+                          textTransform: "uppercase",
+                          flexShrink: 0,
+                        }}
+                      >
+                        {activityTypeLabel(run.activity_type)}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: 12,
+                          color: "var(--text)",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                          maxWidth: 180,
+                        }}
+                      >
+                        {run.activity_name}
+                      </span>
+                    </div>
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: 12,
+                        alignItems: "center",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontFamily: "var(--mono)",
+                          fontSize: 12,
+                          fontWeight: 600,
+                          color: "var(--green)",
+                        }}
+                      >
+                        {formatDistance(run.distance_meters)} km
+                      </span>
+                      <span
+                        style={{
+                          fontSize: 11,
+                          color: "var(--text-dim)",
+                          fontFamily: "var(--mono)",
+                        }}
+                      >
+                        {fmtDur(run.moving_time_seconds)}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: 10,
+                          color: "var(--text-dim)",
+                          fontFamily: "var(--mono)",
+                        }}
+                      >
+                        {run.activity_date.slice(5)}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </Card>
+      )}
 
       {/* Weight Tracker */}
       <Card style={{ marginBottom: 16 }}>

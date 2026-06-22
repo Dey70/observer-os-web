@@ -311,6 +311,86 @@ export interface Database {
           fiber?: number;
         };
       };
+      strava_connections: {
+        Row: {
+          id: string;
+          user_id: string;
+          athlete_id: number;
+          athlete_name: string | null;
+          athlete_avatar: string | null;
+          access_token: string;
+          refresh_token: string;
+          expires_at: number;
+          last_synced_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          athlete_id: number;
+          athlete_name?: string | null;
+          athlete_avatar?: string | null;
+          access_token: string;
+          refresh_token: string;
+          expires_at: number;
+          last_synced_at?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          athlete_name?: string | null;
+          athlete_avatar?: string | null;
+          access_token?: string;
+          refresh_token?: string;
+          expires_at?: number;
+          last_synced_at?: string | null;
+          updated_at?: string;
+        };
+      };
+      running_activities: {
+        Row: {
+          id: string;
+          user_id: string;
+          strava_activity_id: number;
+          activity_name: string;
+          activity_type: string;
+          distance_meters: number;
+          moving_time_seconds: number;
+          elapsed_time_seconds: number;
+          calories: number | null;
+          average_speed: number | null;
+          max_speed: number | null;
+          elevation_gain: number | null;
+          activity_date: string;
+          source: string;
+          created_at: string;
+        };
+        Insert: {
+          user_id: string;
+          strava_activity_id: number;
+          activity_name: string;
+          activity_type?: string;
+          distance_meters?: number;
+          moving_time_seconds?: number;
+          elapsed_time_seconds?: number;
+          calories?: number | null;
+          average_speed?: number | null;
+          max_speed?: number | null;
+          elevation_gain?: number | null;
+          activity_date: string;
+          source?: string;
+        };
+        Update: {
+          activity_name?: string;
+          activity_type?: string;
+          distance_meters?: number;
+          moving_time_seconds?: number;
+          elapsed_time_seconds?: number;
+          calories?: number | null;
+          average_speed?: number | null;
+          max_speed?: number | null;
+          elevation_gain?: number | null;
+        };
+      };
       food_cache: {
         Row: {
           id: number;

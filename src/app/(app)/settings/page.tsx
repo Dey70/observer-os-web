@@ -1,8 +1,8 @@
 // src/app/(app)/settings/page.tsx
 "use client";
 
-import { useState, useRef } from "react";
-import { Card, PageHeader, SectionLabel } from "@/components/ui";
+import { useState, useRef, useEffect } from "react";
+import { Card, PageHeader, SectionLabel, Spinner } from "@/components/ui";
 import {
   Bug,
   Lightbulb,
@@ -14,6 +14,12 @@ import {
   Briefcase,
   Camera,
   Mail,
+  Activity,
+  RefreshCw,
+  Unlink,
+  Link2,
+  CheckCircle2,
+  AlertCircle,
 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -46,6 +52,334 @@ const CREATOR_NOTE_PARAGRAPHS = [
 ];
 
 const TECH_STACK = "Next.js, Supabase, and Groq-powered AI";
+
+// ─── Strava Integration ───────────────────────────────────────────────────────
+
+type StravaStatus =
+  | { connected: false }
+  | {
+      connected: true;
+      athlete_name: string | null;
+      athlete_avatar: string | null;
+      last_synced_at: string | null;
+      activity_count: number;
+      week_km: number;
+    };
+
+function formatRelativeTime(iso: string | null): string {
+  if (!iso) return "Never";
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
+function StravaIntegrationCard() {
+  const [status, setStatus] = useState<StravaStatus | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
+  const [disconnecting, setDisconnecting] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/strava/status")
+      .then((r) => r.json())
+      .then(setStatus)
+      .catch(() => setStatus({ connected: false }));
+
+    // Handle redirect back from Strava OAuth
+    const url = new URL(window.location.href);
+    const stravaParam = url.searchParams.get("strava");
+    if (stravaParam === "connected") {
+      setSyncMsg({ type: "success", text: "Strava connected!" });
+      window.history.replaceState({}, "", "/settings");
+    } else if (stravaParam === "error") {
+      setSyncMsg({ type: "error", text: "Connection failed — try again." });
+      window.history.replaceState({}, "", "/settings");
+    } else if (stravaParam === "denied") {
+      setSyncMsg({ type: "error", text: "Authorization denied on Strava." });
+      window.history.replaceState({}, "", "/settings");
+    }
+  }, []);
+
+  async function handleSync() {
+    if (syncing) return;
+    setSyncing(true);
+    setSyncMsg(null);
+    try {
+      const res = await fetch("/api/strava/sync", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        setSyncMsg({ type: "error", text: data.error ?? "Sync failed." });
+      } else {
+        setSyncMsg({
+          type: "success",
+          text: `Synced ${data.inserted} new activit${data.inserted === 1 ? "y" : "ies"}.`,
+        });
+        // Refresh status to update counts
+        fetch("/api/strava/status")
+          .then((r) => r.json())
+          .then(setStatus);
+      }
+    } catch {
+      setSyncMsg({ type: "error", text: "Network error during sync." });
+    } finally {
+      setSyncing(false);
+    }
+  }
+
+  async function handleDisconnect() {
+    if (!confirm("Disconnect Strava? Your imported activities will be kept."))
+      return;
+    setDisconnecting(true);
+    try {
+      await fetch("/api/strava/disconnect", { method: "DELETE" });
+      setStatus({ connected: false });
+      setSyncMsg(null);
+    } finally {
+      setDisconnecting(false);
+    }
+  }
+
+  const isConnected = status?.connected === true;
+
+  return (
+    <Card style={{ marginBottom: 16 }}>
+      <SectionLabel>Integrations</SectionLabel>
+
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+          flexWrap: "wrap",
+        }}
+      >
+        {/* Left: Strava identity */}
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <div
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 10,
+              background: isConnected ? "rgba(252,76,2,0.12)" : "var(--surface2)",
+              border: `1px solid ${isConnected ? "rgba(252,76,2,0.35)" : "var(--border)"}`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <Activity
+              size={18}
+              color={isConnected ? "#FC4C02" : "var(--text-dim)"}
+              strokeWidth={2}
+            />
+          </div>
+
+          <div>
+            <div
+              style={{
+                fontFamily: "var(--mono)",
+                fontSize: 14,
+                fontWeight: 600,
+                color: "var(--text)",
+              }}
+            >
+              Strava
+            </div>
+            {status === null ? (
+              <div
+                style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}
+              >
+                Loading...
+              </div>
+            ) : isConnected && status.connected ? (
+              <div style={{ marginTop: 2 }}>
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: "var(--text-muted)",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 4,
+                      color: "var(--green)",
+                      fontFamily: "var(--mono)",
+                      fontSize: 10,
+                      letterSpacing: "0.05em",
+                    }}
+                  >
+                    <CheckCircle2 size={11} strokeWidth={2.5} />
+                    CONNECTED
+                  </span>
+                  {status.athlete_name && (
+                    <span style={{ color: "var(--text-muted)", fontSize: 11 }}>
+                      · {status.athlete_name}
+                    </span>
+                  )}
+                </div>
+                <div
+                  style={{
+                    fontSize: 10,
+                    color: "var(--text-dim)",
+                    fontFamily: "var(--mono)",
+                    marginTop: 3,
+                    display: "flex",
+                    gap: 10,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <span>{status.activity_count} activities imported</span>
+                  <span>·</span>
+                  <span>Synced {formatRelativeTime(status.last_synced_at)}</span>
+                  {status.week_km > 0 && (
+                    <>
+                      <span>·</span>
+                      <span>{status.week_km} km this week</span>
+                    </>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div
+                style={{
+                  fontSize: 11,
+                  color: "var(--text-muted)",
+                  marginTop: 2,
+                }}
+              >
+                Connect to import runs and rides
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Right: Action buttons */}
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          {status !== null && isConnected ? (
+            <>
+              <button
+                onClick={handleSync}
+                disabled={syncing}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "8px 14px",
+                  borderRadius: 8,
+                  border: "1px solid var(--border)",
+                  background: "var(--surface2)",
+                  color: syncing ? "var(--text-dim)" : "var(--text-muted)",
+                  fontFamily: "var(--mono)",
+                  fontSize: 11,
+                  cursor: syncing ? "not-allowed" : "pointer",
+                  letterSpacing: "0.05em",
+                }}
+              >
+                <RefreshCw
+                  size={12}
+                  strokeWidth={2}
+                  style={{
+                    animation: syncing ? "spin 0.8s linear infinite" : "none",
+                  }}
+                />
+                {syncing ? "Syncing..." : "Sync Now"}
+              </button>
+              <button
+                onClick={handleDisconnect}
+                disabled={disconnecting}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "8px 14px",
+                  borderRadius: 8,
+                  border: "1px solid var(--red-dim)",
+                  background: "var(--red-dim)",
+                  color: "var(--red)",
+                  fontFamily: "var(--mono)",
+                  fontSize: 11,
+                  cursor: disconnecting ? "not-allowed" : "pointer",
+                  letterSpacing: "0.05em",
+                  opacity: disconnecting ? 0.5 : 1,
+                }}
+              >
+                <Unlink size={12} strokeWidth={2} />
+                Disconnect
+              </button>
+            </>
+          ) : status !== null ? (
+            <a
+              href="/api/strava/auth"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "9px 18px",
+                borderRadius: 8,
+                border: "1px solid rgba(252,76,2,0.5)",
+                background: "rgba(252,76,2,0.1)",
+                color: "#FC4C02",
+                fontFamily: "var(--mono)",
+                fontSize: 11,
+                textDecoration: "none",
+                letterSpacing: "0.05em",
+                fontWeight: 600,
+              }}
+            >
+              <Link2 size={12} strokeWidth={2} />
+              Connect Strava
+            </a>
+          ) : null}
+        </div>
+      </div>
+
+      {/* Sync feedback message */}
+      {syncMsg && (
+        <div
+          style={{
+            marginTop: 12,
+            padding: "8px 12px",
+            borderRadius: 8,
+            background:
+              syncMsg.type === "success" ? "var(--green-dim)" : "var(--red-dim)",
+            border: `1px solid ${syncMsg.type === "success" ? "var(--green)" : "var(--red)"}`,
+            color:
+              syncMsg.type === "success" ? "var(--green)" : "var(--red)",
+            fontSize: 11,
+            fontFamily: "var(--mono)",
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+          }}
+        >
+          {syncMsg.type === "success" ? (
+            <CheckCircle2 size={12} strokeWidth={2.5} />
+          ) : (
+            <AlertCircle size={12} strokeWidth={2.5} />
+          )}
+          {syncMsg.text}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+// ─── Feedback ─────────────────────────────────────────────────────────────────
 
 type Category = "bug" | "feature" | "feedback";
 
@@ -123,8 +457,10 @@ export default function SettingsPage() {
       <div style={{ maxWidth: 640 }}>
         <PageHeader
           title="SETTINGS"
-          subtitle="Feedback, bugs, and a bit about this app"
+          subtitle="Integrations, feedback, and a bit about this app"
         />
+
+        <StravaIntegrationCard />
 
         <Card style={{ marginBottom: 16 }}>
           <SectionLabel>Report a bug or idea</SectionLabel>
