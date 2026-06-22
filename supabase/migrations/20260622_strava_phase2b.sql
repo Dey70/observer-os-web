@@ -20,6 +20,7 @@ CREATE INDEX IF NOT EXISTS training_metrics_user_date_idx
 
 ALTER TABLE training_metrics ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "training_metrics: user owns row" ON training_metrics;
 CREATE POLICY "training_metrics: user owns row"
   ON training_metrics FOR ALL
   USING (auth.uid() = user_id)

@@ -388,107 +388,184 @@ export async function syncActivities(
     if (metricRows.length > 0) {
       await (supabase as any)
         .from("training_metrics")
-        .upsert(metricRows, { onConflict: "user_id,strava_activity_id" });
+        .upsert(metricRows, { onConflict: "user_id,session_id" });
     }
   }
 
-  // 7b. Backfill training_metrics for all historical run sessions that are missing them.
-  //     Step 7 above only covers the current sync batch (bounded by the cursor from Step 3).
-  //     If training_metrics was created (Phase 2B) AFTER previous syncs had already populated
-  //     running_activities, those sessions were never assigned metric rows. This step is
-  //     idempotent: it queries which strava_activity_ids already have a row and only inserts
-  //     the missing ones. On subsequent syncs after backfill it becomes a fast no-op.
+  // 7b. Comprehensive backfill: create sessions + training_metrics for every
+  //     running_activity that is missing them.
+  //
+  //     The previous approach sourced from sessions WHERE strava_activity_id IS NOT NULL,
+  //     but most historical sessions were created before Phase 2A (strava_activity_id
+  //     column) was applied — they have NULL. With only 6 sessions for 30 running_activities,
+  //     most activities had no session at all and the backfill was a no-op.
+  //
+  //     This version sources directly from running_activities, creates missing sessions,
+  //     then upserts training_metrics. Fully idempotent on subsequent syncs.
   {
-    const { data: allRunSessionsRaw } = await supabase
-      .from("sessions")
-      .select("id, strava_activity_id, duration, rpe, date, pace_per_km_seconds")
-      .eq("user_id", userId)
-      .eq("type", "run")
-      .not("strava_activity_id", "is", null);
-
-    const allRunSessions = (allRunSessionsRaw ?? []) as {
-      id: number;
+    type RaRow = {
       strava_activity_id: number;
+      activity_name: string;
+      moving_time_seconds: number;
+      distance_meters: number;
+      activity_date: string;
+    };
+    type SessRow = {
+      id: number;
+      strava_activity_id: number | null;
       duration: number;
       rpe: number;
       date: string;
       pace_per_km_seconds: number | null;
-    }[];
+    };
 
-    if (allRunSessions.length > 0) {
-      const { data: existingMetricRaw } = await (supabase as any)
-        .from("training_metrics")
-        .select("strava_activity_id")
+    // All historical run activities
+    const { data: allRaRaw } = await supabase
+      .from("running_activities")
+      .select("strava_activity_id, activity_name, moving_time_seconds, distance_meters, activity_date")
+      .eq("user_id", userId)
+      .in("activity_type", ["Run", "TrailRun", "VirtualRun"]);
+
+    const allRa = (allRaRaw ?? []) as RaRow[];
+    if (allRa.length === 0) return { inserted: relevant.length, fetched: activities.length, sessionsCreated };
+
+    // Which activities already have training_metrics?
+    const { data: existingMetricRaw } = await (supabase as any)
+      .from("training_metrics")
+      .select("strava_activity_id")
+      .eq("user_id", userId)
+      .not("strava_activity_id", "is", null);
+
+    const coveredIds = new Set(
+      ((existingMetricRaw ?? []) as { strava_activity_id: number }[]).map(
+        (m) => Number(m.strava_activity_id),
+      ),
+    );
+
+    const raToBackfill = allRa.filter((ra) => !coveredIds.has(Number(ra.strava_activity_id)));
+    if (raToBackfill.length === 0) {
+      // All activities already have metrics — fast path out
+    } else {
+      const backfillRaIds = raToBackfill.map((ra) => ra.strava_activity_id);
+
+      // Find existing sessions by strava_activity_id (post-Phase 2A sessions)
+      const { data: sessByStravaRaw } = await supabase
+        .from("sessions")
+        .select("id, strava_activity_id, duration, rpe, date, pace_per_km_seconds")
         .eq("user_id", userId)
-        .not("strava_activity_id", "is", null);
+        .in("strava_activity_id", backfillRaIds);
 
-      const coveredStravaIds = new Set(
-        ((existingMetricRaw ?? []) as { strava_activity_id: number }[]).map(
-          (m) => Number(m.strava_activity_id),
-        ),
+      const sessionByStravaId = new Map<number, SessRow>(
+        ((sessByStravaRaw ?? []) as SessRow[]).map((s) => [Number(s.strava_activity_id), s]),
       );
 
-      const toBackfill = allRunSessions.filter(
-        (s) => !coveredStravaIds.has(Number(s.strava_activity_id)),
-      );
+      // For activities still without a session, look up by date (pre-Phase 2A sessions)
+      const datesNeeded = raToBackfill
+        .filter((ra) => !sessionByStravaId.has(Number(ra.strava_activity_id)))
+        .map((ra) => ra.activity_date);
 
-      if (toBackfill.length > 0) {
-        const backfillStravaIds = toBackfill.map((s) => s.strava_activity_id);
-
-        const { data: raRaw } = await supabase
-          .from("running_activities")
-          .select("strava_activity_id, moving_time_seconds, distance_meters")
+      if (datesNeeded.length > 0) {
+        const { data: sessByDateRaw } = await supabase
+          .from("sessions")
+          .select("id, strava_activity_id, duration, rpe, date, pace_per_km_seconds")
           .eq("user_id", userId)
-          .in("strava_activity_id", backfillStravaIds);
+          .eq("type", "run")
+          .in("date", datesNeeded)
+          .order("id");
 
-        const raByStravaId = new Map(
-          (
-            (raRaw ?? []) as {
-              strava_activity_id: number;
-              moving_time_seconds: number;
-              distance_meters: number;
-            }[]
-          ).map((r) => [Number(r.strava_activity_id), r]),
+        const sessionByDate = new Map<string, SessRow>();
+        for (const s of (sessByDateRaw ?? []) as SessRow[]) {
+          if (!sessionByDate.has(s.date)) sessionByDate.set(s.date, s);
+        }
+
+        // Activities still without any session → create sessions now
+        const raToCreate = raToBackfill.filter(
+          (ra) =>
+            !sessionByStravaId.has(Number(ra.strava_activity_id)) &&
+            !sessionByDate.has(ra.activity_date),
         );
 
-        const backfillRows = toBackfill
-          .filter((s) => raByStravaId.has(Number(s.strava_activity_id)))
-          .map((sess) => {
-            const ra = raByStravaId.get(Number(sess.strava_activity_id))!;
+        if (raToCreate.length > 0) {
+          const newSessionRows = raToCreate.map((ra) => {
             const distKm = (ra.distance_meters ?? 0) > 0 ? ra.distance_meters / 1000 : 0;
-            const movingTimeSec = ra.moving_time_seconds ?? 0;
+            const durationMin = Math.max(1, Math.round((ra.moving_time_seconds ?? 0) / 60));
             const paceSecPerKm =
-              distKm > 0 ? Math.round(movingTimeSec / distKm) : null;
-
-            let tss: number;
-            let trimp: number;
-            if (paceSecPerKm && paceSecPerKm > 0) {
-              const IF = calcIntensityFactor(paceSecPerKm, thresholdPace);
-              tss = calcRunTSS(movingTimeSec, paceSecPerKm, thresholdPace);
-              trimp = calcTRIMP(movingTimeSec, IF);
-            } else {
-              tss = calcSessionTSSProxy(sess.duration, sess.rpe);
-              trimp = Math.round(sess.duration * (sess.rpe / 10));
-            }
-
+              distKm > 0 ? Math.round((ra.moving_time_seconds ?? 0) / distKm) : null;
             return {
               user_id: userId,
-              session_id: sess.id,
-              strava_activity_id: Number(sess.strava_activity_id),
-              activity_date: sess.date,
-              trimp,
-              tss,
-              pace_seconds_per_km: paceSecPerKm ?? null,
-              load_score: tss,
-              source: "strava",
+              date: ra.activity_date,
+              type: "run" as const,
+              duration: durationMin,
+              rpe: 7,
+              notes: `${ra.activity_name}${distKm > 0 ? ` · ${distKm.toFixed(2)} km` : ""}`,
+              strava_activity_id: ra.strava_activity_id,
+              distance_meters: (ra.distance_meters ?? 0) > 0 ? ra.distance_meters : null,
+              pace_per_km_seconds: paceSecPerKm,
             };
           });
 
-        if (backfillRows.length > 0) {
-          await (supabase as any)
-            .from("training_metrics")
-            .upsert(backfillRows, { onConflict: "user_id,strava_activity_id" });
+          const { data: createdSessions } = await supabase
+            .from("sessions")
+            .insert(newSessionRows)
+            .select("id, strava_activity_id, duration, rpe, date, pace_per_km_seconds");
+
+          for (const s of (createdSessions ?? []) as SessRow[]) {
+            if (s.strava_activity_id) {
+              sessionByStravaId.set(Number(s.strava_activity_id), s);
+            }
+          }
         }
+
+        // Merge date-based sessions into the strava_activity_id map
+        for (const ra of raToBackfill) {
+          if (!sessionByStravaId.has(Number(ra.strava_activity_id))) {
+            const byDate = sessionByDate.get(ra.activity_date);
+            if (byDate) sessionByStravaId.set(Number(ra.strava_activity_id), byDate);
+          }
+        }
+      }
+
+      // Build and upsert training_metrics rows
+      const usedSessionIds = new Set<number>();
+      const backfillRows = raToBackfill
+        .map((ra) => {
+          const sess = sessionByStravaId.get(Number(ra.strava_activity_id));
+          if (!sess || usedSessionIds.has(sess.id)) return null;
+          usedSessionIds.add(sess.id);
+
+          const distKm = (ra.distance_meters ?? 0) > 0 ? ra.distance_meters / 1000 : 0;
+          const movingTimeSec = ra.moving_time_seconds ?? 0;
+          const paceSecPerKm = distKm > 0 ? Math.round(movingTimeSec / distKm) : null;
+
+          let tss: number;
+          let trimp: number;
+          if (paceSecPerKm && paceSecPerKm > 0) {
+            const IF = calcIntensityFactor(paceSecPerKm, thresholdPace);
+            tss = calcRunTSS(movingTimeSec, paceSecPerKm, thresholdPace);
+            trimp = calcTRIMP(movingTimeSec, IF);
+          } else {
+            tss = calcSessionTSSProxy(sess.duration, sess.rpe);
+            trimp = Math.round(sess.duration * (sess.rpe / 10));
+          }
+
+          return {
+            user_id: userId,
+            session_id: sess.id,
+            strava_activity_id: Number(ra.strava_activity_id),
+            activity_date: ra.activity_date,
+            trimp,
+            tss,
+            pace_seconds_per_km: paceSecPerKm ?? null,
+            load_score: tss,
+            source: "strava",
+          };
+        })
+        .filter((r): r is NonNullable<typeof r> => r !== null);
+
+      if (backfillRows.length > 0) {
+        await (supabase as any)
+          .from("training_metrics")
+          .upsert(backfillRows, { onConflict: "user_id,session_id" });
       }
     }
   }
