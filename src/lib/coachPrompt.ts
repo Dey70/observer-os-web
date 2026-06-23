@@ -1,40 +1,44 @@
 /**
  * Coach prompt builders.
  *
- * Two distinct prompts:
- *   buildSystemPrompt  — rich context prompt injected into every chat turn.
- *   buildRecommendPrompt — user-turn prompt requesting structured JSON
- *                          recommendations for the Intelligence Panel.
+ * Exports two system prompts:
  *
- * Embedding pre-computed Phase 3 metrics (CTL/ATL/TSB, readiness grade,
- * hybrid score) means the LLM reasons from structured insight rather than
- * raw database rows, which materially improves output quality.
+ *   buildChatSystemPrompt   — full prompt for /api/chat (context + memory + tools).
+ *   buildSystemPrompt       — compact prompt for /api/coach/recommend (no tools).
+ *   buildRecommendPrompt    — user-turn requesting structured JSON for the panel.
+ *
+ * All prompts are athlete-agnostic: they receive computed context from
+ * buildCoachContext and learned facts from observerMemory. No values are
+ * hardcoded — the same prompt functions correctly for any athlete account.
  */
 
 import type { CoachContext } from "@/lib/coachContext";
+import {
+  buildAthleteProfileBlock,
+  buildObserverMemoryBlock,
+  type MemoryFact,
+} from "@/lib/observerMemory";
 
-// ── System prompt ──────────────────────────────────────────────────────────
+// ── Shared coaching philosophy ─────────────────────────────────────────────
 
-export function buildSystemPrompt(ctx: CoachContext): string {
-  const profileLines = [
-    ctx.profileName     ? `Name: ${ctx.profileName}`                  : null,
-    ctx.profileAge      ? `Age: ${ctx.profileAge}`                    : null,
-    ctx.profileSex      ? `Sex: ${ctx.profileSex}`                    : null,
-    ctx.profileSplit    ? `Training split: ${ctx.profileSplit}`        : null,
-    ctx.currentWeightKg ? `Weight: ${ctx.currentWeightKg} kg`         : null,
-    ctx.profileWeeklyGoal ? `Weekly session goal: ${ctx.profileWeeklyGoal}` : null,
-    ctx.profileNotes    ? `Coach notes: ${ctx.profileNotes}`           : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+const PHILOSOPHY = `## Coaching philosophy
+- Long-term sustainability over short-term gains
+- Recovery IS training — neglecting it is the #1 mistake athletes make
+- Nutrition fuels training — macro intake must match training load
+- Mental state (mood, energy) directly predicts physical output
+- Always cite actual numbers from the athlete's data
+- Tell the truth even when it is uncomfortable`;
 
+// ── Current-state snapshot helper ──────────────────────────────────────────
+
+function buildCurrentStateBlock(ctx: CoachContext): string {
   const readinessLine = ctx.readiness
     ? `${ctx.readiness.score}/100 — ${ctx.readiness.grade} (${ctx.readiness.label})`
     : "Not computed — no check-in logged today.";
 
   const recoveryLine = ctx.recoveryScore !== null
     ? `${ctx.recoveryScore}/100`
-    : "No data (no check-in).";
+    : "No data — no check-in today.";
 
   const todayLine = ctx.todayLog
     ? [
@@ -48,80 +52,124 @@ export function buildSystemPrompt(ctx: CoachContext): string {
     : "No check-in logged today.";
 
   const weeklyLine = [
-    ctx.weeklyStats.avgSleep   !== null ? `avg sleep ${ctx.weeklyStats.avgSleep}h`      : null,
-    ctx.weeklyStats.avgMood    !== null ? `avg mood ${ctx.weeklyStats.avgMood}/10`       : null,
-    ctx.weeklyStats.avgEnergy  !== null ? `avg energy ${ctx.weeklyStats.avgEnergy}/10`   : null,
+    ctx.weeklyStats.avgSleep   !== null ? `avg sleep ${ctx.weeklyStats.avgSleep}h`     : null,
+    ctx.weeklyStats.avgMood    !== null ? `avg mood ${ctx.weeklyStats.avgMood}/10`      : null,
+    ctx.weeklyStats.avgEnergy  !== null ? `avg energy ${ctx.weeklyStats.avgEnergy}/10`  : null,
     `${ctx.weeklyStats.sessionCount} sessions`,
     `${ctx.weeklyStats.kmThisWeek} km`,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  ].filter(Boolean).join(" · ");
 
   const goalLines = [
     ctx.goalProgress.hasKmGoal  ? `Distance: ${Math.round(ctx.goalProgress.weeklyKmPct  * 100)}% of weekly target` : null,
-    ctx.goalProgress.hasRunGoal ? `Runs: ${Math.round(ctx.goalProgress.weeklyRunPct * 100)}%`    : null,
-    ctx.goalProgress.hasGymGoal ? `Gym: ${Math.round(ctx.goalProgress.weeklyGymPct * 100)}%`     : null,
-  ]
-    .filter(Boolean)
-    .join(" · ") || "No weekly targets set.";
+    ctx.goalProgress.hasRunGoal ? `Runs: ${Math.round(ctx.goalProgress.weeklyRunPct * 100)}%`                      : null,
+    ctx.goalProgress.hasGymGoal ? `Gym: ${Math.round(ctx.goalProgress.weeklyGymPct  * 100)}%`                      : null,
+  ].filter(Boolean).join(" · ") || "No weekly targets set.";
 
-  const hybridLine = `${ctx.hybrid.score}/100 — ${ctx.hybrid.level} (Recovery ${ctx.hybrid.components.recovery} · Training ${ctx.hybrid.components.training} · Nutrition ${ctx.hybrid.components.nutrition} · Consistency ${ctx.hybrid.components.consistency})`;
+  const hybridLine = `${ctx.hybrid.score}/100 — ${ctx.hybrid.level} `
+    + `(Recovery ${ctx.hybrid.components.recovery} · Training ${ctx.hybrid.components.training} `
+    + `· Nutrition ${ctx.hybrid.components.nutrition} · Consistency ${ctx.hybrid.components.consistency})`;
 
   const streakLine = `Check-in streak: ${ctx.checkinStreak} days · Session streak: ${ctx.sessionStreak} days`;
-
   const nutritionLine = `Protein target: ${ctx.nutritionTargets.protein}g · Water target: ${(ctx.nutritionTargets.waterMl / 1000).toFixed(1)}L`;
 
-  return `You are Observer Coach — an elite AI performance coach for a hybrid athlete (running + lifting).
-
-## Coaching philosophy
-- Long-term sustainability over short-term gains
-- Recovery IS training — neglecting it is the #1 mistake athletes make
-- Nutrition fuels training — macro intake must match training load
-- Mental state (mood, energy) directly predicts physical output
-- Always cite actual numbers from the metrics below
-- Tell the truth even when it is uncomfortable
-
-## Athlete profile
-${profileLines || "Profile not configured."}
-${streakLine}
-
-## Current state (today)
-Readiness:      ${readinessLine}
-Recovery score: ${recoveryLine}
-Today:          ${todayLine}
-
-## Training load — Banister model
-CTL (fitness): ${ctx.ctl} · ATL (fatigue): ${ctx.atl} · TSB (form): ${ctx.tsb > 0 ? "+" : ""}${ctx.tsb}
-Primary focus today: ${ctx.coach.primaryFocus}
-
-## This week
-${weeklyLine}
-
-## Goal progress
-${goalLines}
-Status: ${ctx.coach.goalStatus}
-
-## Hybrid Athlete Score
-${hybridLine}
-
-## Nutrition
-${nutritionLine}
-
-## Deterministic baseline recommendations (your floor — explain why, then exceed this level of detail)
-Training:  ${ctx.coach.trainingRecommendation}
-Recovery:  ${ctx.coach.recoveryRecommendation}
-Nutrition: ${ctx.coach.nutritionRecommendation}
-Goals:     ${ctx.coach.goalRecommendation}
-
-## Response guidelines
-- Reference actual numbers from the metrics above
-- Explain reasoning behind recommendations — not just conclusions
-- For weekly reviews: cover sleep, training load, nutrition, mood/energy, then next-week plan
-- For quick questions: 2–4 sentences, lead with the key finding and its number
-- Tone: direct, evidence-based, no generic wellness language`;
+  return [
+    `## Current state (today)`,
+    `Readiness:      ${readinessLine}`,
+    `Recovery score: ${recoveryLine}`,
+    `Today:          ${todayLine}`,
+    ``,
+    `## Training load — Banister model`,
+    `CTL (fitness): ${ctx.ctl} · ATL (fatigue): ${ctx.atl} · TSB (form): ${ctx.tsb > 0 ? "+" : ""}${ctx.tsb}`,
+    `Primary focus today: ${ctx.coach.primaryFocus}`,
+    ``,
+    `## This week`,
+    weeklyLine,
+    ``,
+    `## Goal progress`,
+    goalLines,
+    `Status: ${ctx.coach.goalStatus}`,
+    ``,
+    `## Hybrid Athlete Score`,
+    hybridLine,
+    `${streakLine}`,
+    ``,
+    `## Nutrition`,
+    nutritionLine,
+  ].join("\n");
 }
 
-// ── Structured recommendations prompt ────────────────────────────────────
+// ── Chat system prompt ─────────────────────────────────────────────────────
+
+export function buildChatSystemPrompt(ctx: CoachContext, facts: MemoryFact[]): string {
+  const profileBlock = buildAthleteProfileBlock(ctx);
+  const memoryBlock  = buildObserverMemoryBlock(facts);
+  const stateBlock   = buildCurrentStateBlock(ctx);
+
+  const baselineBlock = [
+    `## Deterministic baseline recommendations (your floor — analyse and exceed)`,
+    `Training:  ${ctx.coach.trainingRecommendation}`,
+    `Recovery:  ${ctx.coach.recoveryRecommendation}`,
+    `Nutrition: ${ctx.coach.nutritionRecommendation}`,
+    `Goals:     ${ctx.coach.goalRecommendation}`,
+  ].join("\n");
+
+  const toolBlock = `## Tool use
+- ALWAYS call get_checkins or get_sessions before answering performance questions
+- Call get_nutrition when asked about diet, macros, or whether intake matches load
+- Call analyze_trend when asked about patterns over time
+- Call generate_training_plan when asked for a weekly plan or schedule
+- Call update_goal when the athlete wants to set or change a goal
+- Chain multiple tools in a single turn when needed`;
+
+  const responseBlock = `## Response format
+- Lead with the key finding and its number — never open with a generic observation
+- Reference actual metrics from the data above
+- For weekly reviews: cover sleep, training load, nutrition, mood/energy, then next-week plan
+- For quick questions: 2–4 sentences max
+- Tone: direct, evidence-based, no generic wellness language`;
+
+  return [
+    `You are Observer Coach — a data-driven performance coach specialising in hybrid athlete development (running + lifting).`,
+    ``,
+    PHILOSOPHY,
+    ``,
+    profileBlock,
+    ``,
+    memoryBlock,
+    ``,
+    stateBlock,
+    ``,
+    baselineBlock,
+    ``,
+    toolBlock,
+    ``,
+    responseBlock,
+  ].join("\n");
+}
+
+// ── Recommend system prompt (Intelligence Panel sidebar) ───────────────────
+
+export function buildSystemPrompt(ctx: CoachContext): string {
+  const profileBlock = buildAthleteProfileBlock(ctx);
+  const stateBlock   = buildCurrentStateBlock(ctx);
+
+  return [
+    `You are Observer Coach — a data-driven performance coach specialising in hybrid athlete development.`,
+    ``,
+    PHILOSOPHY,
+    ``,
+    profileBlock,
+    ``,
+    stateBlock,
+    ``,
+    `## Response guidelines`,
+    `- Reference actual numbers from the metrics above`,
+    `- Explain reasoning behind recommendations — not just conclusions`,
+    `- Tone: direct, evidence-based, no generic wellness language`,
+  ].join("\n");
+}
+
+// ── Structured recommendations prompt ─────────────────────────────────────
 
 export function buildRecommendPrompt(ctx: CoachContext): string {
   const todayBlock = ctx.todayLog
@@ -138,7 +186,7 @@ export function buildRecommendPrompt(ctx: CoachContext): string {
   const goalBlock = [
     ctx.goalProgress.hasKmGoal  ? `distance ${Math.round(ctx.goalProgress.weeklyKmPct  * 100)}%` : null,
     ctx.goalProgress.hasRunGoal ? `runs ${Math.round(ctx.goalProgress.weeklyRunPct * 100)}%`      : null,
-    ctx.goalProgress.hasGymGoal ? `gym ${Math.round(ctx.goalProgress.weeklyGymPct * 100)}%`       : null,
+    ctx.goalProgress.hasGymGoal ? `gym ${Math.round(ctx.goalProgress.weeklyGymPct  * 100)}%`      : null,
   ].filter(Boolean).join(", ") || "no targets set";
 
   return `Generate personalised coaching recommendations based on today's athlete state.

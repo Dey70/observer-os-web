@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { calcCheckinStreak, calcSessionStreak, isSunday } from "@/lib/utils";
 import { Badge, TypingDots } from "@/components/ui";
 import type { ChatMessage, DailyLog, Session } from "@/types";
-import { Activity, BarChart2, CalendarDays, Target } from "lucide-react";
+import { Activity, BarChart2, CalendarDays, Target, RotateCcw } from "lucide-react";
 import { computeRecoveryScore }   from "@/lib/recoveryScore";
 import { computeCTLATLTSB }       from "@/lib/trainingLoad";
 import type { TrainingMetricRow } from "@/lib/trainingLoad";
@@ -63,8 +63,8 @@ type RecommendResponse = {
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
-// Max messages sent to Groq per turn to avoid token overflow
-const CONTEXT_WINDOW = 15;
+// Max messages sent to Groq per turn (current session only — history is not replayed)
+const CONTEXT_WINDOW = 10;
 
 const QUICK_PROMPTS = [
   { label: "Recovery",          msg: "Pull my last 7 days and tell me how my recovery looks." },
@@ -77,7 +77,7 @@ const QUICK_PROMPTS = [
 const INITIAL_MESSAGE: ChatMessage = {
   role: "assistant",
   content:
-    "Observer OS loaded. I have access to your data — check-ins, sessions, goals, weight logs. Ask me anything.",
+    "Observer Coach ready. I know your training history, goals, and current metrics. Ask me anything.",
 };
 
 // ── Sub-components ─────────────────────────────────────────────────────────
@@ -406,6 +406,8 @@ export default function CoachPage() {
   // AI recommendations for the Intelligence Panel
   const [aiRec, setAiRec]               = useState<RecommendResponse | null>(null);
   const [aiRecLoading, setAiRecLoading] = useState(true);
+  // Observer Memory fact count — fetched on mount, also triggers server-side seeding
+  const [memoryCount, setMemoryCount]   = useState<number | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef       = useRef<HTMLTextAreaElement>(null);
@@ -416,35 +418,17 @@ export default function CoachPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, chatLoading]);
 
-  // ── Load conversation history from persistent storage ───────────────────
-
-  const loadConvHistory = useCallback(async () => {
-    const { data: { user } } = await sb.auth.getUser();
-    if (!user) return;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data } = await (sb as any)
-      .from("coach_conversations")
-      .select("role, content, created_at")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(20);
-
-    if (!data?.length) return;
-
-    const history = ([...data] as { role: string; content: string; created_at: string }[])
-      .reverse()
-      .map((r) => ({
-        role:      r.role as "user" | "assistant",
-        content:   r.content,
-        timestamp: r.created_at,
-      }));
-
-    setMessages([INITIAL_MESSAGE, ...history]);
-  }, []);
+  // ── Fetch Observer Memory count (also seeds system facts on first load) ──
 
   useEffect(() => {
-    loadConvHistory();
-  }, [loadConvHistory]);
+    fetch("/api/coach/memory")
+      .then((r) => r.json())
+      .then((d: unknown) => {
+        const data = d as Record<string, unknown>;
+        if (typeof data.count === "number") setMemoryCount(data.count);
+      })
+      .catch(() => {});
+  }, []);
 
   // ── Fetch AI recommendations (non-blocking; deterministic is the fallback) ─
 
@@ -626,6 +610,14 @@ export default function CoachPage() {
   useEffect(() => {
     loadIntelligence();
   }, [loadIntelligence]);
+
+  // ── Session ────────────────────────────────────────────────────────────
+
+  function startNewSession() {
+    setMessages([INITIAL_MESSAGE]);
+    setInput("");
+    inputRef.current?.focus();
+  }
 
   // ── Chat ────────────────────────────────────────────────────────────────
 
@@ -832,27 +824,60 @@ export default function CoachPage() {
               </div>
               {todayIsSunday && <Badge color="var(--accent)">Weekly review day</Badge>}
             </div>
-            <button
-              className="coach-mobile-toggle"
-              onClick={() => setSheetOpen(true)}
-              style={{
-                alignItems: "center",
-                gap: 6,
-                padding: "6px 10px",
-                borderRadius: 8,
-                border: "1px solid var(--border)",
-                background: "var(--surface2)",
-                color: "var(--text-muted)",
-                fontFamily: "var(--mono)",
-                fontSize: 11,
-                cursor: "pointer",
-              }}
-            >
-              <Activity size={13} strokeWidth={1.75} />
-              Stats
-            </button>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              {messages.length > 1 && (
+                <button
+                  onClick={startNewSession}
+                  disabled={chatLoading}
+                  title="Start a new session"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 5,
+                    padding: "5px 10px",
+                    borderRadius: 7,
+                    border: "1px solid var(--border)",
+                    background: "var(--surface2)",
+                    color: "var(--text-dim)",
+                    fontFamily: "var(--mono)",
+                    fontSize: 10,
+                    cursor: chatLoading ? "not-allowed" : "pointer",
+                    opacity: chatLoading ? 0.5 : 1,
+                  }}
+                >
+                  <RotateCcw size={11} strokeWidth={1.75} />
+                  New session
+                </button>
+              )}
+              <button
+                className="coach-mobile-toggle"
+                onClick={() => setSheetOpen(true)}
+                style={{
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "6px 10px",
+                  borderRadius: 8,
+                  border: "1px solid var(--border)",
+                  background: "var(--surface2)",
+                  color: "var(--text-muted)",
+                  fontFamily: "var(--mono)",
+                  fontSize: 11,
+                  cursor: "pointer",
+                }}
+              >
+                <Activity size={13} strokeWidth={1.75} />
+                Stats
+              </button>
+            </div>
           </div>
-          <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Groq · llama-3.3-70b</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: "var(--text-muted)" }}>
+            <span>Groq · llama-3.3-70b</span>
+            {messages.length > 1 && (
+              <span style={{ color: "var(--text-dim)" }}>
+                · {messages.filter((m) => m.role === "user").length} turn{messages.filter((m) => m.role === "user").length !== 1 ? "s" : ""}
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Quick prompts */}
@@ -1024,24 +1049,42 @@ export default function CoachPage() {
                   color: "var(--text-muted)",
                 }}
               >
-                Intelligence Panel
+                Athlete Memory
               </div>
-              {sourceLabel && (
-                <div
-                  style={{
-                    fontFamily: "var(--mono)",
-                    fontSize: 8,
-                    fontWeight: 700,
-                    letterSpacing: "0.12em",
-                    color: sourceColor,
-                    padding: "2px 6px",
-                    border: `1px solid ${sourceColor}`,
-                    borderRadius: 3,
-                  }}
-                >
-                  {sourceLabel}
-                </div>
-              )}
+              <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                {memoryCount !== null && (
+                  <div
+                    title="Observer Memory facts"
+                    style={{
+                      fontFamily: "var(--mono)",
+                      fontSize: 8,
+                      color: "var(--text-dim)",
+                      padding: "2px 5px",
+                      border: "1px solid var(--border2)",
+                      borderRadius: 3,
+                      letterSpacing: "0.06em",
+                    }}
+                  >
+                    ◎ {memoryCount}
+                  </div>
+                )}
+                {sourceLabel && (
+                  <div
+                    style={{
+                      fontFamily: "var(--mono)",
+                      fontSize: 8,
+                      fontWeight: 700,
+                      letterSpacing: "0.12em",
+                      color: sourceColor,
+                      padding: "2px 6px",
+                      border: `1px solid ${sourceColor}`,
+                      borderRadius: 3,
+                    }}
+                  >
+                    {sourceLabel}
+                  </div>
+                )}
+              </div>
             </div>
             <div className="coach-sidebar-scroll">
               <IntelligencePanel
