@@ -67,7 +67,7 @@ function buildCurrentStateBlock(ctx: CoachContext): string {
 
   const hybridLine = `${ctx.hybrid.score}/100 — ${ctx.hybrid.level} `
     + `(Recovery ${ctx.hybrid.components.recovery} · Training ${ctx.hybrid.components.training} `
-    + `· Nutrition ${ctx.hybrid.components.nutrition} · Consistency ${ctx.hybrid.components.consistency})`;
+    + `· Nutrition ${ctx.hybrid.components.nutrition} · Growth ${ctx.hybrid.components.growth})`;
 
   const streakLine = `Check-in streak: ${ctx.checkinStreak} days · Session streak: ${ctx.sessionStreak} days`;
   const nutritionLine = `Protein target: ${ctx.nutritionTargets.protein}g · Water target: ${(ctx.nutritionTargets.waterMl / 1000).toFixed(1)}L`;

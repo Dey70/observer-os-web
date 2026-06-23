@@ -332,10 +332,10 @@ function IntelligencePanel({
           </span>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <MiniBar value={intel.hybrid.components.recovery}    color="var(--green)"  label="Recovery" />
-          <MiniBar value={intel.hybrid.components.training}    color="var(--accent)" label="Training" />
-          <MiniBar value={intel.hybrid.components.nutrition}   color="var(--yellow)" label="Nutrition" />
-          <MiniBar value={intel.hybrid.components.consistency} color="var(--purple)" label="Consistency" />
+          <MiniBar value={intel.hybrid.components.recovery}  color="var(--green)"  label="Recovery" />
+          <MiniBar value={intel.hybrid.components.training}  color="var(--accent)" label="Training" />
+          <MiniBar value={intel.hybrid.components.nutrition} color="var(--yellow)" label="Nutrition" />
+          <MiniBar value={intel.hybrid.components.growth}    color="var(--purple)" label="Growth" />
         </div>
       </div>
 
@@ -573,7 +573,10 @@ export default function CoachPage() {
       });
     }
 
-    const hybrid = computeHybridScore(recoveryScore, ctl, null, checkinStreak, sessionStreak);
+    const weeklyGrowthMinutes = sessions
+      .filter((s) => s.type === "study" && s.date >= since7)
+      .reduce((sum, s) => sum + ((s as unknown as { duration: number }).duration ?? 0), 0);
+    const hybrid = computeHybridScore(recoveryScore, ctl, null, weeklyGrowthMinutes);
 
     const last7Logs = logs.filter((l) => l.date >= since7);
     const avgSleep  = last7Logs.length

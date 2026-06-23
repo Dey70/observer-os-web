@@ -90,6 +90,29 @@ export const AGENT_TOOLS = [
   {
     type: "function" as const,
     function: {
+      name: "get_growth",
+      description:
+        "Retrieve growth and intellectual-development sessions. Use when asked about study hours, deep work, projects, learning, focus quality, or the Growth pillar of the Hybrid Athlete Score.",
+      parameters: {
+        type: "object",
+        properties: {
+          days: {
+            type: "number",
+            description: "How many days back to fetch. Default 7.",
+          },
+          category: {
+            type: "string",
+            enum: ["study", "project", "learning", "deep_work", "all"],
+            description: "Filter by growth category. Defaults to 'all'.",
+          },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
       name: "generate_training_plan",
       description:
         "Generate a personalized weekly training plan based on current fitness data, goals, and readiness trends.",
@@ -366,6 +389,56 @@ export async function executeTool(
           count: rows.length,
           by_date: byDate,
           todays_targets: todaysTargets,
+        });
+      }
+
+      case "get_growth": {
+        const days = (args.days as number) || 7;
+        const since = new Date(Date.now() - days * 86400000).toISOString().split("T")[0];
+
+        // Query growth_logs (new table) and study sessions (legacy) in parallel
+        const [{ data: growthLogs, error: glErr }, { data: studySess }] = await Promise.all([
+          (supabase as any)
+            .from("growth_logs")
+            .select("date, category, title, duration_min, focus_score, output_notes, tags")
+            .eq("user_id", userId)
+            .gte("date", since)
+            .order("date", { ascending: false }),
+          supabase
+            .from("sessions")
+            .select("date, type, duration, rpe, notes")
+            .eq("user_id", userId)
+            .eq("type", "study")
+            .gte("date", since)
+            .order("date", { ascending: false }),
+        ]);
+
+        if (glErr) return `Error fetching growth logs: ${glErr.message}`;
+
+        const logs   = (growthLogs ?? []) as Record<string, unknown>[];
+        const legacy = (studySess  ?? []) as Record<string, unknown>[];
+
+        const totalMinutes =
+          logs.reduce((s, r) => s + ((r.duration_min as number) ?? 0), 0) +
+          legacy.reduce((s, r) => s + ((r.duration as number) ?? 0), 0);
+
+        const focusScores = logs
+          .map((r) => r.focus_score as number | null)
+          .filter((s): s is number => s !== null);
+        const avgFocus = focusScores.length
+          ? (focusScores.reduce((s, v) => s + v, 0) / focusScores.length).toFixed(1)
+          : null;
+
+        // Category filter applied post-fetch to allow legacy fallback
+        const cat = args.category as string | undefined;
+        const filteredLogs = cat && cat !== "all" ? logs.filter((r) => r.category === cat) : logs;
+
+        return JSON.stringify({
+          totalHours: (totalMinutes / 60).toFixed(1),
+          totalSessions: logs.length + legacy.length,
+          avgFocusScore: avgFocus,
+          growthLogs: filteredLogs,
+          legacyStudySessions: legacy,
         });
       }
 

@@ -13,7 +13,7 @@ import {
 } from "@/components/ui";
 import { useNotifications } from "@/hooks/useNotifications";
 import { calcBMI, bmiCategory } from "@/lib/nutritionEngine";
-import { calcCheckinStreak, calcSessionStreak } from "@/lib/utils";
+import { calcCheckinStreak } from "@/lib/utils";
 import { computeRecoveryScore } from "@/lib/recoveryScore";
 import { computeCTLATLTSB } from "@/lib/trainingLoad";
 import type { TrainingMetricRow } from "@/lib/trainingLoad";
@@ -183,9 +183,10 @@ export default function ProfilePage() {
     const { ctl, tsb } = metrics.length > 0 ? computeCTLATLTSB(metrics) : { ctl: 0, tsb: 0 };
     const todayLog     = logs.find((l) => l.date === todayStr) ?? null;
     const recoveryScore = computeRecoveryScore(todayLog, tsb);
-    const checkinStreak = calcCheckinStreak(logs);
-    const sessionStreak = calcSessionStreak(sessions);
-    setHybrid(computeHybridScore(recoveryScore, ctl, null, checkinStreak, sessionStreak));
+    const weekStartPro = new Date(Date.now() - 7 * 86400000).toISOString().split("T")[0];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const weeklyGrowthMin = sessions.filter((s) => s.type === "study" && s.date >= weekStartPro).reduce((sum, s) => sum + ((s as any).duration ?? 0), 0);
+    setHybrid(computeHybridScore(recoveryScore, ctl, null, weeklyGrowthMin));
 
     setLoading(false);
   }, []);
@@ -368,7 +369,7 @@ export default function ProfilePage() {
                 {hybrid.level}
               </div>
               <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 2 }}>
-                Equal weight: Recovery · Training · Nutrition · Consistency
+                Equal weight: Recovery · Training · Nutrition · Growth
               </div>
             </div>
           </div>
@@ -378,7 +379,7 @@ export default function ProfilePage() {
                 { label: "Recovery",    value: hybrid.components.recovery,    color: "var(--green)"  },
                 { label: "Training",    value: hybrid.components.training,     color: "var(--accent)" },
                 { label: "Nutrition",   value: hybrid.components.nutrition,    color: "var(--yellow)" },
-                { label: "Consistency", value: hybrid.components.consistency,  color: "var(--purple)" },
+                { label: "Growth",      value: hybrid.components.growth,       color: "var(--purple)" },
               ] as const
             ).map(({ label, value, color }) => (
               <div

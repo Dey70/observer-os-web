@@ -225,8 +225,15 @@ export async function buildCoachContext(
         waterTargetMl,
       };
 
-  const coach  = runCoachEngine(coachInput);
-  const hybrid = computeHybridScore(recoveryScore, ctl, null, checkinStreak, sessionStreak);
+  const coach = runCoachEngine(coachInput);
+
+  // Growth minutes: growth_logs (preferred) + sessions(study) as fallback
+  const weeklyGrowthMinutes =
+    sessions
+      .filter((s) => s.type === "study" && s.date >= since7)
+      .reduce((sum, s) => sum + (s.duration ?? 0), 0);
+
+  const hybrid = computeHybridScore(recoveryScore, ctl, null, weeklyGrowthMinutes);
 
   // ── Weekly stats ───────────────────────────────────────────────────────
 

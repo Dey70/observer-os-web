@@ -285,8 +285,12 @@ export default function DashboardPage() {
     const checkinStrAi   = calcCheckinStreak(logsData);
     const sessionStrAi   = calcSessionStreak(sessData);
     const recovForHybrid = todayLogAi ? computeRecoveryScore(todayLogAi, tsbAi) : null;
-    const hybridAi       = computeHybridScore(recovForHybrid, ctlAi, null, checkinStrAi, sessionStrAi);
     const weekSessAi     = sessData.filter((s) => s.date >= weekStart);
+    const weeklyGrowthMinAi = sessData
+      .filter((s) => s.type === "study" && s.date >= weekStart)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .reduce((sum, s) => sum + ((s as any).duration ?? 0), 0);
+    const hybridAi       = computeHybridScore(recovForHybrid, ctlAi, null, weeklyGrowthMinAi);
     const sessionTypesAi = { run: 0, lift: 0, study: 0 };
     weekSessAi.forEach((s) => {
       if (s.type === "run")   sessionTypesAi.run++;
@@ -350,9 +354,14 @@ export default function DashboardPage() {
   const weekDistM    = weekRuns.reduce((s, r) => s + r.distance_meters, 0);
   const weekGymCount = sessions.filter((s) => s.type === "lift" && s.date >= weekStartDate).length;
 
+  const weeklyGrowthMinutes = sessions
+    .filter((s) => s.type === "study" && s.date >= weekStartDate)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .reduce((sum, s) => sum + ((s as any).duration ?? 0), 0);
+
   let readinessOutput: ReadinessOutput | null = null;
   let coachOutput:     CoachOutput     | null = null;
-  let hybridOutput:    HybridScoreOutput      = computeHybridScore(recoveryScore, ctl, null, checkinStreak, sessionStreak);
+  let hybridOutput:    HybridScoreOutput      = computeHybridScore(recoveryScore, ctl, null, weeklyGrowthMinutes);
 
   if (todayLog && recoveryScore !== null) {
     readinessOutput = computeReadiness(recoveryScore, tsb, todayLog.sleep_quality, todayLog.fatigue, todayLog.energy);
@@ -405,7 +414,7 @@ export default function DashboardPage() {
       waterTargetMl,
     });
 
-    hybridOutput = computeHybridScore(recoveryScore, ctl, null, checkinStreak, sessionStreak);
+    hybridOutput = computeHybridScore(recoveryScore, ctl, null, weeklyGrowthMinutes);
   }
 
   // ── Date display ──────────────────────────────────────────────────────
@@ -667,7 +676,7 @@ export default function DashboardPage() {
             {[
               { label: "Recov", val: hybridOutput.components.recovery,    color: "var(--green)"  },
               { label: "Train", val: hybridOutput.components.training,     color: "var(--accent)" },
-              { label: "Consi", val: hybridOutput.components.consistency,  color: "var(--purple)" },
+              { label: "Growth", val: hybridOutput.components.growth,      color: "var(--purple)" },
             ].map(({ label, val, color }) => (
               <div key={label} style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <div style={{ fontSize: 9, color: "var(--text-dim)", width: 32, flexShrink: 0 }}>{label}</div>
