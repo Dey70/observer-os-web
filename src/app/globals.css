@@ -117,6 +117,7 @@
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
+html { overflow-x: hidden; }
 html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--sans); transition: background 0.3s, color 0.3s; }
 
 /* Animated orbs */
@@ -274,6 +275,11 @@ input[type=range][data-color="purple"]::-moz-range-thumb { background: var(--pur
 .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
 .grid-nutrition-rings { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+
+/* Laptop: sidebar=260px + less padding */
+@media (max-width: 1200px) {
+  #main-content { padding: 32px 28px !important; }
+}
 
 @media (max-width: 768px) {
   #sidebar { display: none !important; }

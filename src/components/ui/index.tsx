@@ -404,12 +404,16 @@ export function BarChart({
   data,
   color = "var(--accent)",
   maxVal,
+  minVal,
 }: {
   data: { label: string; value: number }[];
   color?: string;
   maxVal?: number;
+  minVal?: number;
 }) {
-  const max = maxVal ?? Math.max(...data.map((d) => d.value), 1);
+  const rawMax = maxVal ?? Math.max(...data.map((d) => d.value), 1);
+  const rawMin = minVal ?? 0;
+  const range  = Math.max(rawMax - rawMin, 1);
   const [tooltip, setTooltip] = useState<{
     label: string;
     value: number;
@@ -445,55 +449,65 @@ export function BarChart({
       <div
         style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 80 }}
       >
-        {data.map((d, i) => (
-          <div
-            key={i}
-            style={{
-              flex: 1,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              gap: 4,
-              height: "100%",
-            }}
-          >
+        {data.map((d, i) => {
+          // Only show a label every N bars so they never overlap
+          const step = Math.ceil(data.length / 5);
+          const showLabel = i % step === 0 || i === data.length - 1;
+          return (
             <div
+              key={i}
               style={{
                 flex: 1,
                 display: "flex",
-                alignItems: "flex-end",
-                width: "100%",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 4,
+                height: "100%",
+                minWidth: 0,
+                overflow: "hidden",
               }}
             >
               <div
-                onMouseEnter={() =>
-                  setTooltip({ label: d.label, value: d.value, index: i })
-                }
-                onMouseLeave={() => setTooltip(null)}
                 style={{
+                  flex: 1,
+                  display: "flex",
+                  alignItems: "flex-end",
                   width: "100%",
-                  height: `${Math.max(2, (d.value / max) * 100)}%`,
-                  background:
-                    tooltip?.index === i ? "var(--glass-highlight)" : color,
-                  borderRadius: "4px 4px 0 0",
-                  opacity: tooltip?.index === i ? 1 : 0.75,
-                  transition: "all 0.15s",
-                  cursor: "pointer",
                 }}
-              />
+              >
+                <div
+                  onMouseEnter={() =>
+                    setTooltip({ label: d.label, value: d.value, index: i })
+                  }
+                  onMouseLeave={() => setTooltip(null)}
+                  style={{
+                    width: "100%",
+                    height: `${Math.max(4, ((d.value - rawMin) / range) * 100)}%`,
+                    background:
+                      tooltip?.index === i ? "var(--glass-highlight)" : color,
+                    borderRadius: "4px 4px 0 0",
+                    opacity: tooltip?.index === i ? 1 : 0.75,
+                    transition: "all 0.15s",
+                    cursor: "pointer",
+                  }}
+                />
+              </div>
+              <div
+                style={{
+                  fontFamily: "var(--mono)",
+                  fontSize: 8,
+                  color: showLabel ? "var(--text-dim)" : "transparent",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  maxWidth: "100%",
+                  lineHeight: 1,
+                }}
+              >
+                {d.label}
+              </div>
             </div>
-            <div
-              style={{
-                fontFamily: "var(--mono)",
-                fontSize: 8,
-                color: "var(--text-dim)",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {d.label}
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

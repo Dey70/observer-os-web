@@ -10,13 +10,8 @@ import {
   getLast14Days,
 } from "@/lib/utils";
 import {
-  Card,
-  PageHeader,
-  StatCard,
-  SectionLabel,
   BarChart,
   Button,
-  Field,
   Input,
   EmptyState,
 } from "@/components/ui";
@@ -30,7 +25,6 @@ import {
 import {
   computeRecoveryScore,
   getRecoveryStatus,
-  getRecoveryBanner,
 } from "@/lib/recoveryScore";
 import { computeCTLATLTSB } from "@/lib/trainingLoad";
 import type { TrainingMetricRow } from "@/lib/trainingLoad";
@@ -52,113 +46,138 @@ import type {
 
 export const dynamic = "force-dynamic";
 
+// Module-level: avoids calling Date.now() during render
+const MODULE_NOW = Date.now();
+
 type ProfileRow = {
-  weekly_run_km_target:  number;
+  weekly_run_km_target:   number;
   weekly_run_count_target: number;
-  weekly_gym_target:     number;
-  sex:                   "male" | "female" | null;
-  age:                   number | null;
-  height_cm:             number | null;
-  nutrition_goal_type:   string | null;
-  target_weight:         number | null;
+  weekly_gym_target:      number;
+  sex:                    "male" | "female" | null;
+  age:                    number | null;
+  height_cm:              number | null;
+  nutrition_goal_type:    string | null;
+  target_weight:          number | null;
   threshold_pace_seconds: number | null;
 };
 
-// ── Reusable sub-components ────────────────────────────────────────────────
+// ── SVG Readiness Gauge ────────────────────────────────────────────────────
+// 270° arc (gap at bottom). r=54, cx=70, cy=70, viewBox 0 0 140 140.
+// Start: (31.8, 108.2) at 135° · End: (108.2, 108.2) at 45°
 
-function RecRow({
-  icon,
-  text,
-}: {
-  icon: string;
-  text: string;
-}) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "flex-start",
-        gap: 10,
-        padding: "8px 0",
-        borderBottom: "1px solid var(--border2)",
-      }}
-    >
-      <span
-        style={{
-          fontFamily: "var(--mono)",
-          fontSize: 10,
-          color: "var(--text-dim)",
-          letterSpacing: "0.06em",
-          flexShrink: 0,
-          paddingTop: 1,
-        }}
-      >
-        {icon}
-      </span>
-      <span style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.55 }}>
-        {text}
-      </span>
-    </div>
-  );
-}
+const ARC_FULL = 254.5; // arc length of 270° with r=54
 
-function GoalBar({
-  label,
-  current,
-  target,
+function ReadinessArc({
+  score,
   color,
+  grade,
+  loading,
 }: {
-  label: string;
-  current: number | string;
-  target: number | string;
+  score: number;
   color: string;
+  grade: string;
+  loading: boolean;
 }) {
-  const pct = Math.min(
-    1,
-    typeof current === "number" && typeof target === "number" && target > 0
-      ? current / target
-      : 0,
-  );
-  const done = pct >= 1;
+  const offset = loading ? ARC_FULL : ARC_FULL * (1 - score / 100);
+
   return (
-    <div>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          marginBottom: 6,
-        }}
-      >
-        <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{label}</span>
-        <span
+    <div style={{ position: "relative", width: "min(148px, 100%)", aspectRatio: "1 / 1", flexShrink: 0 }}>
+      <svg viewBox="0 0 140 140" width="100%" height="100%">
+        {/* Track */}
+        <path
+          d="M 31.8 108.2 A 54 54 0 1 1 108.2 108.2"
+          fill="none"
+          stroke="var(--border2)"
+          strokeWidth={11}
+          strokeLinecap="round"
+        />
+        {/* Fill */}
+        <path
+          d="M 31.8 108.2 A 54 54 0 1 1 108.2 108.2"
+          fill="none"
+          stroke={color}
+          strokeWidth={11}
+          strokeLinecap="round"
+          strokeDasharray={ARC_FULL}
+          strokeDashoffset={offset}
           style={{
-            fontFamily: "var(--mono)",
-            fontSize: 12,
-            color: done ? color : "var(--text)",
+            transition: "stroke-dashoffset 1.1s cubic-bezier(0.4, 0, 0.2, 1)",
+            filter: score > 0 ? `drop-shadow(0 0 5px ${color}88)` : "none",
           }}
-        >
-          {current} / {target}
-          {typeof current === "number" && typeof target === "string" ? "" : ""}
-        </span>
-      </div>
+        />
+      </svg>
+      {/* Center overlay */}
       <div
         style={{
-          height: 6,
-          background: "var(--border2)",
-          borderRadius: 3,
-          overflow: "hidden",
+          position: "absolute",
+          inset: 0,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          paddingBottom: 14,
         }}
       >
         <div
           style={{
-            height: "100%",
-            width: `${pct * 100}%`,
-            background: done ? "var(--green)" : color,
-            borderRadius: 3,
-            transition: "width 0.4s ease",
+            fontFamily: "var(--mono)",
+            fontSize: 34,
+            fontWeight: 700,
+            color: score > 0 ? color : "var(--text-dim)",
+            lineHeight: 1,
+            letterSpacing: "-0.03em",
           }}
-        />
+        >
+          {score > 0 ? score : "—"}
+        </div>
+        {score > 0 && (
+          <div
+            style={{
+              fontFamily: "var(--mono)",
+              fontSize: 9,
+              fontWeight: 700,
+              letterSpacing: "0.16em",
+              color,
+              marginTop: 5,
+            }}
+          >
+            {grade}
+          </div>
+        )}
       </div>
+    </div>
+  );
+}
+
+// ── Progress bar that animates on render ───────────────────────────────────
+
+function AnimBar({
+  pct,
+  color,
+  height = 6,
+}: {
+  pct: number;
+  color: string;
+  height?: number;
+}) {
+  return (
+    <div
+      style={{
+        height,
+        background: "var(--border2)",
+        borderRadius: height,
+        overflow: "hidden",
+      }}
+    >
+      <div
+        style={{
+          height: "100%",
+          width: `${Math.min(100, pct * 100)}%`,
+          background: pct >= 1 ? "var(--green)" : color,
+          borderRadius: height,
+          transition: "width 0.9s cubic-bezier(0.4, 0, 0.2, 1)",
+        }}
+      />
     </div>
   );
 }
@@ -185,15 +204,13 @@ export default function DashboardPage() {
   const [aiInsight, setAiInsight]       = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const {
-      data: { user },
-    } = await sb.auth.getUser();
+    const { data: { user } } = await sb.auth.getUser();
     if (!user) return;
 
-    const since        = getLast14Days();
-    const weekStart    = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+    const since          = getLast14Days();
+    const weekStart      = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
     const metrics90Since = new Date(Date.now() - 90 * 86400000).toISOString().split("T")[0];
-    const todayStr2    = new Date().toISOString().split("T")[0];
+    const todayStr2      = new Date().toISOString().split("T")[0];
 
     const [
       { data: l },
@@ -213,27 +230,20 @@ export default function DashboardPage() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (sb as any).from("running_activities").select("*").eq("user_id", user.id).order("activity_date", { ascending: false }).limit(5),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (sb as any)
-        .from("training_metrics")
+      (sb as any).from("training_metrics")
         .select("activity_date, tss, trimp, pace_seconds_per_km, load_score, source")
-        .eq("user_id", user.id)
-        .gte("activity_date", metrics90Since)
-        .order("activity_date"),
-      sb
-        .from("profiles")
-        .select(
-          "weekly_run_km_target, weekly_run_count_target, weekly_gym_target, sex, age, height_cm, nutrition_goal_type, target_weight, threshold_pace_seconds",
-        )
-        .eq("user_id", user.id)
-        .maybeSingle(),
+        .eq("user_id", user.id).gte("activity_date", metrics90Since).order("activity_date"),
+      sb.from("profiles")
+        .select("weekly_run_km_target, weekly_run_count_target, weekly_gym_target, sex, age, height_cm, nutrition_goal_type, target_weight, threshold_pace_seconds")
+        .eq("user_id", user.id).maybeSingle(),
       sb.from("nutrition_logs").select("calories").eq("user_id", user.id).eq("date", todayStr2),
     ]);
 
-    const logsData    = (l      ?? []) as DailyLog[];
-    const sessData    = (s      ?? []) as Session[];
-    const wData       = (w      ?? []) as WeightLog[];
-    const runsData    = (runs   ?? []) as RunningActivity[];
-    const recentData  = (recent ?? []) as RunningActivity[];
+    const logsData   = (l      ?? []) as DailyLog[];
+    const sessData   = (s      ?? []) as Session[];
+    const wData      = (w      ?? []) as WeightLog[];
+    const runsData   = (runs   ?? []) as RunningActivity[];
+    const recentData = (recent ?? []) as RunningActivity[];
 
     setLogs(logsData);
     setSessions(sessData);
@@ -256,16 +266,12 @@ export default function DashboardPage() {
     setSessionStreak(calcSessionStreak(sessData));
     setLoading(false);
 
-    // ── AI Insight (fire-and-forget after state is settled) ─────────────
+    // ── AI Insight ──────────────────────────────────────────────────────────
     const last7Logs  = logsData.filter((l) => l.date >= weekStart);
     const todayLogAi = logsData.find((l) => l.date === todayStr2) ?? null;
     const avgOf = (arr: number[]) => arr.length ? Math.round(arr.reduce((s, v) => s + v, 0) / arr.length * 10) / 10 : null;
-
     const metricsArr = (metricsData ?? []) as TrainingMetricRow[];
-    const { ctl: ctlAi, tsb: tsbAi } = metricsArr.length > 0
-      ? computeCTLATLTSB(metricsArr)
-      : { ctl: 0, tsb: 0 };
-
+    const { ctl: ctlAi, tsb: tsbAi } = metricsArr.length > 0 ? computeCTLATLTSB(metricsArr) : { ctl: 0, tsb: 0 };
     let readinessScoreAi: number | null = null;
     let readinessGradeAi: string | null = null;
     if (todayLogAi) {
@@ -276,50 +282,31 @@ export default function DashboardPage() {
         readinessGradeAi = rAi.grade;
       }
     }
-
-    const checkinStrAi = calcCheckinStreak(logsData);
-    const sessionStrAi = calcSessionStreak(sessData);
+    const checkinStrAi   = calcCheckinStreak(logsData);
+    const sessionStrAi   = calcSessionStreak(sessData);
     const recovForHybrid = todayLogAi ? computeRecoveryScore(todayLogAi, tsbAi) : null;
-    const hybridAi = computeHybridScore(recovForHybrid, ctlAi, null, checkinStrAi, sessionStrAi);
-
-    const weekSessAi = sessData.filter((s) => s.date >= weekStart);
+    const hybridAi       = computeHybridScore(recovForHybrid, ctlAi, null, checkinStrAi, sessionStrAi);
+    const weekSessAi     = sessData.filter((s) => s.date >= weekStart);
     const sessionTypesAi = { run: 0, lift: 0, study: 0 };
     weekSessAi.forEach((s) => {
       if (s.type === "run")   sessionTypesAi.run++;
       if (s.type === "lift")  sessionTypesAi.lift++;
       if (s.type === "study") sessionTypesAi.study++;
     });
-
-    const nutRowsAi = (nutData ?? []) as { calories: number }[];
-    const todayCaloriesAi = nutRowsAi.length > 0
-      ? nutRowsAi.reduce((s, r) => s + (r.calories ?? 0), 0)
-      : null;
-
+    const todayCaloriesAi = nutRows.length > 0 ? nutRows.reduce((s, r) => s + (r.calories ?? 0), 0) : null;
     fetch("/api/insight", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        avgSleep7d:       avgOf(last7Logs.map((l) => l.sleep_hours)),
-        todaySleep:       todayLogAi?.sleep_hours ?? null,
-        avgMood7d:        avgOf(last7Logs.map((l) => l.mood)),
-        avgEnergy7d:      avgOf(last7Logs.map((l) => l.energy)),
-        sessionTypes:     sessionTypesAi,
-        todayCals:        todayCaloriesAi,
-        calTarget:        null,
-        latestWeight:     wData[0]?.weight ?? null,
-        weightChange7d:   null,
-        checkinStreak:    checkinStrAi,
-        thisWeekSessions: weekSessAi.length,
-        weeklyGoal:       null,
-        readinessScore:   readinessScoreAi,
-        readinessGrade:   readinessGradeAi,
-        tsb:              tsbAi,
-        ctl:              ctlAi,
-        hybridScore:      hybridAi.score,
-        hybridLevel:      hybridAi.level,
+        avgSleep7d: avgOf(last7Logs.map((l) => l.sleep_hours)), todaySleep: todayLogAi?.sleep_hours ?? null,
+        avgMood7d: avgOf(last7Logs.map((l) => l.mood)), avgEnergy7d: avgOf(last7Logs.map((l) => l.energy)),
+        sessionTypes: sessionTypesAi, todayCals: todayCaloriesAi, calTarget: null,
+        latestWeight: wData[0]?.weight ?? null, weightChange7d: null,
+        checkinStreak: checkinStrAi, thisWeekSessions: weekSessAi.length, weeklyGoal: null,
+        readinessScore: readinessScoreAi, readinessGrade: readinessGradeAi,
+        tsb: tsbAi, ctl: ctlAi, hybridScore: hybridAi.score, hybridLevel: hybridAi.level,
       }),
-    })
-      .then((r) => r.json())
+    }).then((r) => r.json())
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .then((d: any) => { if (d.insight) setAiInsight(d.insight); })
       .catch(() => {});
@@ -334,31 +321,24 @@ export default function DashboardPage() {
     const val = parseFloat(weightInput);
     if (!val || val < 20 || val > 300) return;
     setSavingWeight(true);
-    const {
-      data: { user },
-    } = await sb.auth.getUser();
+    const { data: { user } } = await sb.auth.getUser();
     if (!user) { setSavingWeight(false); return; }
     const todayStr = new Date().toISOString().split("T")[0];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (sb as any)
-      .from("weight_logs")
-      .upsert({ user_id: user.id, date: todayStr, weight: val }, { onConflict: "user_id,date" });
+    await (sb as any).from("weight_logs").upsert({ user_id: user.id, date: todayStr, weight: val }, { onConflict: "user_id,date" });
     setWeightInput("");
     setSavingWeight(false);
     load();
   }
 
-  // ── Derived values ──────────────────────────────────────────────────────
+  // ── Derived values (unchanged) ─────────────────────────────────────────
 
-  const todayStr      = useMemo(() => new Date().toISOString().split("T")[0], []);
-  const weekStartDate = useMemo(
-    () => {
-      // eslint-disable-next-line react-hooks/purity
-      return new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-    },
-    [],
-  );
-  const todayLog      = logs.find((l) => l.date === todayStr) ?? null;
+  const todayStr = useMemo(() => new Date().toISOString().split("T")[0], []);
+  const weekStartDate = useMemo(() => {
+    // eslint-disable-next-line react-hooks/purity
+    return new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+  }, []);
+  const todayLog = logs.find((l) => l.date === todayStr) ?? null;
 
   const { tsb, ctl, atl } = trainingMetrics.length > 0
     ? computeCTLATLTSB(trainingMetrics)
@@ -366,36 +346,22 @@ export default function DashboardPage() {
 
   const recoveryScore  = computeRecoveryScore(todayLog, tsb);
   const recoveryStatus = recoveryScore !== null ? getRecoveryStatus(recoveryScore) : null;
-  const recoveryBanner = getRecoveryBanner(todayLog, recoveryScore);
 
-  const weekDistM  = weekRuns.reduce((s, r) => s + r.distance_meters, 0);
+  const weekDistM    = weekRuns.reduce((s, r) => s + r.distance_meters, 0);
   const weekGymCount = sessions.filter((s) => s.type === "lift" && s.date >= weekStartDate).length;
 
-  // Readiness + coach engine (require today's check-in)
   let readinessOutput: ReadinessOutput | null = null;
   let coachOutput:     CoachOutput     | null = null;
   let hybridOutput:    HybridScoreOutput      = computeHybridScore(recoveryScore, ctl, null, checkinStreak, sessionStreak);
 
   if (todayLog && recoveryScore !== null) {
-    readinessOutput = computeReadiness(
-      recoveryScore,
-      tsb,
-      todayLog.sleep_quality,
-      todayLog.fatigue,
-      todayLog.energy,
-    );
+    readinessOutput = computeReadiness(recoveryScore, tsb, todayLog.sleep_quality, todayLog.fatigue, todayLog.energy);
 
-    // Nutrition targets for rec text
     const currentWeight = weights[0]?.weight ?? null;
     let proteinTarget   = 140;
     let waterTargetMl   = 3000;
 
-    if (
-      profile?.sex &&
-      profile?.age &&
-      profile?.height_cm &&
-      currentWeight
-    ) {
+    if (profile?.sex && profile?.age && profile?.height_cm && currentWeight) {
       const todaySessions = sessions.filter((s) => s.date === todayStr);
       const targets = calculateDailyTargets(
         {
@@ -423,9 +389,7 @@ export default function DashboardPage() {
       recoveryScore,
       readinessScore: readinessOutput.score,
       readinessGrade: readinessOutput.grade,
-      ctl,
-      atl,
-      tsb,
+      ctl, atl, tsb,
       sleepQuality: todayLog.sleep_quality,
       energy:       todayLog.energy,
       mood:         todayLog.mood,
@@ -435,9 +399,7 @@ export default function DashboardPage() {
         weeklyKmPct:  hasKmGoal  ? (weekDistM / 1000) / profile!.weekly_run_km_target  : 0,
         weeklyRunPct: hasRunGoal ? weekRuns.length    / profile!.weekly_run_count_target : 0,
         weeklyGymPct: hasGymGoal ? weekGymCount       / profile!.weekly_gym_target       : 0,
-        hasKmGoal,
-        hasRunGoal,
-        hasGymGoal,
+        hasKmGoal, hasRunGoal, hasGymGoal,
       },
       proteinTarget,
       waterTargetMl,
@@ -446,81 +408,576 @@ export default function DashboardPage() {
     hybridOutput = computeHybridScore(recoveryScore, ctl, null, checkinStreak, sessionStreak);
   }
 
-  const typeColor: Record<string, string> = {
-    run: "var(--green)", lift: "var(--purple)", study: "var(--yellow)",
-  };
+  // ── Date display ──────────────────────────────────────────────────────
+
+  const dateLabel = useMemo(() => {
+    const d = new Date();
+    return d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
+  }, []);
+
+  const greetingHour = useMemo(() => new Date().getHours(), []);
+  const greeting = greetingHour < 12 ? "Good morning" : greetingHour < 17 ? "Good afternoon" : "Good evening";
+
+  // ── Chart data ───────────────────────────────────────────────────────
 
   const sleepChartData  = logs.map((l) => ({ label: l.date.slice(5), value: l.sleep_hours }));
   const moodChartData   = logs.map((l) => ({ label: l.date.slice(5), value: l.mood }));
   const energyChartData = logs.map((l) => ({ label: l.date.slice(5), value: l.energy }));
   const weightChartData = [...weights].reverse().map((w) => ({ label: w.date.slice(5), value: w.weight }));
-  const weightMax       = weights.length ? Math.max(...weights.map((w) => w.weight)) + 1 : 100;
-
-  function streakLabel(n: number) {
-    return n === 0 ? "—" : n >= 3 ? `🔥 ${n}` : `${n}`;
-  }
+  const weightMax       = weights.length ? Math.max(...weights.map((w) => w.weight)) + 2 : 100;
 
   const goalStatusColor: Record<string, string> = {
-    "Exceeded":  "var(--green)",
-    "On Track":  "var(--accent)",
-    "Behind":    "var(--red)",
+    Exceeded: "var(--green)", "On Track": "var(--accent)", Behind: "var(--red)",
   };
 
-  if (loading)
+  const hasGoals = profile && (profile.weekly_run_km_target > 0 || profile.weekly_run_count_target > 0 || profile.weekly_gym_target > 0);
+
+  function streakBadge(n: number, color: string) {
+    if (n === 0) return { text: "0", color: "var(--text-dim)" };
+    if (n >= 7)  return { text: `🔥 ${n}`, color };
+    if (n >= 3)  return { text: `${n}`, color };
+    return { text: `${n}`, color: "var(--text-muted)" };
+  }
+
+  const checkinBadge  = streakBadge(checkinStreak,  "var(--accent)");
+  const sessionBadge  = streakBadge(sessionStreak,  "var(--purple)");
+
+  // ── Loading ────────────────────────────────────────────────────────────
+
+  if (loading) {
     return (
-      <div>
-        <PageHeader title="DASHBOARD" subtitle="Last 14 days" />
-        <div style={{ color: "var(--text-muted)", fontFamily: "var(--mono)", fontSize: 13 }}>
-          Loading...
-        </div>
-      </div>
-    );
-
-  return (
-    <div>
-      <PageHeader title="DASHBOARD" subtitle="Last 14 days" />
-
-      {/* Recovery Banner */}
-      {recoveryBanner.show && (
-        <div
-          style={{
-            padding: "12px 16px",
-            marginBottom: 14,
-            borderRadius: 10,
-            border: `1px solid ${recoveryBanner.color}`,
-            background: `${recoveryBanner.color}10`,
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-          }}
-        >
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {[1, 2, 3].map((i) => (
           <div
+            key={i}
             style={{
-              width: 8,
-              height: 8,
-              borderRadius: "50%",
-              background: recoveryBanner.color,
-              flexShrink: 0,
+              height: i === 1 ? 180 : 100,
+              borderRadius: 14,
+              background: "var(--surface)",
+              border: "1px solid var(--border)",
+              animation: "pulse 1.8s ease-in-out infinite",
             }}
           />
-          <span style={{ fontSize: 13, color: recoveryBanner.color }}>
-            {recoveryBanner.message}
-          </span>
+        ))}
+        <style>{`@keyframes pulse { 0%,100%{opacity:0.5} 50%{opacity:1} }`}</style>
+      </div>
+    );
+  }
+
+  // ── Render ─────────────────────────────────────────────────────────────
+
+  const readScore  = readinessOutput?.score  ?? 0;
+  const readColor  = readinessOutput?.color  ?? "var(--text-dim)";
+  const readGrade  = readinessOutput?.grade  ?? "";
+  const readLabel  = readinessOutput?.label  ?? "";
+  const focusLabel = coachOutput?.primaryFocus ?? "";
+
+  return (
+    <>
+      <style>{`
+        .dash-card {
+          border-radius: 14px;
+          transition: box-shadow 0.22s ease, transform 0.22s ease, border-color 0.22s ease;
+        }
+        .dash-card:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 10px 32px rgba(0,0,0,0.28);
+        }
+        .dash-tile {
+          border-radius: 12px;
+          transition: box-shadow 0.18s ease, transform 0.18s ease;
+        }
+        .dash-tile:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(0,0,0,0.22); }
+        .rec-row {
+          display: flex; align-items: flex-start; gap: 10;
+          padding: 9px 0; border-bottom: 1px solid var(--border2);
+        }
+        .rec-row:last-child { border-bottom: none; padding-bottom: 0; }
+        .run-row {
+          display: flex; align-items: center; justify-content: space-between;
+          padding: 10px 14px; border-radius: 10px;
+          background: var(--surface2); border: 1px solid var(--border2);
+          transition: background 0.15s ease, border-color 0.15s ease;
+          gap: 8;
+        }
+        .run-row:hover { background: var(--surface); border-color: var(--border); }
+        @keyframes fadeUp { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
+        .a1 { animation: fadeUp 0.4s ease both; }
+        .a2 { animation: fadeUp 0.4s 0.07s ease both; }
+        .a3 { animation: fadeUp 0.4s 0.14s ease both; }
+        .a4 { animation: fadeUp 0.4s 0.21s ease both; }
+        .a5 { animation: fadeUp 0.4s 0.28s ease both; }
+        .a6 { animation: fadeUp 0.4s 0.35s ease both; }
+        /* Hero grid: arc card + 3 metric tiles */
+        .dash-hero { grid-template-columns: 188px 1fr 1fr 1fr; }
+        /* Grid children must never overflow their column */
+        .dash-hero > *, .dash-2col > *, .dash-3col > * { min-width: 0; }
+        /* Laptop ≤1100px viewport: tighten arc, tiles stay equal */
+        @media (max-width: 1100px) {
+          .dash-hero { grid-template-columns: 164px 1fr 1fr 1fr; }
+        }
+        /* Tablet ≤900px viewport: 2×2 grid */
+        @media (max-width: 900px) {
+          .dash-hero { grid-template-columns: 1fr 1fr !important; }
+          .dash-3col { grid-template-columns: 1fr 1fr !important; }
+        }
+        /* Mobile ≤640px: single column */
+        @media (max-width: 640px) {
+          .dash-hero { grid-template-columns: 1fr !important; }
+          .dash-2col { grid-template-columns: 1fr !important; }
+          .dash-3col { grid-template-columns: 1fr !important; }
+        }
+      `}</style>
+
+      {/* ── Header ────────────────────────────────────────────────────────── */}
+      <div className="a1" style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 20, flexWrap: "wrap", gap: 8 }}>
+        <div>
+          <div style={{ fontFamily: "var(--mono)", fontSize: 20, fontWeight: 700, letterSpacing: "-0.01em", color: "var(--text)" }}>
+            DASHBOARD
+          </div>
+          <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 3 }}>
+            {greeting} · {dateLabel}
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {[
+            { label: "Check-in", value: checkinBadge.text, color: checkinBadge.color },
+            { label: "Session",  value: sessionBadge.text,  color: sessionBadge.color },
+          ].map(({ label, value, color }) => (
+            <div
+              key={label}
+              style={{
+                padding: "6px 14px",
+                borderRadius: 99,
+                border: "1px solid var(--border)",
+                background: "var(--surface)",
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              <span style={{ fontSize: 10, color: "var(--text-dim)", letterSpacing: "0.08em" }}>{label}</span>
+              <span style={{ fontFamily: "var(--mono)", fontSize: 14, fontWeight: 700, color }}>{value}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Hero row ──────────────────────────────────────────────────────── */}
+      <div
+        className="dash-hero a2"
+        style={{ display: "grid", gap: 10, marginBottom: 12 }}
+      >
+        {/* Readiness gauge card */}
+        <div
+          className="dash-card"
+          style={{
+            background: "var(--surface)",
+            border: `1px solid ${readScore > 0 ? readColor + "55" : "var(--border)"}`,
+            padding: "20px 22px",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
+          <div style={{ fontFamily: "var(--mono)", fontSize: 9, letterSpacing: "0.18em", color: "var(--text-dim)", textTransform: "uppercase", alignSelf: "flex-start" }}>
+            Today
+          </div>
+          <ReadinessArc score={readScore} color={readColor} grade={readGrade} loading={loading} />
+          {readScore > 0 ? (
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 12, color: readColor, fontWeight: 600 }}>{readLabel}</div>
+              {focusLabel && (
+                <div style={{ fontFamily: "var(--mono)", fontSize: 9, color: "var(--text-dim)", letterSpacing: "0.1em", marginTop: 4 }}>
+                  FOCUS · {focusLabel}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 11, color: "var(--text-dim)" }}>No check-in yet</div>
+            </div>
+          )}
+        </div>
+
+        {/* Recovery tile */}
+        <div
+          className="dash-tile"
+          style={{
+            background: "var(--surface)",
+            border: recoveryStatus ? `1px solid ${recoveryStatus.color}33` : "1px solid var(--border)",
+            padding: "18px 16px",
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "space-between",
+          }}
+        >
+          <div style={{ fontFamily: "var(--mono)", fontSize: 9, letterSpacing: "0.14em", color: "var(--text-dim)", textTransform: "uppercase" }}>
+            Recovery
+          </div>
+          {recoveryStatus ? (
+            <>
+              <div>
+                <div style={{ fontFamily: "var(--mono)", fontSize: 36, fontWeight: 700, color: recoveryStatus.color, lineHeight: 1, letterSpacing: "-0.02em" }}>
+                  {recoveryStatus.score}
+                </div>
+                <div style={{ fontSize: 9, fontFamily: "var(--mono)", letterSpacing: "0.08em", color: recoveryStatus.color, marginTop: 4 }}>
+                  {recoveryStatus.label}
+                </div>
+              </div>
+              <div style={{ marginTop: 10 }}>
+                <div style={{ height: 4, background: "var(--border2)", borderRadius: 2, overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: `${recoveryStatus.score}%`, background: recoveryStatus.color, borderRadius: 2, transition: "width 0.9s ease" }} />
+                </div>
+                <div style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 5, lineHeight: 1.4 }}>
+                  {recoveryStatus.description}
+                </div>
+              </div>
+            </>
+          ) : (
+            <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: "auto" }}>Log check-in</div>
+          )}
+        </div>
+
+        {/* Hybrid score tile */}
+        <div
+          className="dash-tile"
+          style={{
+            background: "var(--surface)",
+            border: "1px solid var(--accent)22",
+            padding: "18px 16px",
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "space-between",
+          }}
+        >
+          <div style={{ fontFamily: "var(--mono)", fontSize: 9, letterSpacing: "0.14em", color: "var(--text-dim)", textTransform: "uppercase" }}>
+            Hybrid Score
+          </div>
+          <div>
+            <div style={{ fontFamily: "var(--mono)", fontSize: 36, fontWeight: 700, color: "var(--accent)", lineHeight: 1, letterSpacing: "-0.02em" }}>
+              {hybridOutput.score}
+            </div>
+            <div style={{ fontFamily: "var(--mono)", fontSize: 9, color: "var(--accent)", letterSpacing: "0.06em", marginTop: 4 }}>
+              {hybridOutput.level}
+            </div>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 5, marginTop: 10 }}>
+            {[
+              { label: "Recov", val: hybridOutput.components.recovery,    color: "var(--green)"  },
+              { label: "Train", val: hybridOutput.components.training,     color: "var(--accent)" },
+              { label: "Consi", val: hybridOutput.components.consistency,  color: "var(--purple)" },
+            ].map(({ label, val, color }) => (
+              <div key={label} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <div style={{ fontSize: 9, color: "var(--text-dim)", width: 32, flexShrink: 0 }}>{label}</div>
+                <div style={{ flex: 1, height: 3, background: "var(--border2)", borderRadius: 2, overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: `${val}%`, background: color, borderRadius: 2, transition: "width 0.9s ease" }} />
+                </div>
+                <div style={{ fontFamily: "var(--mono)", fontSize: 9, color, width: 22, textAlign: "right" }}>{val}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Training load tile */}
+        <div
+          className="dash-tile"
+          style={{
+            background: "var(--surface)",
+            border: "1px solid var(--border)",
+            padding: "18px 16px",
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "space-between",
+          }}
+        >
+          <div style={{ fontFamily: "var(--mono)", fontSize: 9, letterSpacing: "0.14em", color: "var(--text-dim)", textTransform: "uppercase" }}>
+            Training Load
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-around", marginTop: 8 }}>
+            {[
+              { key: "CTL", val: ctl, color: "var(--green)" },
+              { key: "ATL", val: atl, color: "var(--red)" },
+              { key: "TSB", val: tsb, color: "var(--accent)" },
+            ].map(({ key, val, color }) => (
+              <div key={key} style={{ textAlign: "center" }}>
+                <div style={{ fontFamily: "var(--mono)", fontSize: 22, fontWeight: 700, color, lineHeight: 1 }}>
+                  {val > 0 && key === "TSB" ? `+${val}` : val}
+                </div>
+                <div style={{ fontSize: 9, color: "var(--text-dim)", marginTop: 3, letterSpacing: "0.08em" }}>{key}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ marginTop: 10 }}>
+            <div style={{ fontSize: 9, color: "var(--text-dim)", letterSpacing: "0.06em", marginBottom: 4 }}>TSB · Form</div>
+            <div style={{ height: 4, background: "var(--border2)", borderRadius: 2, overflow: "hidden", position: "relative" }}>
+              {/* Zero marker */}
+              <div style={{ position: "absolute", left: "50%", top: 0, bottom: 0, width: 1, background: "var(--border)", zIndex: 1 }} />
+              <div
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  bottom: 0,
+                  ...(tsb >= 0
+                    ? { left: "50%", width: `${Math.min(50, (tsb / 30) * 50)}%`, background: "var(--green)" }
+                    : { right: "50%", width: `${Math.min(50, (Math.abs(tsb) / 30) * 50)}%`, background: "var(--red)" }),
+                  transition: "width 0.9s ease",
+                  borderRadius: 2,
+                }}
+              />
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
+              <span style={{ fontSize: 9, color: "var(--red)", letterSpacing: "0.06em" }}>Fatigue</span>
+              <span style={{ fontSize: 9, color: "var(--green)", letterSpacing: "0.06em" }}>Fresh</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Observer Coach card ────────────────────────────────────────────── */}
+      <div className="a3">
+        {coachOutput && readinessOutput ? (
+          <div
+            className="dash-card"
+            style={{
+              background: "var(--surface)",
+              border: `1px solid ${readColor}44`,
+              marginBottom: 12,
+              overflow: "hidden",
+            }}
+          >
+            {/* Header strip */}
+            <div
+              style={{
+                padding: "12px 22px",
+                borderBottom: "1px solid var(--border2)",
+                background: `${readColor}08`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                flexWrap: "wrap",
+                gap: 8,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <div style={{ fontFamily: "var(--mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.2em", color: "var(--text-muted)" }}>
+                  OBSERVER COACH
+                </div>
+                <div
+                  style={{
+                    fontFamily: "var(--mono)",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: readColor,
+                    letterSpacing: "0.08em",
+                    padding: "2px 10px",
+                    border: `1px solid ${readColor}55`,
+                    borderRadius: 4,
+                  }}
+                >
+                  {readGrade}
+                </div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ fontFamily: "var(--mono)", fontSize: 11, color: readColor, fontWeight: 700 }}>
+                  {focusLabel}
+                </div>
+                <div style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--text-dim)" }}>
+                  {readLabel}
+                </div>
+              </div>
+            </div>
+            {/* Recommendations */}
+            <div style={{ padding: "14px 22px", display: "flex", flexDirection: "column" }}>
+              {[
+                { tag: "TRAIN", text: coachOutput.trainingRecommendation,  tagColor: "var(--green)"  },
+                { tag: "RECOV", text: coachOutput.recoveryRecommendation,  tagColor: "var(--accent)" },
+                { tag: "NUT",   text: coachOutput.nutritionRecommendation, tagColor: "var(--yellow)" },
+              ].map(({ tag, text, tagColor }) => (
+                <div key={tag} className="rec-row">
+                  <span
+                    style={{
+                      fontFamily: "var(--mono)",
+                      fontSize: 9,
+                      fontWeight: 700,
+                      letterSpacing: "0.1em",
+                      color: tagColor,
+                      flexShrink: 0,
+                      paddingTop: 1,
+                      width: 38,
+                    }}
+                  >
+                    {tag}
+                  </span>
+                  <span style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.6 }}>{text}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          !todayLog && (
+            <div
+              className="dash-card"
+              style={{
+                marginBottom: 12,
+                padding: "16px 22px",
+                background: "var(--surface)",
+                border: "1px solid var(--border)",
+                display: "flex",
+                alignItems: "center",
+                gap: 16,
+              }}
+            >
+              <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--text-dim)", flexShrink: 0 }} />
+              <div>
+                <div style={{ fontFamily: "var(--mono)", fontSize: 9, letterSpacing: "0.18em", color: "var(--text-dim)", marginBottom: 4 }}>
+                  OBSERVER COACH
+                </div>
+                <div style={{ fontSize: 13, color: "var(--text-muted)" }}>
+                  Log today&apos;s check-in to activate personalised coaching recommendations.
+                </div>
+              </div>
+            </div>
+          )
+        )}
+      </div>
+
+      {/* ── AI Insight ────────────────────────────────────────────────────── */}
+      {aiInsight && (
+        <div
+          className="dash-card a4"
+          style={{
+            marginBottom: 12,
+            padding: "16px 22px",
+            background: "var(--surface)",
+            border: "1px solid var(--accent)33",
+            borderLeft: "3px solid var(--accent)",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+            <div style={{ fontFamily: "var(--mono)", fontSize: 9, letterSpacing: "0.18em", color: "var(--accent)", fontWeight: 700 }}>
+              AI INSIGHT
+            </div>
+            <div style={{ fontFamily: "var(--mono)", fontSize: 8, color: "var(--text-dim)", letterSpacing: "0.1em" }}>
+              · GROQ
+            </div>
+          </div>
+          <p style={{ fontSize: 13, color: "var(--text)", margin: 0, lineHeight: 1.7 }}>{aiInsight}</p>
         </div>
       )}
 
-      {/* ── OBSERVER COACH CARD ── */}
-      {coachOutput && readinessOutput ? (
+      {/* ── Middle two-column ─────────────────────────────────────────────── */}
+      <div
+        className="dash-2col a4"
+        style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}
+      >
+        {/* Net calories */}
+        {todayNetCals !== null && (() => {
+          const net = todayNetCals.eaten - todayNetCals.burned;
+          const netColor = net > 300 ? "var(--yellow)" : net < -300 ? "var(--red)" : "var(--green)";
+          return (
+            <div
+              className="dash-card"
+              style={{ background: "var(--surface)", border: "1px solid var(--border)", padding: "18px 20px" }}
+            >
+              <div style={{ fontFamily: "var(--mono)", fontSize: 9, letterSpacing: "0.14em", color: "var(--text-dim)", textTransform: "uppercase", marginBottom: 14 }}>
+                Net Calories · Today
+              </div>
+              <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+                {[
+                  { label: "Eaten",  value: Math.round(todayNetCals.eaten),  color: "var(--yellow)" },
+                  { label: "Burned", value: Math.round(todayNetCals.burned), color: "var(--red)" },
+                  { label: "Net",    value: net > 0 ? `+${Math.round(net)}` : Math.round(net), color: netColor },
+                ].map(({ label, value, color }) => (
+                  <div key={label} style={{ flex: "1 1 60px" }}>
+                    <div style={{ fontFamily: "var(--mono)", fontSize: 22, fontWeight: 700, color, lineHeight: 1 }}>
+                      {value}
+                    </div>
+                    <div style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 4, letterSpacing: "0.08em" }}>{label}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Weekly goals */}
+        {hasGoals && (
+          <div
+            className="dash-card"
+            style={{ background: "var(--surface)", border: "1px solid var(--border)", padding: "18px 20px" }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+              <div style={{ fontFamily: "var(--mono)", fontSize: 9, letterSpacing: "0.14em", color: "var(--text-dim)", textTransform: "uppercase" }}>
+                Weekly Goals
+              </div>
+              {coachOutput && (
+                <div
+                  style={{
+                    fontFamily: "var(--mono)",
+                    fontSize: 9,
+                    fontWeight: 700,
+                    color: goalStatusColor[coachOutput.goalStatus],
+                    letterSpacing: "0.1em",
+                  }}
+                >
+                  {coachOutput.goalStatus.toUpperCase()}
+                </div>
+              )}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {profile!.weekly_run_km_target > 0 && (
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
+                    <span style={{ fontSize: 11, color: "var(--text-muted)" }}>Distance</span>
+                    <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: "var(--text)" }}>
+                      {(weekDistM / 1000).toFixed(1)} / {profile!.weekly_run_km_target} km
+                    </span>
+                  </div>
+                  <AnimBar pct={(weekDistM / 1000) / profile!.weekly_run_km_target} color="var(--accent)" height={7} />
+                </div>
+              )}
+              {profile!.weekly_run_count_target > 0 && (
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
+                    <span style={{ fontSize: 11, color: "var(--text-muted)" }}>Runs</span>
+                    <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: "var(--text)" }}>
+                      {weekRuns.length} / {profile!.weekly_run_count_target}
+                    </span>
+                  </div>
+                  <AnimBar pct={weekRuns.length / profile!.weekly_run_count_target} color="var(--accent)" height={7} />
+                </div>
+              )}
+              {profile!.weekly_gym_target > 0 && (
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
+                    <span style={{ fontSize: 11, color: "var(--text-muted)" }}>Gym</span>
+                    <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: "var(--text)" }}>
+                      {weekGymCount} / {profile!.weekly_gym_target}
+                    </span>
+                  </div>
+                  <AnimBar pct={weekGymCount / profile!.weekly_gym_target} color="var(--purple)" height={7} />
+                </div>
+              )}
+            </div>
+            {coachOutput && (
+              <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid var(--border2)" }}>
+                <p style={{ fontSize: 11, color: "var(--text-muted)", margin: 0, lineHeight: 1.55 }}>
+                  {coachOutput.goalRecommendation}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ── Strava this week ──────────────────────────────────────────────── */}
+      {stravaConnected && (
         <div
-          style={{
-            marginBottom: 16,
-            background: "var(--surface)",
-            border: `1px solid ${readinessOutput.color}`,
-            borderRadius: 12,
-            overflow: "hidden",
-          }}
+          className="dash-card a5"
+          style={{ background: "var(--surface)", border: "1px solid var(--border)", marginBottom: 12, overflow: "hidden" }}
         >
-          {/* Header */}
           <div
             style={{
               padding: "14px 20px",
@@ -528,389 +985,45 @@ export default function DashboardPage() {
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
-              gap: 12,
-              flexWrap: "wrap",
             }}
           >
-            <div
-              style={{
-                fontFamily: "var(--mono)",
-                fontSize: 10,
-                fontWeight: 700,
-                letterSpacing: "0.18em",
-                textTransform: "uppercase",
-                color: "var(--text-muted)",
-              }}
-            >
-              Observer Coach
+            <div style={{ fontFamily: "var(--mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.16em", color: "var(--text-muted)" }}>
+              THIS WEEK · RUNNING
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div
-                style={{
-                  fontFamily: "var(--mono)",
-                  fontSize: 24,
-                  fontWeight: 700,
-                  color: readinessOutput.color,
-                  lineHeight: 1,
-                }}
-              >
-                {readinessOutput.score}
-                <span
-                  style={{ fontSize: 11, fontWeight: 400, color: "var(--text-dim)", marginLeft: 2 }}
-                >
-                  /100
-                </span>
-              </div>
-              <div
-                style={{
-                  padding: "3px 10px",
-                  borderRadius: 4,
-                  border: `1px solid ${readinessOutput.color}`,
-                  fontFamily: "var(--mono)",
-                  fontSize: 9,
-                  fontWeight: 700,
-                  letterSpacing: "0.12em",
-                  color: readinessOutput.color,
-                }}
-              >
-                {readinessOutput.grade}
-              </div>
-            </div>
-          </div>
-
-          {/* Body */}
-          <div style={{ padding: "14px 20px" }}>
-            {/* Focus + label */}
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                marginBottom: 14,
-              }}
-            >
-              <span
-                style={{
-                  fontSize: 9,
-                  fontFamily: "var(--mono)",
-                  color: "var(--text-dim)",
-                  letterSpacing: "0.1em",
-                  textTransform: "uppercase",
-                }}
-              >
-                Focus
-              </span>
-              <span
-                style={{
-                  fontFamily: "var(--mono)",
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: readinessOutput.color,
-                  letterSpacing: "0.04em",
-                }}
-              >
-                {coachOutput.primaryFocus}
-              </span>
-              <span
-                style={{
-                  marginLeft: "auto",
-                  fontSize: 10,
-                  color: "var(--text-dim)",
-                  fontFamily: "var(--mono)",
-                }}
-              >
-                {readinessOutput.label}
-              </span>
-            </div>
-
-            {/* Three recommendations */}
-            <div>
-              <RecRow icon="TRAIN" text={coachOutput.trainingRecommendation} />
-              <RecRow icon="RECOV" text={coachOutput.recoveryRecommendation} />
-              <div style={{ paddingTop: 8 }}>
-                <RecRow icon="NUT  " text={coachOutput.nutritionRecommendation} />
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : (
-        /* No check-in nudge */
-        !todayLog && (
-          <div
-            style={{
-              marginBottom: 16,
-              padding: "16px 20px",
-              background: "var(--surface)",
-              border: "1px solid var(--border)",
-              borderRadius: 12,
-              display: "flex",
-              alignItems: "center",
-              gap: 12,
-            }}
-          >
-            <div
-              style={{
-                fontFamily: "var(--mono)",
-                fontSize: 10,
-                letterSpacing: "0.15em",
-                textTransform: "uppercase",
-                color: "var(--text-muted)",
-              }}
-            >
-              Observer Coach
-            </div>
-            <span style={{ fontSize: 12, color: "var(--text-dim)" }}>
-              Log today&apos;s check-in to activate coaching recommendations.
-            </span>
-          </div>
-        )
-      )}
-
-      {/* AI Insight */}
-      {aiInsight && (
-        <div
-          style={{
-            marginBottom: 16,
-            padding: "14px 20px",
-            background: "var(--surface)",
-            border: "1px solid var(--border)",
-            borderLeft: "3px solid var(--accent)",
-            borderRadius: 12,
-          }}
-        >
-          <div
-            style={{
-              fontFamily: "var(--mono)",
-              fontSize: 9,
-              letterSpacing: "0.15em",
-              textTransform: "uppercase",
-              color: "var(--text-dim)",
-              marginBottom: 8,
-            }}
-          >
-            AI Insight · Groq
-          </div>
-          <p style={{ fontSize: 13, color: "var(--text-muted)", margin: 0, lineHeight: 1.65 }}>
-            {aiInsight}
-          </p>
-        </div>
-      )}
-
-      {/* Main stats — 2 cols on mobile, 4 on desktop */}
-      <div className="grid-4" style={{ marginBottom: 12 }}>
-        <StatCard value={stats?.avgSleep ?? "—"}    label="Avg Sleep (hrs)" />
-        <StatCard value={stats?.avgMood  ?? "—"}    label="Avg Mood"   color="var(--yellow)" />
-        <StatCard value={stats?.avgEnergy ?? "—"}   label="Avg Energy" color="var(--green)" />
-        <StatCard value={stats?.totalSessions ?? 0} label="Sessions"   color="var(--accent)" />
-      </div>
-
-      {/* Second row */}
-      <div className="grid-4" style={{ marginBottom: 16 }}>
-        <StatCard
-          value={stats?.avgReadiness?.toFixed(1) ?? "—"}
-          label="Avg Readiness"
-          color="var(--accent)"
-        />
-        <StatCard
-          value={`${stats?.sessionsByType.run ?? 0}/${stats?.sessionsByType.lift ?? 0}/${stats?.sessionsByType.study ?? 0}`}
-          label="Run/Lift/Study"
-        />
-        <StatCard value={streakLabel(checkinStreak)} label="Check-in Streak" color="var(--red)" />
-        <StatCard value={streakLabel(sessionStreak)} label="Session Streak"  color="var(--red)" />
-      </div>
-
-      {/* Recovery Score */}
-      {recoveryStatus && (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "stretch",
-            gap: 12,
-            marginBottom: 16,
-            padding: "18px 20px",
-            background: "var(--surface)",
-            border: `1px solid ${recoveryStatus.color}`,
-            borderRadius: 12,
-          }}
-        >
-          <div style={{ flex: 1 }}>
-            <div
-              style={{
-                fontSize: 10,
-                color: "var(--text-muted)",
-                letterSpacing: "0.1em",
-                textTransform: "uppercase",
-                marginBottom: 4,
-              }}
-            >
-              Recovery Score · Today
-            </div>
-            <div
-              style={{
-                fontFamily: "var(--mono)",
-                fontSize: 28,
-                fontWeight: 700,
-                color: recoveryStatus.color,
-                lineHeight: 1,
-              }}
-            >
-              {recoveryStatus.score}
-              <span style={{ fontSize: 14, fontWeight: 400, marginLeft: 2 }}>/100</span>
-            </div>
-            <div
-              style={{
-                fontFamily: "var(--mono)",
-                fontSize: 11,
-                color: recoveryStatus.color,
-                marginTop: 6,
-                letterSpacing: "0.06em",
-              }}
-            >
-              {recoveryStatus.label}
-            </div>
-            <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>
-              {recoveryStatus.description}
-            </div>
-          </div>
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              justifyContent: "flex-end",
-              alignItems: "flex-end",
-            }}
-          >
-            <div
-              style={{
-                width: 6,
-                height: 70,
-                borderRadius: 3,
-                background: "var(--border2)",
-                position: "relative",
-                overflow: "hidden",
-              }}
-            >
-              <div
-                style={{
-                  position: "absolute",
-                  bottom: 0,
-                  width: "100%",
-                  height: `${recoveryStatus.score}%`,
-                  background: recoveryStatus.color,
-                  borderRadius: 3,
-                  transition: "height 0.4s ease",
-                }}
-              />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Net Calories */}
-      {todayNetCals !== null &&
-        (() => {
-          const net      = todayNetCals.eaten - todayNetCals.burned;
-          const netColor =
-            net > 300 ? "var(--yellow)" : net < -300 ? "var(--red)" : "var(--green)";
-          return (
-            <Card style={{ marginBottom: 16 }}>
-              <SectionLabel>Net Calories · Today</SectionLabel>
-              <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
-                <div style={{ flex: "1 1 100px" }}>
-                  <StatCard value={Math.round(todayNetCals.eaten)} label="Eaten"  color="var(--yellow)" />
-                </div>
-                <div style={{ flex: "1 1 100px" }}>
-                  <StatCard value={Math.round(todayNetCals.burned)} label="Burned" color="var(--red)" />
-                </div>
-                <div style={{ flex: "1 1 100px" }}>
-                  <StatCard
-                    value={net > 0 ? `+${Math.round(net)}` : String(Math.round(net))}
-                    label="Net"
-                    color={netColor}
-                  />
-                </div>
-              </div>
-            </Card>
-          );
-        })()}
-
-      {/* Running Summary */}
-      {stravaConnected && (
-        <Card style={{ marginBottom: 16 }}>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              marginBottom: 16,
-            }}
-          >
-            <SectionLabel>This Week · Running</SectionLabel>
-            <span
-              style={{
-                fontSize: 9,
-                fontFamily: "var(--mono)",
-                color: "#FC4C02",
-                letterSpacing: "0.1em",
-                border: "1px solid rgba(252,76,2,0.35)",
-                padding: "2px 7px",
-                borderRadius: 4,
-              }}
-            >
+            <div style={{ fontFamily: "var(--mono)", fontSize: 8, color: "#FC4C02", letterSpacing: "0.1em", border: "1px solid rgba(252,76,2,0.35)", padding: "2px 7px", borderRadius: 4 }}>
               STRAVA
-            </span>
+            </div>
           </div>
-
-          {(() => {
+          {/* Week stats */}
+          {weekRuns.length > 0 && (() => {
             const weekTotalTime = weekRuns.reduce((s, r) => s + r.moving_time_seconds, 0);
-            const longestM      = weekRuns.length > 0 ? Math.max(...weekRuns.map((r) => r.distance_meters)) : 0;
+            const longestM      = Math.max(...weekRuns.map((r) => r.distance_meters));
             const avgPace       = weekDistM > 0 ? weekTotalTime / (weekDistM / 1000) : 0;
-            const lastRun       = recentActivities[0];
-            const lastRunLabel  = (() => {
-              if (!lastRun) return "—";
-              const diffDays = Math.floor(
-                (Date.now() - new Date(lastRun.activity_date + "T00:00:00").getTime()) / 86400000,
-              );
-              if (diffDays === 0) return "Today";
-              if (diffDays === 1) return "Yesterday";
-              return `${diffDays}d ago`;
-            })();
             return (
-              <>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: weekRuns.length > 0 ? 16 : 0 }}>
-                  {[
-                    { value: weekRuns.length > 0 ? `${(weekDistM / 1000).toFixed(1)} km` : "—", label: "Weekly km" },
-                    { value: weekRuns.length, label: "Runs" },
-                    { value: longestM > 0 ? `${(longestM / 1000).toFixed(1)} km` : "—", label: "Longest" },
-                    { value: avgPace > 0 ? formatPace(1000 / avgPace) : "—", label: "Avg Pace" },
-                    { value: lastRunLabel, label: "Last Run" },
-                  ].map(({ value, label }) => (
-                    <div key={label} style={{ flex: "1 1 130px", minWidth: 0 }}>
-                      <StatCard value={value} label={label} color="var(--green)" />
-                    </div>
-                  ))}
-                </div>
-              </>
+              <div style={{ padding: "12px 20px", borderBottom: "1px solid var(--border2)", display: "flex", gap: 24, flexWrap: "wrap" }}>
+                {[
+                  { label: "Distance",  value: `${(weekDistM / 1000).toFixed(1)} km`, color: "var(--green)" },
+                  { label: "Runs",      value: weekRuns.length,                        color: "var(--text)" },
+                  { label: "Longest",   value: `${(longestM / 1000).toFixed(1)} km`,  color: "var(--text)" },
+                  { label: "Avg Pace",  value: avgPace > 0 ? formatPace(1000 / avgPace) : "—", color: "var(--accent)" },
+                  { label: "Time",      value: fmtDur(weekTotalTime),                 color: "var(--text)" },
+                ].map(({ label, value, color }) => (
+                  <div key={label}>
+                    <div style={{ fontFamily: "var(--mono)", fontSize: 16, fontWeight: 700, color, lineHeight: 1 }}>{value}</div>
+                    <div style={{ fontSize: 9, color: "var(--text-dim)", marginTop: 4, letterSpacing: "0.08em" }}>{label}</div>
+                  </div>
+                ))}
+              </div>
             );
           })()}
-
-          {recentActivities.length > 0 && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {recentActivities.map((run) => (
-                <div
-                  key={run.id}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "10px 14px",
-                    background: "var(--surface2)",
-                    border: "1px solid var(--border2)",
-                    borderRadius: 10,
-                    gap: 8,
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {/* Recent runs */}
+          <div style={{ padding: "10px 20px", display: "flex", flexDirection: "column", gap: 6 }}>
+            {recentActivities.slice(0, 4).map((run) => {
+              const diffDays = Math.floor((MODULE_NOW - new Date(run.activity_date + "T00:00:00").getTime()) / 86400000);
+              const when = diffDays === 0 ? "Today" : diffDays === 1 ? "Yesterday" : `${diffDays}d ago`;
+              return (
+                <div key={run.id} className="run-row">
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
                     <span
                       style={{
                         fontFamily: "var(--mono)",
@@ -926,401 +1039,191 @@ export default function DashboardPage() {
                     >
                       {activityTypeLabel(run.activity_type)}
                     </span>
-                    <span
-                      style={{
-                        fontSize: 12,
-                        color: "var(--text)",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                        maxWidth: 180,
-                      }}
-                    >
+                    <span style={{ fontSize: 12, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 200 }}>
                       {run.activity_name}
                     </span>
                   </div>
-                  <div style={{ display: "flex", gap: 12, alignItems: "center", flexShrink: 0 }}>
+                  <div style={{ display: "flex", gap: 14, alignItems: "center", flexShrink: 0 }}>
                     <span style={{ fontFamily: "var(--mono)", fontSize: 12, fontWeight: 600, color: "var(--green)" }}>
                       {formatDistance(run.distance_meters)} km
                     </span>
-                    <span style={{ fontSize: 11, color: "var(--text-dim)", fontFamily: "var(--mono)" }}>
+                    <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: "var(--text-dim)" }}>
                       {fmtDur(run.moving_time_seconds)}
                     </span>
                     {run.average_speed && run.average_speed > 0 && (
-                      <span style={{ fontSize: 11, color: "var(--green)", fontFamily: "var(--mono)" }}>
+                      <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: "var(--accent)" }}>
                         {formatPace(run.average_speed)}
                       </span>
                     )}
-                    <span style={{ fontSize: 10, color: "var(--text-dim)", fontFamily: "var(--mono)" }}>
-                      {run.activity_date.slice(5)}
-                    </span>
+                    <span style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--text-dim)" }}>{when}</span>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </Card>
-      )}
-
-      {/* Weekly Goals */}
-      {profile &&
-        (profile.weekly_run_km_target > 0 ||
-          profile.weekly_run_count_target > 0 ||
-          profile.weekly_gym_target > 0) && (
-          <Card style={{ marginBottom: 0 }}>
-            <SectionLabel>Weekly Goals</SectionLabel>
-            <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 4 }}>
-              {profile.weekly_run_km_target > 0 && (
-                <GoalBar
-                  label="Weekly Distance"
-                  current={`${(weekDistM / 1000).toFixed(1)}`}
-                  target={`${profile.weekly_run_km_target} km`}
-                  color="var(--accent)"
-                />
-              )}
-              {profile.weekly_run_count_target > 0 && (
-                <GoalBar
-                  label="Runs"
-                  current={weekRuns.length}
-                  target={profile.weekly_run_count_target}
-                  color="var(--accent)"
-                />
-              )}
-              {profile.weekly_gym_target > 0 && (
-                <GoalBar
-                  label="Gym Sessions"
-                  current={weekGymCount}
-                  target={profile.weekly_gym_target}
-                  color="var(--purple)"
-                />
-              )}
-            </div>
-
-            {/* Goal Intelligence */}
-            {coachOutput && (
-              <div
-                style={{
-                  marginTop: 16,
-                  padding: "12px 14px",
-                  background: "var(--surface2)",
-                  border: `1px solid ${goalStatusColor[coachOutput.goalStatus]}30`,
-                  borderLeft: `3px solid ${goalStatusColor[coachOutput.goalStatus]}`,
-                  borderRadius: 8,
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    marginBottom: 6,
-                  }}
-                >
-                  <span
-                    style={{
-                      fontSize: 9,
-                      fontFamily: "var(--mono)",
-                      color: "var(--text-dim)",
-                      letterSpacing: "0.1em",
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    Goal Intelligence
-                  </span>
-                  <span
-                    style={{
-                      fontFamily: "var(--mono)",
-                      fontSize: 9,
-                      fontWeight: 700,
-                      color: goalStatusColor[coachOutput.goalStatus],
-                      letterSpacing: "0.08em",
-                    }}
-                  >
-                    {coachOutput.goalStatus.toUpperCase()}
-                  </span>
-                </div>
-                <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0, lineHeight: 1.55 }}>
-                  {coachOutput.goalRecommendation}
-                </p>
-              </div>
-            )}
-          </Card>
-        )}
-
-      {/* Hybrid Athlete Score */}
-      <Card style={{ marginTop: 16, marginBottom: 16 }}>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            marginBottom: 16,
-            flexWrap: "wrap",
-            gap: 10,
-          }}
-        >
-          <SectionLabel>Hybrid Athlete Score</SectionLabel>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-            <span
-              style={{
-                fontFamily: "var(--mono)",
-                fontSize: 28,
-                fontWeight: 700,
-                color: "var(--accent)",
-                lineHeight: 1,
-              }}
-            >
-              {hybridOutput.score}
-            </span>
-            <span
-              style={{
-                fontFamily: "var(--mono)",
-                fontSize: 10,
-                color: "var(--accent)",
-                letterSpacing: "0.08em",
-              }}
-            >
-              {hybridOutput.level}
-            </span>
+              );
+            })}
           </div>
         </div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {(
-            [
-              { label: "Recovery",    value: hybridOutput.components.recovery,    color: "var(--green)"  },
-              { label: "Training",    value: hybridOutput.components.training,     color: "var(--accent)" },
-              { label: "Nutrition",   value: hybridOutput.components.nutrition,    color: "var(--yellow)" },
-              { label: "Consistency", value: hybridOutput.components.consistency,  color: "var(--purple)" },
-            ] as const
-          ).map(({ label, value, color }) => (
+      )}
+
+      {/* ── Trend sparklines ──────────────────────────────────────────────── */}
+      {logs.length > 0 && (
+        <div
+          className="dash-3col a5"
+          style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 12 }}
+        >
+          {[
+            { label: "Sleep (hrs)", data: sleepChartData, color: "var(--accent)",  max: 10 },
+            { label: "Mood",        data: moodChartData,  color: "var(--yellow)",  max: 10 },
+            { label: "Energy",      data: energyChartData, color: "var(--green)", max: 10 },
+          ].map(({ label, data, color, max }) => (
             <div
               key={label}
-              style={{
-                flex: "1 1 100px",
-                padding: "10px 12px",
-                background: "var(--surface2)",
-                border: "1px solid var(--border2)",
-                borderRadius: 8,
-              }}
+              className="dash-card"
+              style={{ background: "var(--surface)", border: "1px solid var(--border)", padding: "16px 16px 14px" }}
             >
-              <div
-                style={{
-                  fontFamily: "var(--mono)",
-                  fontSize: 18,
-                  fontWeight: 700,
-                  color,
-                  lineHeight: 1,
-                }}
-              >
-                {value}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }}>
+                <div style={{ fontSize: 10, color: "var(--text-muted)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                  {label}
+                </div>
+                {data.length > 0 && (
+                  <div style={{ fontFamily: "var(--mono)", fontSize: 16, fontWeight: 700, color }}>
+                    {data[data.length - 1].value}
+                  </div>
+                )}
               </div>
-              <div
-                style={{
-                  fontSize: 9,
-                  color: "var(--text-dim)",
-                  letterSpacing: "0.1em",
-                  textTransform: "uppercase",
-                  marginTop: 4,
-                }}
-              >
-                {label}
-              </div>
-              <div
-                style={{
-                  height: 3,
-                  background: "var(--border2)",
-                  borderRadius: 2,
-                  marginTop: 6,
-                  overflow: "hidden",
-                }}
-              >
-                <div
-                  style={{
-                    height: "100%",
-                    width: `${value}%`,
-                    background: color,
-                    borderRadius: 2,
-                    transition: "width 0.4s ease",
-                  }}
-                />
-              </div>
+              <BarChart data={data} color={color} maxVal={max} />
             </div>
           ))}
         </div>
-      </Card>
+      )}
 
-      {/* Weight Tracker */}
-      <Card style={{ marginBottom: 16 }}>
-        <SectionLabel>Body Weight</SectionLabel>
+      {/* ── Bottom row ────────────────────────────────────────────────────── */}
+      <div
+        className="dash-2col a6"
+        style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}
+      >
+        {/* Weight tracker */}
+        {(() => {
+          const latestW  = weights[0]?.weight ?? null;
+          const oldestW  = weights.length >= 2 ? weights[weights.length - 1].weight : null;
+          const deltaW   = latestW !== null && oldestW !== null ? +(latestW - oldestW).toFixed(1) : null;
+          const weightMin = weights.length ? Math.min(...weights.map((w) => w.weight)) - 1 : 0;
+          return (
+            <div
+              className="dash-card"
+              style={{ background: "var(--surface)", border: "1px solid var(--border)", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 14 }}
+            >
+              {/* Header */}
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+                <div>
+                  <div style={{ fontFamily: "var(--mono)", fontSize: 9, letterSpacing: "0.14em", color: "var(--text-dim)", textTransform: "uppercase", marginBottom: 6 }}>
+                    Body Weight
+                  </div>
+                  {latestW !== null ? (
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                      <span style={{ fontFamily: "var(--mono)", fontSize: 28, fontWeight: 700, color: "var(--purple)", lineHeight: 1, letterSpacing: "-0.02em" }}>
+                        {latestW}
+                      </span>
+                      <span style={{ fontSize: 11, color: "var(--text-dim)" }}>kg</span>
+                      {deltaW !== null && (
+                        <span style={{
+                          fontFamily: "var(--mono)", fontSize: 11, fontWeight: 600,
+                          color: deltaW < 0 ? "var(--green)" : deltaW > 0 ? "var(--red)" : "var(--text-dim)",
+                          letterSpacing: "0.04em",
+                        }}>
+                          {deltaW > 0 ? "+" : ""}{deltaW}
+                        </span>
+                      )}
+                    </div>
+                  ) : (
+                    <div style={{ fontFamily: "var(--mono)", fontSize: 22, color: "var(--text-dim)" }}>—</div>
+                  )}
+                </div>
+                {stats?.weightAvg7d && (
+                  <div style={{ textAlign: "right", flexShrink: 0 }}>
+                    <div style={{ fontFamily: "var(--mono)", fontSize: 9, color: "var(--text-dim)", letterSpacing: "0.1em", marginBottom: 4 }}>7-DAY AVG</div>
+                    <div style={{ fontFamily: "var(--mono)", fontSize: 16, fontWeight: 600, color: "var(--purple)" }}>
+                      {stats.weightAvg7d} kg
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Log input */}
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <div style={{ flex: 1 }}>
+                  <Input
+                    type="number"
+                    step={0.1}
+                    placeholder={latestW !== null ? `${latestW} kg` : "72.5 kg"}
+                    value={weightInput}
+                    onChange={(e) => setWeightInput(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && logWeight()}
+                  />
+                </div>
+                <Button onClick={logWeight} disabled={savingWeight || !weightInput}>
+                  {savingWeight ? "…" : "Log"}
+                </Button>
+              </div>
+
+              {/* Chart */}
+              {weightChartData.length > 0 ? (
+                <BarChart
+                  data={weightChartData}
+                  color="var(--purple)"
+                  maxVal={weightMax}
+                  minVal={weightMin}
+                />
+              ) : (
+                <EmptyState message="No weight data yet" />
+              )}
+            </div>
+          );
+        })()}
+
+        {/* Recent sessions */}
         <div
-          style={{
-            display: "flex",
-            gap: 8,
-            alignItems: "flex-end",
-            marginBottom: 16,
-            flexWrap: "wrap",
-          }}
+          className="dash-card"
+          style={{ background: "var(--surface)", border: "1px solid var(--border)", padding: "18px 20px" }}
         >
-          <div style={{ width: 120 }}>
-            <Field label="Weight (kg)">
-              <Input
-                type="number"
-                step={0.1}
-                placeholder="72.5"
-                value={weightInput}
-                onChange={(e) => setWeightInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && logWeight()}
-              />
-            </Field>
+          <div style={{ fontFamily: "var(--mono)", fontSize: 9, letterSpacing: "0.14em", color: "var(--text-dim)", textTransform: "uppercase", marginBottom: 14 }}>
+            Recent Sessions
           </div>
-          <Button onClick={logWeight} disabled={savingWeight || !weightInput} style={{ marginBottom: 16 }}>
-            Log
-          </Button>
-          {stats?.weightAvg7d ? (
-            <div style={{ marginBottom: 16, marginLeft: 8 }}>
-              <span
-                style={{
-                  fontFamily: "var(--mono)",
-                  fontSize: 20,
-                  fontWeight: 700,
-                  color: "var(--purple)",
-                }}
-              >
-                {stats.weightAvg7d} kg
-              </span>
-              <span
-                style={{
-                  fontSize: 10,
-                  color: "var(--text-muted)",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.08em",
-                  marginLeft: 8,
-                }}
-              >
-                7-day avg
-              </span>
+          {sessions.length === 0 ? (
+            <EmptyState message="No sessions logged yet" />
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {sessions.slice(0, 6).map((s) => {
+                const typeColor: Record<string, string> = { run: "var(--green)", lift: "var(--purple)", study: "var(--yellow)" };
+                const color = typeColor[s.type] ?? "var(--text-dim)";
+                return (
+                  <div
+                    key={s.id}
+                    className="run-row"
+                    style={{ padding: "9px 12px" }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                      <span style={{ fontFamily: "var(--mono)", fontSize: 9, letterSpacing: "0.1em", padding: "2px 7px", border: `1px solid ${color}`, color, textTransform: "uppercase", borderRadius: 4, flexShrink: 0 }}>
+                        {s.type}
+                      </span>
+                      <span style={{ fontSize: 11, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {s.notes || "—"}
+                      </span>
+                    </div>
+                    <div style={{ textAlign: "right", flexShrink: 0 }}>
+                      <div style={{ fontFamily: "var(--mono)", fontSize: 11, color: "var(--text)" }}>
+                        {formatDuration(s.duration)}
+                      </div>
+                      <div style={{ fontFamily: "var(--mono)", fontSize: 9, color: "var(--text-dim)", marginTop: 1 }}>
+                        {s.date.slice(5)}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          ) : null}
+          )}
         </div>
-        {weightChartData.length > 0 ? (
-          <BarChart data={weightChartData} color="var(--purple)" maxVal={weightMax} />
-        ) : (
-          <EmptyState message="No weight data yet" />
-        )}
-      </Card>
-
-      {/* Charts */}
-      <Card style={{ marginBottom: 16 }}>
-        {logs.length > 0 ? (
-          <>
-            <div style={{ marginBottom: 24 }}>
-              <div
-                style={{
-                  fontSize: 10,
-                  color: "var(--text-muted)",
-                  letterSpacing: "0.1em",
-                  textTransform: "uppercase",
-                  marginBottom: 10,
-                }}
-              >
-                Sleep (hours)
-              </div>
-              <BarChart data={sleepChartData} color="var(--accent)" maxVal={12} />
-            </div>
-            <div style={{ marginBottom: 24 }}>
-              <div
-                style={{
-                  fontSize: 10,
-                  color: "var(--text-muted)",
-                  letterSpacing: "0.1em",
-                  textTransform: "uppercase",
-                  marginBottom: 10,
-                }}
-              >
-                Mood
-              </div>
-              <BarChart data={moodChartData} color="var(--yellow)" maxVal={10} />
-            </div>
-            <div>
-              <div
-                style={{
-                  fontSize: 10,
-                  color: "var(--text-muted)",
-                  letterSpacing: "0.1em",
-                  textTransform: "uppercase",
-                  marginBottom: 10,
-                }}
-              >
-                Energy
-              </div>
-              <BarChart data={energyChartData} color="var(--green)" maxVal={10} />
-            </div>
-          </>
-        ) : (
-          <EmptyState message="No check-ins yet" />
-        )}
-      </Card>
-
-      {/* Recent Sessions */}
-      <Card>
-        <SectionLabel>Recent Sessions</SectionLabel>
-        {sessions.length === 0 ? (
-          <EmptyState message="No sessions logged yet" />
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {sessions.slice(0, 8).map((s) => (
-              <div
-                key={s.id}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  padding: "12px 16px",
-                  background: "var(--surface)",
-                  border: "1px solid var(--border)",
-                  gap: 8,
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-                  <span
-                    style={{
-                      fontFamily: "var(--mono)",
-                      fontSize: 10,
-                      letterSpacing: "0.1em",
-                      padding: "3px 8px",
-                      border: `1px solid ${typeColor[s.type]}`,
-                      color: typeColor[s.type],
-                      textTransform: "uppercase",
-                      flexShrink: 0,
-                    }}
-                  >
-                    {s.type}
-                  </span>
-                  <span
-                    style={{
-                      fontSize: 12,
-                      color: "var(--text-muted)",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {s.notes || "—"}
-                  </span>
-                </div>
-                <div style={{ textAlign: "right", flexShrink: 0 }}>
-                  <div style={{ fontFamily: "var(--mono)", fontSize: 12 }}>
-                    {formatDuration(s.duration)}
-                  </div>
-                  <div style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--text-dim)" }}>
-                    {s.date}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </Card>
-    </div>
+      </div>
+    </>
   );
 }

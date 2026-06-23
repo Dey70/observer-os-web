@@ -676,6 +676,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           minHeight: "100vh",
           padding: "40px 48px",
           position: "relative",
+          overflowX: "hidden",
+          minWidth: 0,
         }}
       >
         <div
