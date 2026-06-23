@@ -61,6 +61,10 @@ function isValidRecommendation(obj: unknown): obj is Omit<RecommendResponse, "so
 // ── Handler ────────────────────────────────────────────────────────────────
 
 export async function POST() {
+  const requestId = Math.random().toString(36).slice(2, 9);
+  const log = (event: string, data: Record<string, unknown>) =>
+    console.log(JSON.stringify({ ts: new Date().toISOString(), requestId, route: "recommend", event, ...data }));
+
   try {
     const supabase = await createServerSupabaseClient();
     const {
@@ -69,13 +73,31 @@ export async function POST() {
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
+      log("auth_failure", { authError: authError?.message ?? "no user" });
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const ctx = await buildCoachContext(supabase, user.id);
+    log("recommend_start", { userId: user.id });
+
+    let ctx: Awaited<ReturnType<typeof buildCoachContext>>;
+    try {
+      ctx = await buildCoachContext(supabase, user.id);
+      log("context_built", {
+        userId: user.id,
+        hasTodayLog: !!ctx.todayLog,
+        recentLogs: ctx.recentLogs.length,
+        recentSessions: ctx.recentSessions.length,
+        ctl: ctx.ctl, atl: ctx.atl, tsb: ctx.tsb,
+      });
+    } catch (ctxErr) {
+      const message = ctxErr instanceof Error ? ctxErr.message : String(ctxErr);
+      log("context_build_error", { userId: user.id, error: message });
+      return NextResponse.json({ error: "Internal error" }, { status: 500 });
+    }
 
     const apiKey = process.env.GROQ_API_KEY;
     if (!apiKey) {
+      log("groq_key_missing", { userId: user.id, fallback: "deterministic" });
       return NextResponse.json(deterministicFallback(ctx));
     }
 
@@ -97,11 +119,28 @@ export async function POST() {
     });
 
     if (!response.ok) {
+      const errBody = await response.text();
+      let parsedError: unknown;
+      try { parsedError = JSON.parse(errBody); } catch { parsedError = errBody; }
+      log("groq_error", {
+        userId: user.id,
+        status: response.status,
+        statusText: response.statusText,
+        groqError: parsedError,
+        fallback: "deterministic",
+      });
       return NextResponse.json(deterministicFallback(ctx));
     }
 
     const data = await response.json();
     const raw  = (data.choices?.[0]?.message?.content ?? "") as string;
+
+    log("groq_response_received", {
+      userId: user.id,
+      promptTokens: data.usage?.prompt_tokens,
+      completionTokens: data.usage?.completion_tokens,
+      rawLength: raw.length,
+    });
 
     let parsed: unknown;
     try {
@@ -111,16 +150,34 @@ export async function POST() {
         .replace(/```\s*$/, "")
         .trim();
       parsed = JSON.parse(json);
-    } catch {
+    } catch (parseErr) {
+      log("json_parse_error", {
+        userId: user.id,
+        parseError: parseErr instanceof Error ? parseErr.message : String(parseErr),
+        rawPreview: raw.slice(0, 200),
+        fallback: "deterministic",
+      });
       return NextResponse.json(deterministicFallback(ctx));
     }
 
     if (!isValidRecommendation(parsed)) {
+      const p = parsed as Record<string, unknown>;
+      log("validation_failure", {
+        userId: user.id,
+        missingFields: ["training","recovery","nutrition","primaryFocus","goalInsight"].filter(
+          (k) => typeof p?.[k] !== "string" || !(p[k] as string).length,
+        ),
+        fallback: "deterministic",
+      });
       return NextResponse.json(deterministicFallback(ctx));
     }
 
+    log("recommend_complete", { userId: user.id, source: "ai" });
     return NextResponse.json({ ...parsed, source: "ai" } satisfies RecommendResponse);
-  } catch {
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const stack   = err instanceof Error ? err.stack : undefined;
+    console.log(JSON.stringify({ ts: new Date().toISOString(), requestId, route: "recommend", event: "unhandled_exception", message, stack }));
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }

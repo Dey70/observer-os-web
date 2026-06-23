@@ -654,7 +654,14 @@ export default function CoachPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ messages: apiMessages }),
         });
-        if (!res.ok) throw new Error("API error");
+        if (!res.ok) {
+          let detail = `API error (${res.status})`;
+          try {
+            const errBody = await res.json();
+            if (errBody?.error) detail = `API error (${res.status}): ${errBody.error}`;
+          } catch {}
+          throw new Error(detail);
+        }
         const data = await res.json();
         const assistantContent: string = data.content;
         setMessages((prev) => [
