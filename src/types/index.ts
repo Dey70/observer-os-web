@@ -126,6 +126,19 @@ export interface TrainingMetric {
   created_at: string;
 }
 
+export interface GrowthLog {
+  id: string;
+  user_id: string;
+  date: string;
+  category: "study" | "project" | "learning" | "deep_work";
+  title: string;
+  duration_min: number;
+  focus_score: number | null;
+  output_notes: string | null;
+  tags: string[] | null;
+  created_at: string;
+}
+
 export type ReadinessLevel = "high" | "moderate" | "low";
 
 export interface ReadinessScore {
