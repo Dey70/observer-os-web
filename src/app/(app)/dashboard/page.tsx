@@ -182,6 +182,40 @@ function AnimBar({
   );
 }
 
+// ── Growth helpers ────────────────────────────────────────────────────────
+
+type GrowthLogSummary = { date: string; category: string; duration_min: number };
+
+function calcGrowthStreak(entries: GrowthLogSummary[], today: string): number {
+  const dates = new Set(entries.map((e) => e.date));
+  let streak = 0;
+  const d = new Date(today + "T00:00:00");
+  while (dates.has(d.toISOString().split("T")[0])) {
+    streak++;
+    d.setDate(d.getDate() - 1);
+  }
+  return streak;
+}
+
+function getGrowthInsight(
+  by: { study: number; project: number; learning: number; deep_work: number },
+  total: number,
+): string {
+  if (total === 0) return "";
+  if (total >= 15) return `Exceptional growth week — ${total.toFixed(1)}h of focused work.`;
+  const balanced = Object.values(by).every((h) => h > 0);
+  if (balanced && total >= 8) return "Growth is balanced across all categories.";
+  const dominant = (Object.entries(by) as [string, number][])
+    .filter(([, h]) => h > 0)
+    .sort((a, b) => b[1] - a[1])[0];
+  if (!dominant) return "";
+  if (total < 3) return "Growth is low — block time for focused work this week.";
+  const labels: Record<string, string> = {
+    study: "study", project: "project", learning: "learning", deep_work: "deep work",
+  };
+  return `Strong ${labels[dominant[0]] ?? dominant[0]} focus this week.`;
+}
+
 // ── Page ───────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
@@ -202,6 +236,7 @@ export default function DashboardPage() {
   const [todayNetCals, setTodayNetCals] = useState<{ eaten: number; burned: number } | null>(null);
   const [profile, setProfile]           = useState<ProfileRow | null>(null);
   const [aiInsight, setAiInsight]       = useState<string | null>(null);
+  const [growthLogs, setGrowthLogs]     = useState<GrowthLogSummary[]>([]);
 
   const load = useCallback(async () => {
     const { data: { user } } = await sb.auth.getUser();
@@ -210,6 +245,7 @@ export default function DashboardPage() {
     const since          = getLast14Days();
     const weekStart      = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
     const metrics90Since = new Date(Date.now() - 90 * 86400000).toISOString().split("T")[0];
+    const since30        = new Date(Date.now() - 30 * 86400000).toISOString().split("T")[0];
     const todayStr2      = new Date().toISOString().split("T")[0];
 
     const [
@@ -221,6 +257,7 @@ export default function DashboardPage() {
       { data: metricsData },
       { data: profileData },
       { data: nutData },
+      { data: growthData },
     ] = await Promise.all([
       sb.from("daily_logs").select("*").eq("user_id", user.id).gte("date", since).order("date"),
       sb.from("sessions").select("*").eq("user_id", user.id).gte("date", since).order("date", { ascending: false }),
@@ -237,6 +274,10 @@ export default function DashboardPage() {
         .select("weekly_run_km_target, weekly_run_count_target, weekly_gym_target, sex, age, height_cm, nutrition_goal_type, target_weight, threshold_pace_seconds")
         .eq("user_id", user.id).maybeSingle(),
       sb.from("nutrition_logs").select("calories").eq("user_id", user.id).eq("date", todayStr2),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (sb as any).from("growth_logs")
+        .select("date, category, duration_min")
+        .eq("user_id", user.id).gte("date", since30).order("date", { ascending: false }),
     ]);
 
     const logsData   = (l      ?? []) as DailyLog[];
@@ -253,6 +294,7 @@ export default function DashboardPage() {
     setStravaConnected(recentData.length > 0);
     setTrainingMetrics((metricsData ?? []) as TrainingMetricRow[]);
     setProfile(profileData as ProfileRow | null);
+    setGrowthLogs((growthData ?? []) as GrowthLogSummary[]);
 
     const nutRows = (nutData ?? []) as { calories: number }[];
     const eaten   = nutRows.reduce((sum, r) => sum + (r.calories ?? 0), 0);
@@ -286,10 +328,12 @@ export default function DashboardPage() {
     const sessionStrAi   = calcSessionStreak(sessData);
     const recovForHybrid = todayLogAi ? computeRecoveryScore(todayLogAi, tsbAi) : null;
     const weekSessAi     = sessData.filter((s) => s.date >= weekStart);
-    const weeklyGrowthMinAi = sessData
-      .filter((s) => s.type === "study" && s.date >= weekStart)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .reduce((sum, s) => sum + ((s as any).duration ?? 0), 0);
+    const growthLogsAi = ((growthData ?? []) as GrowthLogSummary[]).filter((g) => g.date >= weekStart);
+    const weeklyGrowthMinAi =
+      growthLogsAi.reduce((sum, g) => sum + g.duration_min, 0) +
+      sessData.filter((s) => s.type === "study" && s.date >= weekStart)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .reduce((sum, s) => sum + ((s as any).duration ?? 0), 0);
     const hybridAi       = computeHybridScore(recovForHybrid, ctlAi, null, weeklyGrowthMinAi);
     const sessionTypesAi = { run: 0, lift: 0, study: 0 };
     weekSessAi.forEach((s) => {
@@ -354,10 +398,27 @@ export default function DashboardPage() {
   const weekDistM    = weekRuns.reduce((s, r) => s + r.distance_meters, 0);
   const weekGymCount = sessions.filter((s) => s.type === "lift" && s.date >= weekStartDate).length;
 
-  const weeklyGrowthMinutes = sessions
+  // ── Growth metrics ─────────────────────────────────────────────────────
+  // Primary: growth_logs. Secondary: sessions(type='study') as legacy fallback.
+
+  const weekGrowthLogs = growthLogs.filter((g) => g.date >= weekStartDate);
+  const legacyStudyHours = sessions
     .filter((s) => s.type === "study" && s.date >= weekStartDate)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .reduce((sum, s) => sum + ((s as any).duration ?? 0), 0);
+    .reduce((sum, s) => sum + ((s as any).duration ?? 0), 0) / 60;
+
+  const growthByCategory = {
+    study:     weekGrowthLogs.filter((g) => g.category === "study").reduce((s, g) => s + g.duration_min, 0) / 60 + legacyStudyHours,
+    project:   weekGrowthLogs.filter((g) => g.category === "project").reduce((s, g) => s + g.duration_min, 0) / 60,
+    learning:  weekGrowthLogs.filter((g) => g.category === "learning").reduce((s, g) => s + g.duration_min, 0) / 60,
+    deep_work: weekGrowthLogs.filter((g) => g.category === "deep_work").reduce((s, g) => s + g.duration_min, 0) / 60,
+  };
+  const totalGrowthHours    = Object.values(growthByCategory).reduce((s, v) => s + v, 0);
+  const weeklyGrowthMinutes = Math.round(totalGrowthHours * 60);
+  const growthStreak        = calcGrowthStreak(growthLogs, todayStr);
+  const growthInsightText   = getGrowthInsight(growthByCategory, totalGrowthHours);
+  const hasGrowthData       = totalGrowthHours > 0;
+  const maxCatHours         = Math.max(...Object.values(growthByCategory), 0.01);
 
   let readinessOutput: ReadinessOutput | null = null;
   let coachOutput:     CoachOutput     | null = null;
@@ -550,8 +611,9 @@ export default function DashboardPage() {
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {[
-            { label: "Check-in", value: checkinBadge.text, color: checkinBadge.color },
-            { label: "Session",  value: sessionBadge.text,  color: sessionBadge.color },
+            { label: "Check-in", value: checkinBadge.text,  color: checkinBadge.color  },
+            { label: "Session",  value: sessionBadge.text,  color: sessionBadge.color  },
+            ...(growthStreak > 0 ? [{ label: "Growth", value: growthStreak >= 7 ? `🔥 ${growthStreak}` : `${growthStreak}`, color: "var(--accent)" }] : []),
           ].map(({ label, value, color }) => (
             <div
               key={label}
@@ -875,6 +937,121 @@ export default function DashboardPage() {
           <p style={{ fontSize: 13, color: "var(--text)", margin: 0, lineHeight: 1.7 }}>{aiInsight}</p>
         </div>
       )}
+
+      {/* ── Growth This Week ─────────────────────────────────────────────── */}
+      <div
+        className="dash-card a4"
+        style={{
+          background: "var(--surface)",
+          border: "1px solid var(--accent)22",
+          marginBottom: 12,
+          overflow: "hidden",
+        }}
+      >
+        {/* Card header */}
+        <div style={{
+          padding: "12px 20px",
+          borderBottom: "1px solid var(--border2)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}>
+          <div style={{ fontFamily: "var(--mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.18em", color: "var(--text-muted)" }}>
+            GROWTH THIS WEEK
+          </div>
+          {growthStreak > 0 && (
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ fontFamily: "var(--mono)", fontSize: 12, fontWeight: 700, color: "var(--accent)" }}>
+                {growthStreak >= 7 ? `🔥 ${growthStreak}` : growthStreak}
+              </span>
+              <span style={{ fontFamily: "var(--mono)", fontSize: 9, color: "var(--text-dim)", letterSpacing: "0.06em" }}>
+                DAY STREAK
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Empty state */}
+        {!hasGrowthData ? (
+          <div style={{ padding: "24px 20px", display: "flex", flexDirection: "column", alignItems: "center", gap: 12, textAlign: "center" }}>
+            <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.6, maxWidth: 340 }}>
+              Log your first study, project, learning, or deep work session to activate Growth analytics.
+            </div>
+            <a
+              href="/log"
+              style={{
+                fontFamily: "var(--mono)", fontSize: 11, fontWeight: 700,
+                color: "var(--accent)", border: "1px solid var(--accent)44",
+                padding: "7px 18px", borderRadius: 8, textDecoration: "none",
+                letterSpacing: "0.08em", transition: "all 0.15s",
+              }}
+            >
+              LOG GROWTH →
+            </a>
+          </div>
+        ) : (
+          <div style={{ padding: "16px 20px" }}>
+            {/* Insight */}
+            {growthInsightText && (
+              <div style={{
+                fontSize: 12, color: "var(--text-dim)", marginBottom: 16,
+                fontStyle: "italic", lineHeight: 1.5,
+                borderLeft: "2px solid var(--accent)44", paddingLeft: 10,
+              }}>
+                {growthInsightText}
+              </div>
+            )}
+
+            {/* Category bars */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
+              {(
+                [
+                  { key: "study",     label: "Study",     color: "var(--yellow)"  },
+                  { key: "project",   label: "Project",   color: "var(--accent)"  },
+                  { key: "learning",  label: "Learning",  color: "var(--green)"   },
+                  { key: "deep_work", label: "Deep Work", color: "var(--purple)"  },
+                ] as { key: keyof typeof growthByCategory; label: string; color: string }[]
+              ).map(({ key, label, color }) => {
+                const hours = growthByCategory[key];
+                const pct   = hours / maxCatHours;
+                return (
+                  <div key={key}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 5 }}>
+                      <span style={{ fontSize: 11, color: hours > 0 ? "var(--text-muted)" : "var(--text-dim)", letterSpacing: "0.04em" }}>
+                        {label}
+                      </span>
+                      <span style={{
+                        fontFamily: "var(--mono)", fontSize: 12, fontWeight: hours > 0 ? 700 : 400,
+                        color: hours > 0 ? color : "var(--text-dim)",
+                      }}>
+                        {hours > 0 ? `${hours.toFixed(1)}h` : "—"}
+                      </span>
+                    </div>
+                    <AnimBar pct={pct} color={color} height={5} />
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Total footer */}
+            <div style={{
+              marginTop: 16, paddingTop: 12,
+              borderTop: "1px solid var(--border2)",
+              display: "flex", justifyContent: "space-between", alignItems: "center",
+            }}>
+              <span style={{ fontFamily: "var(--mono)", fontSize: 9, color: "var(--text-dim)", letterSpacing: "0.14em" }}>
+                TOTAL THIS WEEK
+              </span>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+                <span style={{ fontFamily: "var(--mono)", fontSize: 22, fontWeight: 700, color: "var(--accent)", lineHeight: 1 }}>
+                  {totalGrowthHours.toFixed(1)}
+                </span>
+                <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: "var(--text-dim)" }}>h</span>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* ── Middle two-column ─────────────────────────────────────────────── */}
       <div
