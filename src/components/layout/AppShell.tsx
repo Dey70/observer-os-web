@@ -22,6 +22,7 @@ import {
   Settings,
   Home,
   ScrollText,
+  Brain,
 } from "lucide-react";
 
 const navItems = [
@@ -35,6 +36,7 @@ const navItems = [
   { href: "/metrics", label: "Metrics", icon: HeartPulse },
   { href: "/records", label: "Records", icon: Trophy },
   { href: "/load", label: "Load", icon: BarChart2 },
+  { href: "/growth", label: "Growth", icon: Brain },
   { href: "/goals", label: "Goals", icon: Target },
   { href: "/coach", label: "Coach", icon: Bot },
   { href: "/review", label: "Review", icon: ScrollText },
@@ -390,6 +392,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   { href: "/calendar", label: "Calendar", icon: CalendarDays },
                   { href: "/metrics", label: "Metrics", icon: HeartPulse },
                   { href: "/records", label: "Records", icon: Trophy },
+                  { href: "/growth", label: "Growth", icon: Brain },
                   { href: "/load", label: "Load", icon: BarChart2 },
                   { href: "/goals", label: "Goals", icon: Target },
                   { href: "/review", label: "Review", icon: ScrollText },
