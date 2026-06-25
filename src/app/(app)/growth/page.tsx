@@ -325,7 +325,7 @@ export default function GrowthPage() {
   // ── Section 07: Heatmap ───────────────────────────────────────────────────
   const cellCount = isMobile ? 56 : 91;
   const weekCount = isMobile ? 8 : 13;
-  const sqSize    = isMobile ? 10 : 12;
+  const sqGap     = 3;
 
   const byDateMap = new Map<string, { minutes: number; sessions: number }>();
   for (const log of recent) {
@@ -582,18 +582,18 @@ export default function GrowthPage() {
         </div>
 
         {/* Month labels row */}
-        <div style={{ display: "flex", gap: 2, marginBottom: 4 }}>
+        <div style={{ display: "flex", gap: sqGap, marginBottom: 5, width: "100%" }}>
           {Array.from({ length: weekCount }, (_, wi) => (
-            <div key={wi} style={{ width: sqSize, flexShrink: 0, fontSize: 8, color: "var(--text-dim)", fontFamily: "var(--mono)", overflow: "visible", whiteSpace: "nowrap" }}>
+            <div key={wi} style={{ flex: 1, minWidth: 0, fontSize: 9, color: "var(--text-dim)", fontFamily: "var(--mono)", overflow: "visible", whiteSpace: "nowrap" }}>
               {monthLabels.get(wi) ?? ""}
             </div>
           ))}
         </div>
 
-        {/* Heatmap grid */}
-        <div role="grid" aria-label={`${isMobile ? "8-week" : "90-day"} growth activity`} style={{ display: "flex", gap: 2 }}>
+        {/* Heatmap grid — flex columns stretch to fill card width */}
+        <div role="grid" aria-label={`${isMobile ? "8-week" : "90-day"} growth activity`} style={{ display: "flex", gap: sqGap, width: "100%" }}>
           {heatWeeks.map((week, wi) => (
-            <div key={wi} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <div key={wi} style={{ flex: 1, display: "flex", flexDirection: "column", gap: sqGap }}>
               {week.map((cell) => {
                 const isToday = cell.date === today;
                 const d       = new Date(cell.date + "T12:00:00");
@@ -608,7 +608,8 @@ export default function GrowthPage() {
                     aria-label={`${dateLbl}: ${cell.minutes > 0 ? fmtDurationTooltip(cell.minutes) : "no activity"}`}
                     title={tip}
                     style={{
-                      width: sqSize, height: sqSize,
+                      width: "100%",
+                      aspectRatio: "1 / 1",
                       background: heatColor(cell.minutes),
                       borderRadius: 3,
                       cursor: "default",
