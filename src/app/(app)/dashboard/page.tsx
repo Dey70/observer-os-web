@@ -46,6 +46,8 @@ import type {
 import { computeAdaptiveGoals } from "@/lib/adaptiveGoals";
 import type { AdaptiveGoalOutput } from "@/lib/adaptiveGoals";
 import { AdaptiveGoalsCard } from "@/components/AdaptiveGoalsCard";
+import { computeWeekPlan } from "@/lib/adaptivePlanner";
+import type { WeekPlan } from "@/lib/adaptivePlanner";
 
 export const dynamic = "force-dynamic";
 
@@ -62,6 +64,7 @@ type ProfileRow = {
   nutrition_goal_type:    string | null;
   target_weight:          number | null;
   threshold_pace_seconds: number | null;
+  split:                  string | null;
 };
 
 // ── SVG Readiness Gauge ────────────────────────────────────────────────────
@@ -274,7 +277,7 @@ export default function DashboardPage() {
         .select("activity_date, tss, trimp, pace_seconds_per_km, load_score, source")
         .eq("user_id", user.id).gte("activity_date", metrics90Since).order("activity_date"),
       sb.from("profiles")
-        .select("weekly_run_km_target, weekly_run_count_target, weekly_gym_target, sex, age, height_cm, nutrition_goal_type, target_weight, threshold_pace_seconds")
+        .select("weekly_run_km_target, weekly_run_count_target, weekly_gym_target, sex, age, height_cm, nutrition_goal_type, target_weight, threshold_pace_seconds, split")
         .eq("user_id", user.id).maybeSingle(),
       sb.from("nutrition_logs").select("calories").eq("user_id", user.id).eq("date", todayStr2),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -513,6 +516,19 @@ export default function DashboardPage() {
     userRunCountGoal: profile?.weekly_run_count_target ?? 0,
     userGymGoal:      profile?.weekly_gym_target       ?? 0,
   });
+
+  // ── Weekly plan (Phase 5B) ────────────────────────────────────────────
+
+  const weekPlan: WeekPlan = computeWeekPlan({
+    adaptiveGoals: adaptiveGoalOutput,
+    ctl, atl, tsb,
+    readinessScore: readinessOutput?.score ?? null,
+    recoveryScore,
+    today: todayStr,
+    trainingProfile: profile?.split ?? "balanced",
+  });
+
+  const todayPlanDay = weekPlan.days.find((d) => d.isToday) ?? weekPlan.days[0];
 
   // ── Date display ──────────────────────────────────────────────────────
 
@@ -984,6 +1000,143 @@ export default function DashboardPage() {
             gym:      profile?.weekly_gym_target       ?? 0,
           }}
         />
+      </div>
+
+      {/* ── Next Session ─────────────────────────────────────────────────── */}
+      <div
+        className="dash-card a4"
+        style={{
+          background: "var(--surface)",
+          border: todayPlanDay.load === "high"
+            ? "1px solid var(--red)33"
+            : todayPlanDay.load === "rest"
+            ? "1px solid var(--border)"
+            : "1px solid var(--accent)22",
+          marginBottom: 12,
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            padding: "12px 20px",
+            borderBottom: "1px solid var(--border2)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <div style={{ fontFamily: "var(--mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.18em", color: "var(--text-muted)" }}>
+            NEXT SESSION · TODAY
+          </div>
+          <a
+            href="/planner"
+            style={{
+              fontFamily: "var(--mono)", fontSize: 9, fontWeight: 600, letterSpacing: "0.10em",
+              color: "var(--accent)", textDecoration: "none",
+              border: "1px solid var(--accent)44", borderRadius: 6, padding: "3px 10px",
+              transition: "all 0.15s ease",
+            }}
+          >
+            FULL PLAN →
+          </a>
+        </div>
+
+        <div style={{ padding: "14px 20px", display: "flex", flexWrap: "wrap", gap: 14 }}>
+          {/* Session block */}
+          {todayPlanDay.sessions.map((sess, i) => {
+            const isRest  = sess.type === "rest";
+            const sessCol = isRest ? "var(--text-dim)" : sess.type.startsWith("run_") ? "var(--accent)" : "var(--purple)";
+            return (
+              <div
+                key={i}
+                style={{
+                  flex: "1 1 200px",
+                  padding: "12px 14px",
+                  borderRadius: 10,
+                  background: isRest ? "var(--surface2)" : sessCol + "10",
+                  border: `1px solid ${isRest ? "var(--border2)" : sessCol + "33"}`,
+                }}
+              >
+                <div style={{ fontFamily: "var(--mono)", fontSize: 8, letterSpacing: "0.12em", color: "var(--text-dim)", marginBottom: 5 }}>
+                  {sess.type.startsWith("run_") ? "RUN" : sess.type.startsWith("lift_") ? "LIFT" : "REST"}
+                </div>
+                <div style={{ fontFamily: "var(--mono)", fontSize: 14, fontWeight: 700, color: sessCol, marginBottom: 2 }}>
+                  {sess.label}
+                </div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 5 }}>
+                  <span style={{ fontFamily: "var(--mono)", fontSize: 9, color: "var(--text-muted)" }}>
+                    {sess.intensity}
+                  </span>
+                  {sess.distanceKm !== undefined && sess.distanceKm > 0 && (
+                    <span style={{ fontFamily: "var(--mono)", fontSize: 9, color: "var(--text-dim)" }}>
+                      {sess.distanceKm.toFixed(1)} km
+                    </span>
+                  )}
+                  {sess.durationMin > 0 && (
+                    <span style={{ fontFamily: "var(--mono)", fontSize: 9, color: "var(--text-dim)" }}>
+                      {sess.durationMin} min
+                    </span>
+                  )}
+                </div>
+                <div style={{ fontSize: 10, color: "var(--text-dim)", lineHeight: 1.45 }}>
+                  {sess.notes}
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Growth block */}
+          {todayPlanDay.growth && (
+            <div
+              style={{
+                flex: "1 1 180px",
+                padding: "12px 14px",
+                borderRadius: 10,
+                background: "var(--green)10",
+                border: "1px solid var(--green)22",
+              }}
+            >
+              <div style={{ fontFamily: "var(--mono)", fontSize: 8, letterSpacing: "0.12em", color: "var(--text-dim)", marginBottom: 5 }}>
+                GROWTH
+              </div>
+              <div style={{ fontFamily: "var(--mono)", fontSize: 14, fontWeight: 700, color: "var(--green)", marginBottom: 2 }}>
+                {todayPlanDay.growth.label}
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <span style={{ fontFamily: "var(--mono)", fontSize: 9, color: "var(--text-muted)" }}>
+                  {todayPlanDay.growth.timing.toUpperCase()}
+                </span>
+                <span style={{ fontFamily: "var(--mono)", fontSize: 9, color: "var(--text-dim)" }}>
+                  {todayPlanDay.growth.durationMin} min
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Nutrition target */}
+          <div
+            style={{
+              flex: "0 1 160px",
+              padding: "12px 14px",
+              borderRadius: 10,
+              background: "var(--yellow)08",
+              border: "1px solid var(--yellow)22",
+            }}
+          >
+            <div style={{ fontFamily: "var(--mono)", fontSize: 8, letterSpacing: "0.12em", color: "var(--text-dim)", marginBottom: 5 }}>
+              NUTRITION
+            </div>
+            <div style={{ fontFamily: "var(--mono)", fontSize: 20, fontWeight: 700, color: "var(--yellow)", lineHeight: 1 }}>
+              {todayPlanDay.nutrition.proteinG}g
+            </div>
+            <div style={{ fontFamily: "var(--mono)", fontSize: 8, letterSpacing: "0.08em", color: "var(--text-muted)", marginTop: 3 }}>
+              PROTEIN TARGET
+            </div>
+            <div style={{ fontFamily: "var(--mono)", fontSize: 11, color: "var(--text-dim)", marginTop: 6 }}>
+              {todayPlanDay.nutrition.caloriesKcal.toLocaleString()} kcal
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* ── Growth This Week ─────────────────────────────────────────────── */}

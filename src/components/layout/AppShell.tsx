@@ -23,6 +23,7 @@ import {
   Home,
   ScrollText,
   Brain,
+  ClipboardList,
 } from "lucide-react";
 
 const navItems = [
@@ -38,6 +39,7 @@ const navItems = [
   { href: "/load", label: "Load", icon: BarChart2 },
   { href: "/growth", label: "Growth", icon: Brain },
   { href: "/goals", label: "Goals", icon: Target },
+  { href: "/planner", label: "Planner", icon: ClipboardList },
   { href: "/coach", label: "Coach", icon: Bot },
   { href: "/review", label: "Review", icon: ScrollText },
   { href: "/profile", label: "Profile", icon: User },
@@ -395,6 +397,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   { href: "/growth", label: "Growth", icon: Brain },
                   { href: "/load", label: "Load", icon: BarChart2 },
                   { href: "/goals", label: "Goals", icon: Target },
+                  { href: "/planner", label: "Planner", icon: ClipboardList },
                   { href: "/review", label: "Review", icon: ScrollText },
                   { href: "/settings", label: "Settings", icon: Settings },
                 ].map(({ href, label, icon: Icon }) => {
