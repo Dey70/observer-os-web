@@ -28,9 +28,26 @@ export type SessionType =
   | "active_recovery"
   | "rest";
 
-export type LoadLevel   = "high" | "medium" | "low" | "rest";
-export type DayPriority = "HIGH" | "NORMAL" | "RECOVERY" | "REST";
-export type PlanBalance = "Excellent" | "Good" | "Needs Adjustment";
+export type LoadLevel        = "high" | "medium" | "low" | "rest";
+export type DayPriority      = "HIGH" | "NORMAL" | "RECOVERY" | "REST";
+export type PlanBalance      = "Excellent" | "Good" | "Needs Adjustment";
+export type CompletionStatus = "pending" | "completed" | "skipped";
+
+// Rationale card — generated deterministically from engine outputs, no LLM
+export interface DecisionRationale {
+  primaryPriority: string;
+  priorityColor:   string;
+  signals:         string[];   // up to 5 physiological data points
+  decisions:       string[];   // up to 3 scheduling decisions made
+}
+
+// Planned vs Goal comparison for the summary strip
+export interface GoalComparison {
+  planned: number;
+  target:  number | null;   // null = no goal set
+  unit:    string;
+  pct:     number | null;   // 0–1, null if no target
+}
 
 export interface PlannedSession {
   type:         SessionType;
@@ -44,6 +61,7 @@ export interface PlannedSession {
 export interface PlannedGrowthBlock {
   category:    "study" | "project" | "learning" | "deep_work";
   label:       string;
+  title:       string;   // descriptive title, e.g. "Deep Work Block"
   durationMin: number;
   timing:      "morning" | "afternoon" | "evening";
 }
@@ -55,30 +73,40 @@ export interface PlannedNutrition {
 }
 
 export interface PlannedDay {
-  date:      string;      // "YYYY-MM-DD"
-  dayOfWeek: string;      // "Monday" … "Sunday"
-  shortDay:  string;      // "MON" … "SUN"
-  dayIndex:  number;      // 0 = Monday, 6 = Sunday
-  isToday:   boolean;
-  isPast:    boolean;
-  priority:  DayPriority;
-  load:      LoadLevel;
-  sessions:  PlannedSession[];
-  growth:    PlannedGrowthBlock | null;
-  nutrition: PlannedNutrition;
+  date:             string;           // "YYYY-MM-DD"
+  dayOfWeek:        string;           // "Monday" … "Sunday"
+  shortDay:         string;           // "MON" … "SUN"
+  dayIndex:         number;           // 0 = Monday, 6 = Sunday
+  isToday:          boolean;
+  isTomorrow:       boolean;
+  isPast:           boolean;
+  priority:         DayPriority;
+  load:             LoadLevel;
+  sessions:         PlannedSession[];
+  growth:           PlannedGrowthBlock | null;
+  nutrition:        PlannedNutrition;
+  completionStatus: CompletionStatus; // always "pending" — Phase 5C will track actuals
 }
 
 export interface WeekPlan {
-  weekStart:         string;       // Monday "YYYY-MM-DD"
-  weekEnd:           string;       // Sunday  "YYYY-MM-DD"
-  days:              PlannedDay[]; // [Mon, Tue, Wed, Thu, Fri, Sat, Sun]
-  weekFocus:         string;       // e.g. "RUNNING WEEK"
-  weekFocusColor:    string;       // CSS color variable reference
-  planBalance:       PlanBalance;
-  planBalanceReason: string;
-  totalRunKm:        number;
-  totalLiftSessions: number;
-  totalGrowthHours:  number;
+  weekStart:          string;       // Monday "YYYY-MM-DD"
+  weekEnd:            string;       // Sunday  "YYYY-MM-DD"
+  days:               PlannedDay[]; // [Mon, Tue, Wed, Thu, Fri, Sat, Sun]
+  weekFocus:          string;       // e.g. "RUNNING WEEK"
+  weekFocusColor:     string;       // CSS color variable reference
+  planBalance:        PlanBalance;
+  planBalanceReason:  string;
+  planBalanceBullets: string[];     // ≤4 deterministic bullet points
+  totalRunKm:         number;
+  totalLiftSessions:  number;
+  totalGrowthHours:   number;       // actually placed growth hours
+  decisionRationale:  DecisionRationale;
+  goalComparison: {
+    running:  GoalComparison;
+    strength: GoalComparison;
+    growth:   GoalComparison;
+    protein:  GoalComparison;
+  };
 }
 
 // ── Input type ─────────────────────────────────────────────────────────────
@@ -90,8 +118,12 @@ export interface PlannerInput {
   tsb:             number;
   readinessScore:  number | null;
   recoveryScore:   number | null;
-  today:           string;   // "YYYY-MM-DD"
-  trainingProfile: string;   // "balanced"|"running"|"strength"|"study_heavy"|"deload"
+  today:           string;    // "YYYY-MM-DD"
+  trainingProfile: string;    // "balanced"|"running"|"strength"|"study_heavy"|"deload"
+  // Optional user goals for Planned vs Goal comparison
+  userRunKmGoal?:  number;    // 0 or undefined = no goal set
+  userGymGoal?:    number;    // 0 or undefined = no goal set
+  proteinTargetG?: number;    // daily protein target
 }
 
 // ── Internal types ─────────────────────────────────────────────────────────
@@ -111,6 +143,13 @@ const GROWTH_LABELS: Record<GrowthCategory, string> = {
   project:   "Project Work",
   learning:  "Learning",
   deep_work: "Deep Work",
+};
+
+const GROWTH_BLOCK_TITLES: Record<GrowthCategory, string> = {
+  study:     "Focused Study",
+  project:   "Project Session",
+  learning:  "Learning Session",
+  deep_work: "Deep Work Block",
 };
 
 // ── Week templates — 7 slots (Mon … Sun) ──────────────────────────────────
@@ -435,6 +474,7 @@ function placeGrowthBlocks(
     blocks[dayIndex] = {
       category,
       label:       GROWTH_LABELS[category],
+      title:       GROWTH_BLOCK_TITLES[category],
       durationMin: dur,
       timing,
     };
@@ -549,6 +589,98 @@ function weekFocusMeta(
   }
 }
 
+// ── Decision rationale builder ────────────────────────────────────────────
+
+function buildDecisionRationale(input: PlannerInput): DecisionRationale {
+  const { adaptiveGoals, tsb, ctl, readinessScore, recoveryScore } = input;
+  const primary = adaptiveGoals.primaryProgression;
+  const { label, color } = weekFocusMeta(primary);
+
+  const signals: string[] = [];
+  if (readinessScore !== null) signals.push(`Readiness: ${readinessScore}/100`);
+  signals.push(`TSB (Form): ${tsb >= 0 ? "+" : ""}${tsb}`);
+  signals.push(`CTL (Fitness): ${Math.round(ctl)}`);
+  if (recoveryScore !== null) signals.push(`Recovery: ${recoveryScore}/100`);
+  if      (tsb < -20)                                      signals.push("High accumulated fatigue");
+  else if (tsb > 10 && (readinessScore ?? 50) >= 75)       signals.push("Positive training form");
+  else if ((readinessScore ?? 50) < 50)                    signals.push("Readiness below training threshold");
+
+  const decisions: string[] = [];
+  switch (primary) {
+    case "recovery":
+      decisions.push("Training volume reduced to absorb load");
+      decisions.push("Quality sessions deprioritised this week");
+      decisions.push("Growth blocks maintained as scheduled");
+      break;
+    case "running":
+      decisions.push(`Volume target: ${adaptiveGoals.running.weeklyKm.value} km · ${adaptiveGoals.running.intensity.label} intensity`);
+      decisions.push(`${adaptiveGoals.running.weeklyRuns.value} runs scheduled including long run`);
+      decisions.push("Strength held at maintenance frequency");
+      break;
+    case "strength":
+      decisions.push("Additional strength session added this week");
+      decisions.push("Running volume held at maintenance level");
+      decisions.push("Progressive overload opportunity on compounds");
+      break;
+    case "growth":
+      decisions.push(`Growth target: ${adaptiveGoals.growth.weeklyHours.value}h · Focus: ${adaptiveGoals.growth.categoryEmphasis.label}`);
+      decisions.push("Physical training at maintenance — not regressing");
+      decisions.push("Growth blocks prioritised on low-load days");
+      break;
+    case "nutrition":
+      decisions.push(`Protein target: ${adaptiveGoals.nutrition.protein.value}g/day — rate-limiting factor`);
+      decisions.push("Training maintained — nutrition unlocks next progression");
+      decisions.push("Hitting protein target takes precedence this week");
+      break;
+    default:
+      decisions.push("No single domain flagged for progression");
+      decisions.push("All four pillars maintained at current levels");
+      decisions.push("Conditions are balanced — solid maintenance week");
+  }
+
+  return {
+    primaryPriority: label.replace(" WEEK", ""),
+    priorityColor:   color,
+    signals:         signals.slice(0, 5),
+    decisions:       decisions.slice(0, 3),
+  };
+}
+
+// ── Plan balance bullet points ─────────────────────────────────────────────
+
+function buildBalanceBullets(
+  slots:        SlotDef[],
+  growthBlocks: (PlannedGrowthBlock | null)[],
+): string[] {
+  const bullets: string[] = [];
+
+  const hasRestDay = slots.some((s) => s.session === "rest");
+  if (hasRestDay) bullets.push("Recovery spacing preserved");
+
+  let maxConsec = 0, run = 0;
+  for (const s of slots) {
+    if (s.load === "high") { run++; maxConsec = Math.max(maxConsec, run); }
+    else run = 0;
+  }
+  if (maxConsec < 2) bullets.push("No consecutive high-intensity sessions");
+  else if (maxConsec === 2) bullets.push("Back-to-back hard days — monitor recovery closely");
+
+  const longRunIdx = slots.findIndex((s) => s.session === "run_long");
+  if (longRunIdx > 0) {
+    const before = slots[longRunIdx - 1].session;
+    if (before !== "lift_legs" && before !== "run_intervals") {
+      bullets.push("Long run protected — no heavy session preceding it");
+    }
+  }
+
+  const growthDays = growthBlocks.filter((b) => b !== null).length;
+  if      (growthDays >= 3) bullets.push(`Growth distributed across ${growthDays} days`);
+  else if (growthDays === 2) bullets.push("Growth split across 2 focused days");
+  else if (growthDays === 1) bullets.push("Growth session scheduled on a recovery day");
+
+  return bullets.slice(0, 4);
+}
+
 // ── Public API ─────────────────────────────────────────────────────────────
 
 /**
@@ -585,6 +717,9 @@ export function computeWeekPlan(input: PlannerInput): WeekPlan {
   const baseProtein = nutrition.protein.value;
   const baseCals    = nutrition.calories.value > 0 ? nutrition.calories.value : 2500;
 
+  // Actual placed growth hours (may be less than recommended if insufficient days)
+  const placedGrowthHours = growthBlocks.reduce((s, b) => s + (b?.durationMin ?? 0), 0) / 60;
+
   // Build week dates
   const monday = getMondayOfWeek(today);
 
@@ -593,23 +728,31 @@ export function computeWeekPlan(input: PlannerInput): WeekPlan {
     date.setDate(monday.getDate() + i);
     const dateStr = isoDate(date);
 
-    const sess    = buildSession(slot.session, running.weeklyKm.value, targetRuns, hasQualRun);
-    const nutDay  = buildDayNutrition(slot.session, baseProtein, baseCals);
+    const sess   = buildSession(slot.session, running.weeklyKm.value, targetRuns, hasQualRun);
+    const nutDay = buildDayNutrition(slot.session, baseProtein, baseCals);
 
     return {
-      date:      dateStr,
-      dayOfWeek: DAY_NAMES[i],
-      shortDay:  SHORT_DAYS[i],
-      dayIndex:  i,
-      isToday:   dateStr === today,
-      isPast:    dateStr < today,
-      priority:  dayPriority(slot.session),
-      load:      slot.load,
-      sessions:  [sess],
-      growth:    growthBlocks[i],
-      nutrition: nutDay,
+      date:             dateStr,
+      dayOfWeek:        DAY_NAMES[i],
+      shortDay:         SHORT_DAYS[i],
+      dayIndex:         i,
+      isToday:          dateStr === today,
+      isTomorrow:       false,         // set in post-processing step below
+      isPast:           dateStr < today,
+      priority:         dayPriority(slot.session),
+      load:             slot.load,
+      sessions:         [sess],
+      growth:           growthBlocks[i],
+      nutrition:        nutDay,
+      completionStatus: "pending",
     };
   });
+
+  // Post-process: mark tomorrow's day for stronger secondary visual emphasis
+  const todayIdx = days.findIndex((d) => d.isToday);
+  if (todayIdx >= 0 && todayIdx < 6) {
+    days[todayIdx + 1] = { ...days[todayIdx + 1], isTomorrow: true };
+  }
 
   const { balance, reason } = scorePlanBalance(slots);
   const { label: weekFocus, color: weekFocusColor } = weekFocusMeta(primary);
@@ -621,16 +764,53 @@ export function computeWeekPlan(input: PlannerInput): WeekPlan {
     s.session === "lift_full",
   ).length;
 
+  // Goal comparisons — target is null when user has not set a goal
+  const runKmGoal  = (input.userRunKmGoal  ?? 0) > 0 ? (input.userRunKmGoal  ?? 0) : null;
+  const gymGoal    = (input.userGymGoal    ?? 0) > 0 ? (input.userGymGoal    ?? 0) : null;
+  const protGoal   = (input.proteinTargetG ?? 0) > 0 ? (input.proteinTargetG ?? 0) : null;
+
+  const goalComparison = {
+    running: {
+      planned: running.weeklyKm.value,
+      target:  runKmGoal,
+      unit:    "km",
+      pct:     runKmGoal ? Math.min(1.2, running.weeklyKm.value / runKmGoal) : null,
+    },
+    strength: {
+      planned: totalLiftSessions,
+      target:  gymGoal,
+      unit:    "sessions",
+      pct:     gymGoal ? Math.min(1.2, totalLiftSessions / gymGoal) : null,
+    },
+    growth: {
+      planned: Math.round(placedGrowthHours * 10) / 10,
+      target:  growth.weeklyHours.value > 0 ? growth.weeklyHours.value : null,
+      unit:    "h",
+      pct:     growth.weeklyHours.value > 0
+        ? Math.min(1.2, placedGrowthHours / growth.weeklyHours.value)
+        : null,
+    },
+    protein: {
+      planned: Math.round(baseProtein),
+      target:  protGoal ?? Math.round(baseProtein),
+      unit:    "g/day",
+      pct:     protGoal ? Math.min(1.2, baseProtein / protGoal) : 1.0,
+    },
+  };
+
   return {
-    weekStart:         isoDate(monday),
-    weekEnd:           isoDate(new Date(monday.getTime() + 6 * 86400000)),
+    weekStart:          isoDate(monday),
+    weekEnd:            isoDate(new Date(monday.getTime() + 6 * 86400000)),
     days,
     weekFocus,
     weekFocusColor,
-    planBalance:       balance,
-    planBalanceReason: reason,
-    totalRunKm:        running.weeklyKm.value,
+    planBalance:        balance,
+    planBalanceReason:  reason,
+    planBalanceBullets: buildBalanceBullets(slots, growthBlocks),
+    totalRunKm:         running.weeklyKm.value,
     totalLiftSessions,
-    totalGrowthHours:  growth.weeklyHours.value,
+    totalGrowthHours:   Math.round(placedGrowthHours * 10) / 10,
+    decisionRationale:  buildDecisionRationale(input),
+    goalComparison,
   };
 }

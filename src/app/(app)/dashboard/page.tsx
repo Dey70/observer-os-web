@@ -525,7 +525,10 @@ export default function DashboardPage() {
     readinessScore: readinessOutput?.score ?? null,
     recoveryScore,
     today: todayStr,
-    trainingProfile: profile?.split ?? "balanced",
+    trainingProfile:  profile?.split ?? "balanced",
+    userRunKmGoal:    profile?.weekly_run_km_target    ?? 0,
+    userGymGoal:      profile?.weekly_gym_target       ?? 0,
+    proteinTargetG:   proteinTarget,
   });
 
   const todayPlanDay = weekPlan.days.find((d) => d.isToday) ?? weekPlan.days[0];
