@@ -19,6 +19,9 @@ import { computeCTLATLTSB } from "@/lib/trainingLoad";
 import type { TrainingMetricRow } from "@/lib/trainingLoad";
 import { computeHybridScore } from "@/lib/hybridScore";
 import type { HybridScoreOutput } from "@/lib/hybridScore";
+import { computeReadiness } from "@/lib/readiness";
+import { computeAdaptiveGoals } from "@/lib/adaptiveGoals";
+import type { AdaptiveGoalOutput } from "@/lib/adaptiveGoals";
 import type { DailyLog, Session } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -45,6 +48,100 @@ const BMI_CATEGORY_LABEL: Record<string, { label: string; color: string }> = {
   overweight: { label: "Overweight", color: "var(--yellow)" },
   obese: { label: "Obese", color: "var(--red)" },
 };
+
+// ── Profile goal comparison row ────────────────────────────────────────────
+
+function ProfileGoalRow({
+  label,
+  userVal,
+  recVal,
+  confidence,
+  reason,
+  color,
+}: {
+  label:      string;
+  userVal:    string;
+  recVal:     string;
+  confidence: number;
+  reason:     string;
+  color:      string;
+}) {
+  const pct = Math.round(confidence * 100);
+  const chipColor =
+    pct >= 85 ? "var(--green)"  :
+    pct >= 70 ? "var(--accent)" :
+                "var(--yellow)";
+  return (
+    <div
+      style={{
+        padding:      "9px 0",
+        borderBottom: "1px solid var(--border2)",
+      }}
+    >
+      <div
+        style={{
+          display:     "flex",
+          alignItems:  "center",
+          gap:         8,
+          flexWrap:    "wrap",
+          marginBottom: 4,
+        }}
+      >
+        <span
+          style={{
+            fontFamily:    "var(--mono)",
+            fontSize:      10,
+            color:         "var(--text-dim)",
+            letterSpacing: "0.06em",
+            width:         80,
+            flexShrink:    0,
+          }}
+        >
+          {label}
+        </span>
+        <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: "var(--text-dim)" }}>
+          {userVal}
+        </span>
+        <span style={{ fontSize: 10, color: "var(--text-dim)" }}>→</span>
+        <span
+          style={{
+            fontFamily: "var(--mono)",
+            fontSize:   13,
+            fontWeight: 700,
+            color,
+          }}
+        >
+          {recVal}
+        </span>
+        <span
+          style={{
+            fontFamily:    "var(--mono)",
+            fontSize:      9,
+            fontWeight:    700,
+            letterSpacing: "0.06em",
+            color:         chipColor,
+            border:        `1px solid ${chipColor}44`,
+            borderRadius:  4,
+            padding:       "1px 5px",
+          }}
+        >
+          {pct}%
+        </span>
+      </div>
+      <p
+        style={{
+          margin:     0,
+          fontSize:   11,
+          color:      "var(--text-dim)",
+          lineHeight: 1.5,
+          paddingLeft: 88,
+        }}
+      >
+        {reason}
+      </p>
+    </div>
+  );
+}
 
 async function geocodeCity(
   cityQuery: string,
@@ -104,6 +201,7 @@ export default function ProfilePage() {
   const [loading, setLoading]       = useState(true);
   const [notifLoading, setNotifLoading] = useState(false);
   const [hybrid, setHybrid]         = useState<HybridScoreOutput | null>(null);
+  const [adaptiveGoals, setAdaptiveGoals] = useState<AdaptiveGoalOutput | null>(null);
 
   const load = useCallback(async () => {
     const {
@@ -179,14 +277,59 @@ export default function ProfilePage() {
 
     setCurrentWeight(weights.length ? weights[0].weight : null);
 
-    // Hybrid Athlete Score
-    const { ctl, tsb } = metrics.length > 0 ? computeCTLATLTSB(metrics) : { ctl: 0, tsb: 0 };
-    const todayLog     = logs.find((l) => l.date === todayStr) ?? null;
+    // Hybrid Athlete Score + Adaptive Goals
+    const { ctl, atl, tsb } = metrics.length > 0 ? computeCTLATLTSB(metrics) : { ctl: 0, atl: 0, tsb: 0 };
+    const todayLog      = logs.find((l) => l.date === todayStr) ?? null;
     const recoveryScore = computeRecoveryScore(todayLog, tsb);
-    const weekStartPro = new Date(Date.now() - 7 * 86400000).toISOString().split("T")[0];
+    const weekStartPro  = new Date(Date.now() - 7 * 86400000).toISOString().split("T")[0];
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const weeklyGrowthMin = sessions.filter((s) => s.type === "study" && s.date >= weekStartPro).reduce((sum, s) => sum + ((s as any).duration ?? 0), 0);
-    setHybrid(computeHybridScore(recoveryScore, ctl, null, weeklyGrowthMin));
+    const weeklyGrowthHrs = weeklyGrowthMin / 60;
+    const weeklyLiftCount = sessions.filter((s) => s.type === "lift" && s.date >= weekStartPro).length;
+
+    const hybridResult = computeHybridScore(recoveryScore, ctl, null, weeklyGrowthMin);
+    setHybrid(hybridResult);
+
+    // Readiness (requires today's check-in)
+    let readinessScore: number | null = null;
+    if (todayLog && recoveryScore !== null) {
+      const r = computeReadiness(recoveryScore, tsb, todayLog.sleep_quality, todayLog.fatigue, todayLog.energy);
+      readinessScore = r.score;
+    }
+
+    const weekLogs7d = logs.filter((l) => l.date >= weekStartPro);
+    const avg7d = (arr: number[]) =>
+      arr.length >= 3 ? arr.reduce((s, v) => s + v, 0) / arr.length : null;
+
+    setAdaptiveGoals(computeAdaptiveGoals({
+      ctl, atl, tsb,
+      readinessScore,
+      recoveryScore,
+      sleepQuality: todayLog?.sleep_quality ?? null,
+      fatigue:      todayLog?.fatigue      ?? null,
+      soreness:     todayLog?.soreness     ?? null,
+      energy:       todayLog?.energy       ?? null,
+      avgSleepQuality7d: avg7d(weekLogs7d.map((l) => l.sleep_quality)),
+      avgFatigue7d:      avg7d(weekLogs7d.map((l) => l.fatigue)),
+      avgEnergy7d:       avg7d(weekLogs7d.map((l) => l.energy)),
+      hybridScore:           hybridResult.score,
+      hybridGrowthComponent: hybridResult.components.growth,
+      // Use user's targets as the current-level proxy (no running_activities on profile page)
+      weeklyRunKm:        data?.weekly_run_km_target    ?? 0,
+      weeklyRunCount:     data?.weekly_run_count_target ?? 0,
+      weeklyLiftSessions: weeklyLiftCount,
+      weeklyGrowthHours:  weeklyGrowthHrs,
+      weeklyGrowthCategories: { study: weeklyGrowthHrs, project: 0, learning: 0, deep_work: 0 },
+      avgDailyCalories: null,
+      avgDailyProtein:  null,
+      proteinTargetG:   140,
+      calorieTargetKcal: null,
+      waterTargetMl:    3000,
+      userRunKmGoal:    data?.weekly_run_km_target    ?? 0,
+      userRunCountGoal: data?.weekly_run_count_target ?? 0,
+      userGymGoal:      data?.weekly_gym_target       ?? 0,
+    }));
 
     setLoading(false);
   }, []);
@@ -914,6 +1057,196 @@ export default function ProfilePage() {
           )}
         </div>
       </Card>
+
+      {/* ── Recommended Goals (Phase 5A) ───────────────────────────────── */}
+      {adaptiveGoals && (
+        <Card>
+          <div
+            style={{
+              fontSize: 10,
+              color: "var(--text-muted)",
+              letterSpacing: "0.12em",
+              textTransform: "uppercase",
+              marginBottom: 4,
+            }}
+          >
+            Recommended Goals
+          </div>
+          <div
+            style={{
+              fontSize: 11,
+              color: "var(--text-dim)",
+              marginBottom: 16,
+              fontFamily: "var(--mono)",
+              lineHeight: 1.5,
+            }}
+          >
+            {adaptiveGoals.weekSummary}
+          </div>
+
+          {/* ── Running ─────────────────────────────────────────────────── */}
+          <div
+            style={{
+              fontSize: 10,
+              color: "var(--accent)",
+              letterSpacing: "0.1em",
+              fontFamily: "var(--mono)",
+              fontWeight: 700,
+              marginBottom: 10,
+              marginTop: 8,
+            }}
+          >
+            RUNNING
+          </div>
+          {[
+            {
+              label: "Weekly km",
+              userVal: weeklyRunKm ? `${weeklyRunKm} km` : "—",
+              rec:    adaptiveGoals.running.weeklyKm,
+              unit:   "km",
+              color:  "var(--accent)",
+            },
+            {
+              label:   "Weekly runs",
+              userVal: weeklyRunCount ? `${weeklyRunCount} runs` : "—",
+              rec:     adaptiveGoals.running.weeklyRuns,
+              unit:    "runs",
+              color:   "var(--accent)",
+            },
+          ].map(({ label, userVal, rec, unit, color }) => (
+            <ProfileGoalRow
+              key={label}
+              label={label}
+              userVal={userVal}
+              recVal={`${rec.value} ${unit}`}
+              confidence={rec.confidence}
+              reason={rec.reason}
+              color={color}
+            />
+          ))}
+          <ProfileGoalRow
+            label="Intensity"
+            userVal="—"
+            recVal={adaptiveGoals.running.intensity.label}
+            confidence={adaptiveGoals.running.intensity.confidence}
+            reason={adaptiveGoals.running.intensity.reason}
+            color="var(--accent)"
+          />
+
+          {/* ── Strength ────────────────────────────────────────────────── */}
+          <div
+            style={{
+              fontSize: 10,
+              color: "var(--purple)",
+              letterSpacing: "0.1em",
+              fontFamily: "var(--mono)",
+              fontWeight: 700,
+              marginBottom: 10,
+              marginTop: 18,
+            }}
+          >
+            STRENGTH
+          </div>
+          <ProfileGoalRow
+            label="Sessions"
+            userVal={weeklyGym ? `${weeklyGym} sessions` : "—"}
+            recVal={`${adaptiveGoals.strength.weeklySessions.value} sessions`}
+            confidence={adaptiveGoals.strength.weeklySessions.confidence}
+            reason={adaptiveGoals.strength.weeklySessions.reason}
+            color="var(--purple)"
+          />
+
+          {/* ── Growth ──────────────────────────────────────────────────── */}
+          <div
+            style={{
+              fontSize: 10,
+              color: "var(--green)",
+              letterSpacing: "0.1em",
+              fontFamily: "var(--mono)",
+              fontWeight: 700,
+              marginBottom: 10,
+              marginTop: 18,
+            }}
+          >
+            GROWTH
+          </div>
+          <ProfileGoalRow
+            label="Weekly hours"
+            userVal="—"
+            recVal={`${adaptiveGoals.growth.weeklyHours.value} h`}
+            confidence={adaptiveGoals.growth.weeklyHours.confidence}
+            reason={adaptiveGoals.growth.weeklyHours.reason}
+            color="var(--green)"
+          />
+          <div
+            style={{
+              fontSize: 11,
+              color: "var(--text-dim)",
+              marginTop: 6,
+              lineHeight: 1.5,
+              fontFamily: "var(--mono)",
+            }}
+          >
+            Emphasis → {adaptiveGoals.growth.categoryEmphasis.label} — {adaptiveGoals.growth.categoryEmphasis.reason}
+          </div>
+
+          {/* ── Nutrition ───────────────────────────────────────────────── */}
+          <div
+            style={{
+              fontSize: 10,
+              color: "var(--yellow)",
+              letterSpacing: "0.1em",
+              fontFamily: "var(--mono)",
+              fontWeight: 700,
+              marginBottom: 10,
+              marginTop: 18,
+            }}
+          >
+            NUTRITION
+          </div>
+          {[
+            {
+              label: "Protein",
+              recVal: `${adaptiveGoals.nutrition.protein.value} g`,
+              conf:   adaptiveGoals.nutrition.protein.confidence,
+              reason: adaptiveGoals.nutrition.protein.reason,
+            },
+            {
+              label:  "Calories",
+              recVal: `${adaptiveGoals.nutrition.calories.value.toLocaleString()} kcal`,
+              conf:   adaptiveGoals.nutrition.calories.confidence,
+              reason: adaptiveGoals.nutrition.calories.reason,
+            },
+          ].map(({ label, recVal, conf, reason }) => (
+            <ProfileGoalRow
+              key={label}
+              label={label}
+              userVal="—"
+              recVal={recVal}
+              confidence={conf}
+              reason={reason}
+              color="var(--yellow)"
+            />
+          ))}
+
+          <div
+            style={{
+              marginTop: 14,
+              padding: "10px 12px",
+              background: "var(--surface2)",
+              border: "1px solid var(--border2)",
+              borderRadius: 8,
+              fontSize: 11,
+              color: "var(--text-dim)",
+              lineHeight: 1.55,
+              fontFamily: "var(--mono)",
+            }}
+          >
+            Recommendations recompute each session from your live data. Goal
+            acceptance and overrides are planned for Phase 5B.
+          </div>
+        </Card>
+      )}
 
       <Card>
         <div

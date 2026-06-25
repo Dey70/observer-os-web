@@ -43,6 +43,9 @@ import type {
   DashboardStats,
   RunningActivity,
 } from "@/types";
+import { computeAdaptiveGoals } from "@/lib/adaptiveGoals";
+import type { AdaptiveGoalOutput } from "@/lib/adaptiveGoals";
+import { AdaptiveGoalsCard } from "@/components/AdaptiveGoalsCard";
 
 export const dynamic = "force-dynamic";
 
@@ -423,13 +426,13 @@ export default function DashboardPage() {
   let readinessOutput: ReadinessOutput | null = null;
   let coachOutput:     CoachOutput     | null = null;
   let hybridOutput:    HybridScoreOutput      = computeHybridScore(recoveryScore, ctl, null, weeklyGrowthMinutes);
+  let proteinTarget  = 140;
+  let waterTargetMl  = 3000;
 
   if (todayLog && recoveryScore !== null) {
     readinessOutput = computeReadiness(recoveryScore, tsb, todayLog.sleep_quality, todayLog.fatigue, todayLog.energy);
 
     const currentWeight = weights[0]?.weight ?? null;
-    let proteinTarget   = 140;
-    let waterTargetMl   = 3000;
 
     if (profile?.sex && profile?.age && profile?.height_cm && currentWeight) {
       const todaySessions = sessions.filter((s) => s.date === todayStr);
@@ -477,6 +480,39 @@ export default function DashboardPage() {
 
     hybridOutput = computeHybridScore(recoveryScore, ctl, null, weeklyGrowthMinutes);
   }
+
+  // ── Adaptive Goals (Phase 5A) ─────────────────────────────────────────
+
+  const weekLogs7d = logs.filter((l) => l.date >= weekStartDate);
+  const avg7d = (arr: number[]) => arr.length >= 3 ? arr.reduce((s, v) => s + v, 0) / arr.length : null;
+
+  const adaptiveGoalOutput: AdaptiveGoalOutput = computeAdaptiveGoals({
+    ctl, atl, tsb,
+    readinessScore: readinessOutput?.score ?? null,
+    recoveryScore,
+    sleepQuality: todayLog?.sleep_quality ?? null,
+    fatigue:      todayLog?.fatigue      ?? null,
+    soreness:     todayLog?.soreness     ?? null,
+    energy:       todayLog?.energy       ?? null,
+    avgSleepQuality7d: avg7d(weekLogs7d.map((l) => l.sleep_quality)),
+    avgFatigue7d:      avg7d(weekLogs7d.map((l) => l.fatigue)),
+    avgEnergy7d:       avg7d(weekLogs7d.map((l) => l.energy)),
+    hybridScore:           hybridOutput.score,
+    hybridGrowthComponent: hybridOutput.components.growth,
+    weeklyRunKm:        weekDistM / 1000,
+    weeklyRunCount:     weekRuns.length,
+    weeklyLiftSessions: weekGymCount,
+    weeklyGrowthHours:  totalGrowthHours,
+    weeklyGrowthCategories: growthByCategory,
+    avgDailyCalories: todayNetCals?.eaten ?? null,
+    avgDailyProtein:  null,
+    proteinTargetG:   proteinTarget,
+    calorieTargetKcal: null,
+    waterTargetMl,
+    userRunKmGoal:    profile?.weekly_run_km_target    ?? 0,
+    userRunCountGoal: profile?.weekly_run_count_target ?? 0,
+    userGymGoal:      profile?.weekly_gym_target       ?? 0,
+  });
 
   // ── Date display ──────────────────────────────────────────────────────
 
@@ -937,6 +973,18 @@ export default function DashboardPage() {
           <p style={{ fontSize: 13, color: "var(--text)", margin: 0, lineHeight: 1.7 }}>{aiInsight}</p>
         </div>
       )}
+
+      {/* ── Adaptive Goals ───────────────────────────────────────────────── */}
+      <div className="a4">
+        <AdaptiveGoalsCard
+          goals={adaptiveGoalOutput}
+          userGoals={{
+            runKm:    profile?.weekly_run_km_target    ?? 0,
+            runCount: profile?.weekly_run_count_target ?? 0,
+            gym:      profile?.weekly_gym_target       ?? 0,
+          }}
+        />
+      </div>
 
       {/* ── Growth This Week ─────────────────────────────────────────────── */}
       <div

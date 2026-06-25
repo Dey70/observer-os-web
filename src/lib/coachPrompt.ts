@@ -18,6 +18,7 @@ import {
   buildObserverMemoryBlock,
   type MemoryFact,
 } from "@/lib/observerMemory";
+import { buildAdaptiveGoalsBlock } from "@/lib/adaptiveGoals";
 
 // ── Shared coaching philosophy ─────────────────────────────────────────────
 
@@ -101,9 +102,10 @@ function buildCurrentStateBlock(ctx: CoachContext): string {
 // ── Chat system prompt ─────────────────────────────────────────────────────
 
 export function buildChatSystemPrompt(ctx: CoachContext, facts: MemoryFact[]): string {
-  const profileBlock = buildAthleteProfileBlock(ctx);
-  const memoryBlock  = buildObserverMemoryBlock(facts);
-  const stateBlock   = buildCurrentStateBlock(ctx);
+  const profileBlock      = buildAthleteProfileBlock(ctx);
+  const memoryBlock       = buildObserverMemoryBlock(facts);
+  const stateBlock        = buildCurrentStateBlock(ctx);
+  const adaptiveGoalsBlock = buildAdaptiveGoalsBlock(ctx.adaptiveGoals);
 
   const baselineBlock = [
     `## Deterministic baseline recommendations (your floor — analyse and exceed)`,
@@ -138,6 +140,8 @@ export function buildChatSystemPrompt(ctx: CoachContext, facts: MemoryFact[]): s
     memoryBlock,
     ``,
     stateBlock,
+    ``,
+    adaptiveGoalsBlock,
     ``,
     baselineBlock,
     ``,

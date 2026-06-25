@@ -24,6 +24,8 @@ import { calculateDailyTargets }     from "@/lib/nutritionEngine";
 import type { NutritionProfileInputs } from "@/lib/nutritionEngine";
 import { calcCheckinStreak, calcSessionStreak } from "@/lib/utils";
 import type { DailyLog, Session, RunningActivity } from "@/types";
+import { computeAdaptiveGoals } from "@/lib/adaptiveGoals";
+import type { AdaptiveGoalOutput } from "@/lib/adaptiveGoals";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -81,6 +83,8 @@ export interface CoachContext {
     sessionCount: number;
     kmThisWeek:   number;
   };
+  // Phase 5A — Adaptive Goals
+  adaptiveGoals: AdaptiveGoalOutput;
 }
 
 // ── Builder ────────────────────────────────────────────────────────────────
@@ -233,15 +237,56 @@ export async function buildCoachContext(
       .filter((s) => s.type === "study" && s.date >= since7)
       .reduce((sum, s) => sum + (s.duration ?? 0), 0);
 
+  const weeklyGrowthHours = weeklyGrowthMinutes / 60;
+
   const hybrid = computeHybridScore(recoveryScore, ctl, null, weeklyGrowthMinutes);
 
   // ── Weekly stats ───────────────────────────────────────────────────────
 
-  const recentLogs    = logs.filter((l) => l.date >= since7);
+  const recentLogs     = logs.filter((l) => l.date >= since7);
   const recentSessions = sessions.filter((s) => s.date >= since7);
 
-  const avg = (arr: number[]) => arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : null;
+  const avg    = (arr: number[]) => arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : null;
   const round1 = (n: number | null) => n !== null ? Math.round(n * 10) / 10 : null;
+
+  const avgOf  = (arr: number[]) => arr.length >= 3 ? arr.reduce((s, v) => s + v, 0) / arr.length : null;
+
+  // ── Adaptive Goals (Phase 5A) ──────────────────────────────────────────
+
+  const weeklyLiftSessions = recentSessions.filter((s) => s.type === "lift").length;
+
+  const adaptiveGoals = computeAdaptiveGoals({
+    ctl, atl, tsb,
+    readinessScore: readiness?.score ?? null,
+    recoveryScore,
+    sleepQuality: todayLog?.sleep_quality ?? null,
+    fatigue:      todayLog?.fatigue      ?? null,
+    soreness:     todayLog?.soreness     ?? null,
+    energy:       todayLog?.energy       ?? null,
+    avgSleepQuality7d: avgOf(recentLogs.map((l) => l.sleep_quality)),
+    avgFatigue7d:      avgOf(recentLogs.map((l) => l.fatigue)),
+    avgEnergy7d:       avgOf(recentLogs.map((l) => l.energy)),
+    hybridScore:           hybrid.score,
+    hybridGrowthComponent: hybrid.components.growth,
+    weeklyRunKm:        Math.round((weekDistM / 1000) * 10) / 10,
+    weeklyRunCount:     runs.length,
+    weeklyLiftSessions,
+    weeklyGrowthHours,
+    weeklyGrowthCategories: {
+      study:     weeklyGrowthHours,
+      project:   0,
+      learning:  0,
+      deep_work: 0,
+    },
+    avgDailyCalories: null,
+    avgDailyProtein:  null,
+    proteinTargetG:    proteinTarget,
+    calorieTargetKcal: null,
+    waterTargetMl,
+    userRunKmGoal:    profile?.weekly_run_km_target    ?? 0,
+    userRunCountGoal: profile?.weekly_run_count_target ?? 0,
+    userGymGoal:      profile?.weekly_gym_target       ?? 0,
+  });
 
   return {
     userId,
@@ -274,5 +319,6 @@ export async function buildCoachContext(
       sessionCount: recentSessions.length,
       kmThisWeek:  Math.round((weekDistM / 1000) * 10) / 10,
     },
+    adaptiveGoals,
   };
 }
