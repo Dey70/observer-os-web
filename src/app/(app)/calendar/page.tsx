@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { formatDuration, rpeToLabel, calcReadiness } from "@/lib/utils";
 import { PageHeader } from "@/components/ui";
-import type { Session, DailyLog } from "@/types";
+import type { Session, DailyLog, GrowthLog } from "@/types";
 import {
   ChevronLeft,
   ChevronRight,
@@ -44,7 +44,14 @@ const TYPE_ICON: Record<string, React.ElementType> = {
   study: BookOpen,
 };
 
-type DayData = { sessions: Session[]; log: DailyLog | null };
+const GROWTH_CAT: Record<string, { color: string; label: string; emoji: string }> = {
+  study:     { color: "var(--accent)",  label: "Study",     emoji: "📚" },
+  project:   { color: "var(--green)",   label: "Project",   emoji: "🛠️" },
+  learning:  { color: "var(--purple)",  label: "Learning",  emoji: "💡" },
+  deep_work: { color: "var(--yellow)",  label: "Deep Work", emoji: "🎯" },
+};
+
+type DayData = { sessions: Session[]; growthLogs: GrowthLog[]; log: DailyLog | null };
 
 export default function CalendarPage() {
   const sb = createClient();
@@ -66,7 +73,7 @@ export default function CalendarPage() {
     const lastDay = new Date(year, month + 1, 0);
     const lastStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(lastDay.getDate()).padStart(2, "0")}`;
 
-    const [{ data: sessions }, { data: logs }] = await Promise.all([
+    const [{ data: sessions }, { data: logs }, { data: growth }] = await Promise.all([
       sb
         .from("sessions")
         .select("*")
@@ -79,16 +86,26 @@ export default function CalendarPage() {
         .eq("user_id", user.id)
         .gte("date", firstDay)
         .lte("date", lastStr),
+      sb
+        .from("growth_logs")
+        .select("*")
+        .eq("user_id", user.id)
+        .gte("date", firstDay)
+        .lte("date", lastStr),
     ]);
 
     const map: Record<string, DayData> = {};
     (sessions ?? []).forEach((s: Session) => {
-      if (!map[s.date]) map[s.date] = { sessions: [], log: null };
+      if (!map[s.date]) map[s.date] = { sessions: [], growthLogs: [], log: null };
       map[s.date].sessions.push(s);
     });
     (logs ?? []).forEach((l: DailyLog) => {
-      if (!map[l.date]) map[l.date] = { sessions: [], log: null };
+      if (!map[l.date]) map[l.date] = { sessions: [], growthLogs: [], log: null };
       map[l.date].log = l;
+    });
+    (growth ?? []).forEach((g: GrowthLog) => {
+      if (!map[g.date]) map[g.date] = { sessions: [], growthLogs: [], log: null };
+      map[g.date].growthLogs.push(g);
     });
 
     setDayMap(map);
@@ -223,6 +240,9 @@ export default function CalendarPage() {
             const sessionTypes = [
               ...new Set(data?.sessions.map((s) => s.type) ?? []),
             ];
+            const growthCats = [
+              ...new Set(data?.growthLogs.map((g) => g.category) ?? []),
+            ];
 
             return (
               <button
@@ -268,7 +288,7 @@ export default function CalendarPage() {
                 </span>
 
                 {/* Dots row */}
-                {(hasCheckin || sessionTypes.length > 0) && (
+                {(hasCheckin || sessionTypes.length > 0 || growthCats.length > 0) && (
                   <div
                     style={{
                       display: "flex",
@@ -301,6 +321,18 @@ export default function CalendarPage() {
                         }}
                       />
                     ))}
+                    {growthCats.map((c) => (
+                      <div
+                        key={c}
+                        style={{
+                          width: 4,
+                          height: 4,
+                          borderRadius: 1,
+                          background: GROWTH_CAT[c].color,
+                          flexShrink: 0,
+                        }}
+                      />
+                    ))}
                   </div>
                 )}
               </button>
@@ -323,11 +355,11 @@ export default function CalendarPage() {
         }}
       >
         {[
-          { color: "var(--accent)", label: "Check-in" },
-          { color: "var(--green)", label: "Run" },
-          { color: "var(--purple)", label: "Lift" },
-          { color: "var(--yellow)", label: "Study" },
-        ].map(({ color, label }) => (
+          { color: "var(--accent)", label: "Check-in", square: false },
+          { color: "var(--green)", label: "Run", square: false },
+          { color: "var(--purple)", label: "Lift", square: false },
+          { color: "var(--yellow)", label: "Study", square: false },
+        ].map(({ color, label, square }) => (
           <div
             key={label}
             style={{ display: "flex", alignItems: "center", gap: 5 }}
@@ -336,7 +368,32 @@ export default function CalendarPage() {
               style={{
                 width: 6,
                 height: 6,
-                borderRadius: "50%",
+                borderRadius: square ? 1 : "50%",
+                background: color,
+              }}
+            />
+            <span
+              style={{
+                fontSize: 10,
+                color: "var(--text-muted)",
+                fontFamily: "var(--mono)",
+              }}
+            >
+              {label}
+            </span>
+          </div>
+        ))}
+        <div style={{ width: "100%", height: 0 }} />
+        {Object.entries(GROWTH_CAT).map(([key, { color, label }]) => (
+          <div
+            key={key}
+            style={{ display: "flex", alignItems: "center", gap: 5 }}
+          >
+            <div
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: 1,
                 background: color,
               }}
             />
@@ -391,7 +448,7 @@ export default function CalendarPage() {
 }
 
 function DayPanel({ date, data }: { date: string; data: DayData }) {
-  const { sessions, log } = data;
+  const { sessions, growthLogs, log } = data;
   const readiness = log
     ? calcReadiness(
         log.sleep_quality,
@@ -579,31 +636,21 @@ function DayPanel({ date, data }: { date: string; data: DayData }) {
           </div>
         )}
 
-        {/* Sessions */}
-        <div>
-          <div
-            style={{
-              fontSize: 9,
-              color: "var(--text-dim)",
-              letterSpacing: "2px",
-              textTransform: "uppercase",
-              fontFamily: "var(--mono)",
-              marginBottom: 8,
-            }}
-          >
-            Sessions ({sessions.length})
-          </div>
-          {sessions.length === 0 ? (
+        {/* Training sessions */}
+        {sessions.length > 0 && (
+          <div>
             <div
               style={{
-                fontSize: 11,
+                fontSize: 9,
                 color: "var(--text-dim)",
+                letterSpacing: "2px",
+                textTransform: "uppercase",
                 fontFamily: "var(--mono)",
+                marginBottom: 8,
               }}
             >
-              Rest day
+              Training ({sessions.length})
             </div>
-          ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {sessions.map((s) => {
                 const Icon = TYPE_ICON[s.type];
@@ -626,18 +673,8 @@ function DayPanel({ date, data }: { date: string; data: DayData }) {
                         marginBottom: 4,
                       }}
                     >
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 6,
-                        }}
-                      >
-                        <Icon
-                          size={12}
-                          color={themeColor.color}
-                          strokeWidth={2}
-                        />
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <Icon size={12} color={themeColor.color} strokeWidth={2} />
                         <span
                           style={{
                             fontFamily: "var(--mono)",
@@ -662,31 +699,104 @@ function DayPanel({ date, data }: { date: string; data: DayData }) {
                       </span>
                     </div>
                     {s.notes && (
-                      <div
-                        style={{
-                          fontSize: 12,
-                          color: "var(--text-muted)",
-                          marginBottom: 3,
-                        }}
-                      >
+                      <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 3 }}>
                         {s.notes}
                       </div>
                     )}
-                    <div
-                      style={{
-                        fontSize: 10,
-                        fontFamily: "var(--mono)",
-                        color: "var(--text-dim)",
-                      }}
-                    >
+                    <div style={{ fontSize: 10, fontFamily: "var(--mono)", color: "var(--text-dim)" }}>
                       RPE {s.rpe}/10 · {rpeToLabel(s.rpe)}
                     </div>
                   </div>
                 );
               })}
             </div>
-          )}
-        </div>
+          </div>
+        )}
+
+        {/* Growth sessions */}
+        {growthLogs.length > 0 && (
+          <div>
+            <div
+              style={{
+                fontSize: 9,
+                color: "var(--text-dim)",
+                letterSpacing: "2px",
+                textTransform: "uppercase",
+                fontFamily: "var(--mono)",
+                marginBottom: 8,
+              }}
+            >
+              Growth ({growthLogs.length})
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {growthLogs.map((g) => {
+                const cat = GROWTH_CAT[g.category];
+                return (
+                  <div
+                    key={g.id}
+                    style={{
+                      padding: "10px 12px",
+                      background: "var(--surface2)",
+                      border: `1px solid var(--border2)`,
+                      borderLeft: `3px solid ${cat.color}`,
+                      borderRadius: 10,
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        marginBottom: 4,
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontFamily: "var(--mono)",
+                          fontSize: 10,
+                          color: cat.color,
+                          textTransform: "uppercase",
+                          fontWeight: 700,
+                        }}
+                      >
+                        {cat.emoji} {cat.label}
+                      </span>
+                      <span
+                        style={{
+                          fontFamily: "var(--mono)",
+                          fontSize: 13,
+                          fontWeight: 700,
+                          color: "var(--text)",
+                        }}
+                      >
+                        {formatDuration(g.duration_min)}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: g.focus_score ? 3 : 0 }}>
+                      {g.title}
+                    </div>
+                    {g.focus_score !== null && (
+                      <div style={{ fontSize: 10, fontFamily: "var(--mono)", color: "var(--text-dim)" }}>
+                        Focus {g.focus_score}/10
+                      </div>
+                    )}
+                    {g.output_notes && (
+                      <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4, fontStyle: "italic" }}>
+                        {g.output_notes}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {sessions.length === 0 && growthLogs.length === 0 && (
+          <div style={{ fontSize: 11, color: "var(--text-dim)", fontFamily: "var(--mono)" }}>
+            Rest day
+          </div>
+        )}
       </div>
     </div>
   );
