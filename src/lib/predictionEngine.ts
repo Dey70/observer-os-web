@@ -42,9 +42,11 @@ export type RiskLevel   = "LOW" | "MEDIUM" | "HIGH";
 export type DataQuality = "LOW" | "MEDIUM" | "HIGH";
 
 export interface RiskAssessment {
-  level:  RiskLevel;
-  score:  number;   // raw risk score (useful for debugging)
-  reason: string;
+  level:     RiskLevel;
+  score:     number;
+  reason:    string;
+  primary:   string | null;
+  secondary: string | null;
 }
 
 // ── Input ──────────────────────────────────────────────────────────────────
@@ -431,34 +433,42 @@ function buildGoalPredictions(input: PredictionInput): PredictionOutput["goals"]
 // ── Fatigue risk ───────────────────────────────────────────────────────────
 
 function buildFatigueRisk(input: PredictionInput): RiskAssessment {
-  let score = 0;
+  const contributors: { label: string; points: number }[] = [];
+
+  const push = (label: string, points: number) => {
+    if (points > 0) contributors.push({ label, points });
+  };
 
   // TSB (primary fatigue signal)
-  if      (input.tsb < -25) score += 4;
-  else if (input.tsb < -15) score += 3;
-  else if (input.tsb < -5)  score += 1;
-
-  // Recovery
   const rc = input.recoveryScore;
-  if      (rc !== null && rc < 40) score += 3;
-  else if (rc !== null && rc < 60) score += 1;
-
-  // Readiness
   const rs = input.readinessScore;
-  if      (rs !== null && rs < 40) score += 2;
-  else if (rs !== null && rs < 55) score += 1;
-
-  // Subjective fatigue (daily log)
   const ft = input.avgFatigue7d;
-  if      (ft !== null && ft > 8) score += 2;
-  else if (ft !== null && ft > 6) score += 1;
-
-  // Planned load increase vs current
   const safeBase = Math.max(input.weeklyRunKm, 5);
   const loadIncrease = (input.planWeeklyKm - input.weeklyRunKm) / safeBase;
-  if (loadIncrease > 0.20) score += 1;
 
+  push(
+    "Negative TSB",
+    input.tsb < -25 ? 4 : input.tsb < -15 ? 3 : input.tsb < -5 ? 1 : 0,
+  );
+  push(
+    "Low recovery",
+    rc !== null ? (rc < 40 ? 3 : rc < 60 ? 1 : 0) : 0,
+  );
+  push(
+    "Low readiness",
+    rs !== null ? (rs < 40 ? 2 : rs < 55 ? 1 : 0) : 0,
+  );
+  push(
+    "High fatigue",
+    ft !== null ? (ft > 8 ? 2 : ft > 6 ? 1 : 0) : 0,
+  );
+  push("Planned load increase", loadIncrease > 0.20 ? 1 : 0);
+
+  contributors.sort((a, b) => b.points - a.points);
+  const score    = contributors.reduce((s, c) => s + c.points, 0);
   const level: RiskLevel = score >= 6 ? "HIGH" : score >= 3 ? "MEDIUM" : "LOW";
+  const primary   = contributors[0]?.points > 0 ? contributors[0].label : null;
+  const secondary = contributors[1]?.points > 0 ? contributors[1].label : null;
 
   const reason = level === "HIGH"
     ? `Multiple fatigue signals elevated — TSB ${input.tsb}, recovery ${rc ?? "—"}/100. Prioritise rest before next hard session.`
@@ -466,35 +476,42 @@ function buildFatigueRisk(input: PredictionInput): RiskAssessment {
     ? `Moderate fatigue accumulation detected (TSB ${input.tsb}). Monitor closely; avoid adding load this week.`
     : `Fatigue markers within acceptable range (TSB ${input.tsb}). Continue as planned with attention to sleep quality.`;
 
-  return { level, score, reason };
+  return { level, score, reason, primary, secondary };
 }
 
 // ── Injury risk ────────────────────────────────────────────────────────────
 
 function buildInjuryRisk(input: PredictionInput): RiskAssessment {
-  let score = 0;
+  const contributors: { label: string; points: number }[] = [];
 
-  // Rapid load increase — primary injury predictor
-  const safeBase = Math.max(input.weeklyRunKm, 5);
+  const push = (label: string, points: number) => {
+    if (points > 0) contributors.push({ label, points });
+  };
+
+  const safeBase     = Math.max(input.weeklyRunKm, 5);
   const loadIncrease = (input.planWeeklyKm - input.weeklyRunKm) / safeBase;
-  if      (loadIncrease > 0.30) score += 4;
-  else if (loadIncrease > 0.20) score += 3;
-  else if (loadIncrease > 0.12) score += 1;
+  const rc           = input.recoveryScore;
+  const ft           = input.avgFatigue7d;
 
-  // Negative TSB compounds mechanical load on connective tissue
-  if      (input.tsb < -20) score += 3;
-  else if (input.tsb < -10) score += 1;
+  push(
+    "Rapid load increase",
+    loadIncrease > 0.30 ? 4 : loadIncrease > 0.20 ? 3 : loadIncrease > 0.12 ? 1 : 0,
+  );
+  push(
+    "Negative TSB",
+    input.tsb < -20 ? 3 : input.tsb < -10 ? 1 : 0,
+  );
+  push(
+    "Low recovery",
+    rc !== null ? (rc < 40 ? 2 : rc < 55 ? 1 : 0) : 0,
+  );
+  push("High fatigue", ft !== null && ft > 8 ? 1 : 0);
 
-  // Low recovery = poor tissue repair
-  const rc = input.recoveryScore;
-  if      (rc !== null && rc < 40) score += 2;
-  else if (rc !== null && rc < 55) score += 1;
-
-  // High subjective fatigue
-  const ft = input.avgFatigue7d;
-  if (ft !== null && ft > 8) score += 1;
-
+  contributors.sort((a, b) => b.points - a.points);
+  const score    = contributors.reduce((s, c) => s + c.points, 0);
   const level: RiskLevel = score >= 6 ? "HIGH" : score >= 3 ? "MEDIUM" : "LOW";
+  const primary   = contributors[0]?.points > 0 ? contributors[0].label : null;
+  const secondary = contributors[1]?.points > 0 ? contributors[1].label : null;
 
   const loadPct = Math.round(loadIncrease * 100);
   const reason = level === "HIGH"
@@ -503,7 +520,7 @@ function buildInjuryRisk(input: PredictionInput): RiskAssessment {
     ? `Moderate injury risk from ${loadPct > 12 ? `${loadPct}% load increase` : `negative TSB (${input.tsb})`}. Monitor for early warning signs (soreness, stiffness).`
     : "Injury risk is low — load progression and recovery signals are within safe parameters.";
 
-  return { level, score, reason };
+  return { level, score, reason, primary, secondary };
 }
 
 // ── Confidence model ───────────────────────────────────────────────────────

@@ -347,17 +347,30 @@ export function PerformanceForecastCard({
                 <div
                   key={label}
                   style={{
-                    display:     "flex",
-                    alignItems:  "center",
-                    justifyContent: "space-between",
-                    padding:     "8px 10px",
-                    borderRadius: 8,
-                    background:  `${riskColor(r.level)}08`,
-                    border:      `1px solid ${riskColor(r.level)}22`,
+                    padding:      "8px 10px",
+                    borderRadius:  8,
+                    background:   `${riskColor(r.level)}08`,
+                    border:       `1px solid ${riskColor(r.level)}22`,
                   }}
                 >
-                  <span style={{ fontSize: 10, color: "var(--text-muted)" }}>{label}</span>
-                  <RiskPill level={r.level} />
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: r.primary ? 6 : 0 }}>
+                    <span style={{ fontSize: 10, color: "var(--text-muted)" }}>{label}</span>
+                    <RiskPill level={r.level} />
+                  </div>
+                  {r.primary && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                        <span style={{ fontFamily: "var(--mono)", fontSize: 8, letterSpacing: "0.10em", color: riskColor(r.level), flexShrink: 0 }}>PRIMARY</span>
+                        <span style={{ fontSize: 9, color: "var(--text-dim)" }}>{r.primary}</span>
+                      </div>
+                      {r.secondary && (
+                        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                          <span style={{ fontFamily: "var(--mono)", fontSize: 8, letterSpacing: "0.10em", color: "var(--text-dim)", flexShrink: 0 }}>SECONDARY</span>
+                          <span style={{ fontSize: 9, color: "var(--text-dim)" }}>{r.secondary}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
