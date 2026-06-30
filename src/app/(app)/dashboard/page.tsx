@@ -54,6 +54,9 @@ import {
 } from "@/lib/predictionEngine";
 import type { PredictionInput } from "@/lib/predictionEngine";
 import { PerformanceForecastCard } from "@/components/PerformanceForecastCard";
+import { computeExecutionSummary } from "@/lib/adaptiveExecution";
+import type { ExecutionInput } from "@/lib/adaptiveExecution";
+import { ExecutionStatusCard } from "@/components/ExecutionStatusCard";
 
 export const dynamic = "force-dynamic";
 
@@ -580,6 +583,29 @@ export default function DashboardPage() {
     avgPaceFromRuns,
   );
 
+  // ── Adaptive Execution (Phase 6A) ───────────────────────────────────────
+
+  const completedRunDates = Array.from(new Set([
+    ...weekRuns.map((r) => r.activity_date),
+    ...sessions.filter((s) => s.type === "run").map((s) => s.date),
+  ]));
+  const completedLiftDates = Array.from(new Set(
+    sessions.filter((s) => s.type === "lift").map((s) => s.date),
+  ));
+
+  const execInput: ExecutionInput = {
+    weekPlan,
+    today: todayStr,
+    completedRunDates,
+    completedLiftDates,
+    actualWeeklyRunKm:        weekDistM / 1000,
+    actualWeeklyLiftSessions: weekGymCount,
+    actualWeeklyGrowthHours:  totalGrowthHours,
+    actualAvgDailyProtein:    null,
+  };
+
+  const executionSummary = computeExecutionSummary(execInput);
+
   // ── Date display ──────────────────────────────────────────────────────
 
   const dateLabel = useMemo(() => {
@@ -1039,6 +1065,14 @@ export default function DashboardPage() {
           <p style={{ fontSize: 13, color: "var(--text)", margin: 0, lineHeight: 1.7 }}>{aiInsight}</p>
         </div>
       )}
+
+      {/* ── Execution Status (Phase 6A) ──────────────────────────────────── */}
+      <div className="a4">
+        <ExecutionStatusCard
+          summary={executionSummary}
+          today={executionSummary.days.find((d) => d.date === todayStr)}
+        />
+      </div>
 
       {/* ── Adaptive Goals ───────────────────────────────────────────────── */}
       <div className="a4">

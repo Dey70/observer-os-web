@@ -26,6 +26,10 @@ import { calcCheckinStreak, calcSessionStreak } from "@/lib/utils";
 import type { DailyLog, Session, RunningActivity } from "@/types";
 import { computeAdaptiveGoals } from "@/lib/adaptiveGoals";
 import type { AdaptiveGoalOutput } from "@/lib/adaptiveGoals";
+import { computeWeekPlan } from "@/lib/adaptivePlanner";
+import type { WeekPlan } from "@/lib/adaptivePlanner";
+import { computeExecutionSummary } from "@/lib/adaptiveExecution";
+import type { ExecutionSummary, ExecutionInput } from "@/lib/adaptiveExecution";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -85,6 +89,9 @@ export interface CoachContext {
   };
   // Phase 5A — Adaptive Goals
   adaptiveGoals: AdaptiveGoalOutput;
+  // Phase 5B/6A — Weekly plan + execution tracking
+  weekPlan:         WeekPlan;
+  executionSummary: ExecutionSummary;
 }
 
 // ── Builder ────────────────────────────────────────────────────────────────
@@ -105,6 +112,7 @@ export async function buildCoachContext(
     { data: rawProfile },
     { data: rawRuns },
     { data: rawWeights },
+    { data: rawGrowth },
   ] = await Promise.all([
     supabase.from("daily_logs").select("*")
       .eq("user_id", userId).gte("date", since14).order("date", { ascending: false }),
@@ -123,6 +131,10 @@ export async function buildCoachContext(
       .eq("user_id", userId).gte("activity_date", since7),
     supabase.from("weight_logs").select("weight")
       .eq("user_id", userId).order("date", { ascending: false }).limit(1),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase as any).from("growth_logs")
+      .select("date, category, duration_min")
+      .eq("user_id", userId).gte("date", since7),
   ]);
 
   const logs     = (rawLogs     ?? []) as DailyLog[];
@@ -130,6 +142,7 @@ export async function buildCoachContext(
   const metrics  = (rawMetrics  ?? []) as TrainingMetricRow[];
   const profile  = rawProfile as ProfileRow | null;
   const runs     = (rawRuns ?? []) as Pick<RunningActivity, "distance_meters" | "moving_time_seconds" | "activity_date">[];
+  const growthLogs = (rawGrowth ?? []) as { date: string; category: string; duration_min: number }[];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const currentWeightKg = ((rawWeights as any[])?.[0])?.weight ?? null;
 
@@ -231,13 +244,19 @@ export async function buildCoachContext(
 
   const coach = runCoachEngine(coachInput);
 
-  // Growth minutes: growth_logs (preferred) + sessions(study) as fallback
-  const weeklyGrowthMinutes =
-    sessions
-      .filter((s) => s.type === "study" && s.date >= since7)
-      .reduce((sum, s) => sum + (s.duration ?? 0), 0);
+  // Growth hours: growth_logs (preferred) + sessions(study) as legacy fallback
+  const legacyStudyHours = sessions
+    .filter((s) => s.type === "study" && s.date >= since7)
+    .reduce((sum, s) => sum + (s.duration ?? 0), 0) / 60;
 
-  const weeklyGrowthHours = weeklyGrowthMinutes / 60;
+  const growthByCategory = {
+    study:     growthLogs.filter((g) => g.category === "study").reduce((s, g) => s + g.duration_min, 0) / 60 + legacyStudyHours,
+    project:   growthLogs.filter((g) => g.category === "project").reduce((s, g) => s + g.duration_min, 0) / 60,
+    learning:  growthLogs.filter((g) => g.category === "learning").reduce((s, g) => s + g.duration_min, 0) / 60,
+    deep_work: growthLogs.filter((g) => g.category === "deep_work").reduce((s, g) => s + g.duration_min, 0) / 60,
+  };
+  const weeklyGrowthHours   = Object.values(growthByCategory).reduce((s, v) => s + v, 0);
+  const weeklyGrowthMinutes = Math.round(weeklyGrowthHours * 60);
 
   const hybrid = computeHybridScore(recoveryScore, ctl, null, weeklyGrowthMinutes);
 
@@ -272,12 +291,7 @@ export async function buildCoachContext(
     weeklyRunCount:     runs.length,
     weeklyLiftSessions,
     weeklyGrowthHours,
-    weeklyGrowthCategories: {
-      study:     weeklyGrowthHours,
-      project:   0,
-      learning:  0,
-      deep_work: 0,
-    },
+    weeklyGrowthCategories: growthByCategory,
     avgDailyCalories: null,
     avgDailyProtein:  null,
     proteinTargetG:    proteinTarget,
@@ -287,6 +301,41 @@ export async function buildCoachContext(
     userRunCountGoal: profile?.weekly_run_count_target ?? 0,
     userGymGoal:      profile?.weekly_gym_target       ?? 0,
   });
+
+  // ── Weekly plan + execution summary (Phase 5B / 6A) ─────────────────────
+
+  const weekPlan = computeWeekPlan({
+    adaptiveGoals,
+    ctl, atl, tsb,
+    readinessScore: readiness?.score ?? null,
+    recoveryScore,
+    today: todayStr,
+    trainingProfile:  profile?.split ?? "balanced",
+    userRunKmGoal:    profile?.weekly_run_km_target ?? 0,
+    userGymGoal:      profile?.weekly_gym_target    ?? 0,
+    proteinTargetG:   proteinTarget,
+  });
+
+  const completedRunDates = Array.from(new Set([
+    ...runs.map((r) => r.activity_date),
+    ...sessions.filter((s) => s.type === "run").map((s) => s.date),
+  ]));
+  const completedLiftDates = Array.from(new Set(
+    sessions.filter((s) => s.type === "lift").map((s) => s.date),
+  ));
+
+  const execInput: ExecutionInput = {
+    weekPlan,
+    today: todayStr,
+    completedRunDates,
+    completedLiftDates,
+    actualWeeklyRunKm:        weekDistM / 1000,
+    actualWeeklyLiftSessions: weeklyLiftSessions,
+    actualWeeklyGrowthHours:  weeklyGrowthHours,
+    actualAvgDailyProtein:    null,
+  };
+
+  const executionSummary = computeExecutionSummary(execInput);
 
   return {
     userId,
@@ -320,5 +369,7 @@ export async function buildCoachContext(
       kmThisWeek:  Math.round((weekDistM / 1000) * 10) / 10,
     },
     adaptiveGoals,
+    weekPlan,
+    executionSummary,
   };
 }

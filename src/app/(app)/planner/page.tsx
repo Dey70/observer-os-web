@@ -18,6 +18,8 @@ import type {
   GoalComparison,
   DecisionRationale,
 } from "@/lib/adaptivePlanner";
+import { computeExecutionSummary, replanRemainingWeek } from "@/lib/adaptiveExecution";
+import type { ExecutionInput, ExecutionSummary, ExecutionDayStatus, ExecutionStatus } from "@/lib/adaptiveExecution";
 import type { DailyLog } from "@/types";
 
 // ── Colour maps ────────────────────────────────────────────────────────────
@@ -27,6 +29,15 @@ const PRIORITY_META: Record<DayPriority, { label: string; color: string; bg: str
   NORMAL:   { label: "NORMAL",   color: "var(--accent)",     bg: "var(--accent-dim)"  },
   RECOVERY: { label: "RECOVERY", color: "var(--green)",      bg: "var(--green-dim)"   },
   REST:     { label: "REST",     color: "var(--text-muted)", bg: "var(--surface2)"    },
+};
+
+const EXEC_STATUS_META: Record<ExecutionStatus, { label: string; color: string }> = {
+  planned:     { label: "PLANNED",     color: "var(--text-muted)" },
+  in_progress: { label: "IN PROGRESS", color: "var(--yellow)"     },
+  completed:   { label: "COMPLETED",   color: "var(--green)"      },
+  skipped:     { label: "SKIPPED",     color: "var(--red)"        },
+  rescheduled: { label: "RESCHEDULED", color: "var(--accent)"     },
+  cancelled:   { label: "CANCELLED",   color: "var(--purple)"     },
 };
 
 const LOAD_BORDER: Record<LoadLevel, string> = {
@@ -149,8 +160,28 @@ function NutritionRow({ proteinG, caloriesKcal }: { proteinG: number; caloriesKc
   );
 }
 
+function ExecStatusBadge({ status }: { status: ExecutionStatus }) {
+  const meta = EXEC_STATUS_META[status];
+  return (
+    <span
+      style={{
+        fontFamily:    "var(--mono)",
+        fontSize:      8,
+        fontWeight:    700,
+        letterSpacing: "0.10em",
+        color:         meta.color,
+        border:        `1px solid ${meta.color}55`,
+        borderRadius:  4,
+        padding:       "2px 6px",
+      }}
+    >
+      {meta.label}
+    </span>
+  );
+}
+
 // Improvement 3: visual hierarchy — TODAY glow, TOMORROW secondary, PAST dim
-function DayCard({ day }: { day: PlannedDay }) {
+function DayCard({ day, execStatus }: { day: PlannedDay; execStatus?: ExecutionDayStatus }) {
   const pm     = PRIORITY_META[day.priority];
   const border = LOAD_BORDER[day.load];
 
@@ -190,6 +221,7 @@ function DayCard({ day }: { day: PlannedDay }) {
           </div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3 }}>
+          {execStatus && <ExecStatusBadge status={execStatus.status} />}
           {day.isToday && (
             <span style={{ fontFamily: "var(--mono)", fontSize: 8, fontWeight: 700, letterSpacing: "0.12em", color: "var(--accent)", background: "var(--accent-dim)", borderRadius: 4, padding: "2px 6px" }}>
               TODAY
@@ -375,9 +407,10 @@ type ProfileRow = {
 
 export default function PlannerPage() {
   const sb = createClient();
-  const [plan,    setPlan]    = useState<WeekPlan | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error,   setError]   = useState<string | null>(null);
+  const [plan,        setPlan]        = useState<WeekPlan | null>(null);
+  const [execSummary, setExecSummary] = useState<ExecutionSummary | null>(null);
+  const [loading,     setLoading]     = useState(true);
+  const [error,       setError]       = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -409,7 +442,7 @@ export default function PlannerPage() {
           .eq("user_id", user.id).maybeSingle(),
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (sb as any).from("running_activities")
-          .select("distance_meters")
+          .select("distance_meters, activity_date")
           .eq("user_id", user.id).gte("activity_date", weekStartStr),
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (sb as any).from("growth_logs")
@@ -422,7 +455,7 @@ export default function PlannerPage() {
       const sessions = (sessData    ?? []) as { type: string; date: string; duration?: number }[];
       const metrics  = (metricsData ?? []) as TrainingMetricRow[];
       const profile  = profileData as ProfileRow | null;
-      const runs     = (runsData    ?? []) as { distance_meters: number }[];
+      const runs     = (runsData    ?? []) as { distance_meters: number; activity_date: string }[];
       const growth   = (growthData  ?? []) as { date: string; category: string; duration_min: number }[];
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const latestWeight = ((weightData as any[])?.[0])?.weight ?? null;
@@ -520,7 +553,30 @@ export default function PlannerPage() {
         proteinTargetG:   proteinTarget,
       });
 
-      setPlan(weekPlan);
+      const completedRunDates = Array.from(new Set([
+        ...runs.map((r) => r.activity_date),
+        ...sessions.filter((s) => s.type === "run").map((s) => s.date),
+      ]));
+      const completedLiftDates = Array.from(new Set(
+        sessions.filter((s) => s.type === "lift").map((s) => s.date),
+      ));
+
+      const execInput: ExecutionInput = {
+        weekPlan,
+        today,
+        completedRunDates,
+        completedLiftDates,
+        actualWeeklyRunKm:        weeklyRunKm,
+        actualWeeklyLiftSessions: weeklyLifts,
+        actualWeeklyGrowthHours:  growthHours,
+        actualAvgDailyProtein:    null,
+      };
+
+      const executionSummary = computeExecutionSummary(execInput);
+      const { plan: finalPlan } = replanRemainingWeek(weekPlan, today, executionSummary);
+
+      setPlan(finalPlan);
+      setExecSummary(executionSummary);
     } catch (err) {
       setError(String(err));
     } finally {
@@ -628,7 +684,7 @@ export default function PlannerPage() {
       <div className="plan-grid pa4">
         {plan.days.map((day) => (
           <div key={day.date} className="day-card-hover">
-            <DayCard day={day} />
+            <DayCard day={day} execStatus={execSummary?.days.find((d) => d.date === day.date)} />
           </div>
         ))}
       </div>
@@ -636,11 +692,11 @@ export default function PlannerPage() {
       {/* ── Footer ────────────────────────────────────────────────────────── */}
       <div className="pa5" style={{ marginTop: 20, padding: "10px 16px", borderRadius: 10, background: "var(--surface)", border: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 10 }}>
         <div style={{ fontFamily: "var(--mono)", fontSize: 9, letterSpacing: "0.10em", color: "var(--accent)", background: "var(--accent-dim)", padding: "3px 8px", borderRadius: 4, flexShrink: 0 }}>
-          Phase 5B · read-only
+          Phase 6A · adaptive execution
         </div>
         <div style={{ fontSize: 10, color: "var(--text-dim)", lineHeight: 1.4 }}>
           Plan regenerated deterministically from latest physiological signals every load.
-          Past days show the originally scheduled intent. Completion tracking arrives in Phase 5C.
+          Missed sessions are automatically redistributed across the remaining week — read-only badges, no manual editing yet.
         </div>
       </div>
     </>
