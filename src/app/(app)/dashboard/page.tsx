@@ -48,6 +48,12 @@ import type { AdaptiveGoalOutput } from "@/lib/adaptiveGoals";
 import { AdaptiveGoalsCard } from "@/components/AdaptiveGoalsCard";
 import { computeWeekPlan } from "@/lib/adaptivePlanner";
 import type { WeekPlan } from "@/lib/adaptivePlanner";
+import {
+  computePredictions,
+  computeCurrentEstimates,
+} from "@/lib/predictionEngine";
+import type { PredictionInput } from "@/lib/predictionEngine";
+import { PerformanceForecastCard } from "@/components/PerformanceForecastCard";
 
 export const dynamic = "force-dynamic";
 
@@ -533,6 +539,47 @@ export default function DashboardPage() {
 
   const todayPlanDay = weekPlan.days.find((d) => d.isToday) ?? weekPlan.days[0];
 
+  // ── Prediction Engine (Phase 5C.1) ────────────────────────────────────
+
+  const avgPaceFromRuns = (() => {
+    const withSpeed = weekRuns.filter((r) => r.average_speed && r.average_speed > 0);
+    if (withSpeed.length === 0) return null;
+    return withSpeed.reduce((s, r) => s + 1000 / r.average_speed!, 0) / withSpeed.length;
+  })();
+
+  const longRunKm = weekRuns.length > 0
+    ? Math.max(...weekRuns.map((r) => r.distance_meters)) / 1000
+    : null;
+
+  const predInput: PredictionInput = {
+    ctl, atl, tsb,
+    weeklyRunKm:        weekDistM / 1000,
+    longRunKm,
+    weeklyLiftSessions: weekGymCount,
+    weeklyGrowthHours:  totalGrowthHours,
+    avgPaceSecPerKm:    avgPaceFromRuns,
+    readinessScore:     readinessOutput?.score ?? null,
+    recoveryScore,
+    avgSleepQuality7d:  avg7d(weekLogs7d.map((l) => l.sleep_quality)),
+    avgFatigue7d:       avg7d(weekLogs7d.map((l) => l.fatigue)),
+    planWeeklyKm:          adaptiveGoalOutput.running.weeklyKm.value,
+    planIntensityLabel:    adaptiveGoalOutput.running.intensity.label,
+    planWeeklyGrowthHours: adaptiveGoalOutput.growth.weeklyHours.value,
+    planLiftSessions:      adaptiveGoalOutput.strength.weeklySessions.value,
+    userRunKmGoal:  profile?.weekly_run_km_target ?? 0,
+    userGymGoal:    profile?.weekly_gym_target    ?? 0,
+    recentWeights:  weights.map((w) => ({ weight: w.weight, date: w.date })),
+    totalSessionCount:     trainingMetrics.length,
+    thresholdPaceSecPerKm: profile?.threshold_pace_seconds ?? null,
+    today: todayStr,
+  };
+
+  const predictionOutput     = computePredictions(predInput);
+  const currentEstimates     = computeCurrentEstimates(
+    profile?.threshold_pace_seconds ?? null,
+    avgPaceFromRuns,
+  );
+
   // ── Date display ──────────────────────────────────────────────────────
 
   const dateLabel = useMemo(() => {
@@ -1002,6 +1049,17 @@ export default function DashboardPage() {
             runCount: profile?.weekly_run_count_target ?? 0,
             gym:      profile?.weekly_gym_target       ?? 0,
           }}
+        />
+      </div>
+
+      {/* ── Performance Forecast (Phase 5C.1) ────────────────────────────── */}
+      <div className="a4">
+        <PerformanceForecastCard
+          ctl={ctl}
+          weeklyRunKm={weekDistM / 1000}
+          estimated5KMin={currentEstimates.estimated5KMin}
+          estimated10KMin={currentEstimates.estimated10KMin}
+          prediction={predictionOutput}
         />
       </div>
 
