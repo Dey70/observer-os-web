@@ -15,7 +15,7 @@ import type { BehaviorInsight, BehaviorProfile, PlannerSuggestion } from "@/lib/
 
 // ── Sub-components ───────────────────────────────────────────────────────────
 
-function ConfidenceBadge({ value }: { value: number }) {
+function ConfidenceBadge({ value, label }: { value: number; label?: string }) {
   const pct   = Math.round(value * 100);
   const color = value >= 0.80 ? "var(--green)" : value >= 0.65 ? "var(--yellow)" : "var(--text-dim)";
   return (
@@ -32,8 +32,35 @@ function ConfidenceBadge({ value }: { value: number }) {
         flexShrink:    0,
         whiteSpace:    "nowrap",
       }}
+      title={label}
     >
       {pct}%
+    </span>
+  );
+}
+
+function StabilityBadge({ value }: { value: number }) {
+  const pct   = Math.round(value * 100);
+  const color = value >= 0.85 ? "var(--accent)"
+              : value >= 0.65 ? "var(--yellow)"
+              : "var(--red)";
+  const label = value >= 0.85 ? "stable" : value >= 0.65 ? "moderate" : "volatile";
+  return (
+    <span
+      style={{
+        fontFamily:    "var(--mono)",
+        fontSize:      8,
+        letterSpacing: "0.08em",
+        color,
+        border:        `1px solid ${color}44`,
+        borderRadius:  4,
+        padding:       "2px 6px",
+        flexShrink:    0,
+        whiteSpace:    "nowrap",
+      }}
+      title={`Stability: ${label} — how consistently this pattern holds over time`}
+    >
+      ↔ {pct}%
     </span>
   );
 }
@@ -42,14 +69,17 @@ function InsightRow({ insight }: { insight: BehaviorInsight }) {
   return (
     <div
       style={{
-        display:       "flex",
-        alignItems:    "flex-start",
-        gap:           10,
-        padding:       "10px 0",
-        borderBottom:  "1px solid var(--border2)",
+        display:      "flex",
+        alignItems:   "flex-start",
+        gap:          10,
+        padding:      "10px 0",
+        borderBottom: "1px solid var(--border2)",
       }}
     >
-      <ConfidenceBadge value={insight.confidence} />
+      <div style={{ display: "flex", flexDirection: "column", gap: 4, flexShrink: 0, paddingTop: 1 }}>
+        <ConfidenceBadge value={insight.confidence} label="Confidence" />
+        <StabilityBadge  value={insight.stability} />
+      </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 12, color: "var(--text)", lineHeight: 1.5 }}>
           {insight.pattern}
