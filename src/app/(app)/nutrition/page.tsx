@@ -1848,88 +1848,96 @@ export default function NutritionPage() {
         </Card>
       )}
 
-      <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
-        {MEAL_TYPES.map(({ value, label, icon: Icon, color }) => {
-          const isActive = mealType === value;
-          return (
-            <button
-              key={value}
-              onClick={() => setMealType(value)}
-              style={{
-                flex: 1,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 6,
-                padding: "9px 6px",
-                borderRadius: 10,
-                border: `1px solid ${isActive ? color : "var(--border)"}`,
-                background: isActive ? "var(--surface2)" : "var(--surface)",
-                color: isActive ? color : "var(--text-muted)",
-                fontFamily: "var(--mono)",
-                fontSize: 11,
-                fontWeight: isActive ? 700 : 400,
-                cursor: "pointer",
-                transition: "all 0.15s",
-              }}
-            >
-              <Icon size={13} strokeWidth={isActive ? 2.25 : 1.75} />
-              {label}
-            </button>
-          );
-        })}
-      </div>
-
       <div
         style={{
-          display: "flex",
-          gap: 8,
           position: "sticky",
           bottom: 16,
+          zIndex: 10,
+          background: "var(--bg)",
+          paddingTop: 10,
         }}
       >
-        <input
-          ref={inputRef}
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          disabled={parsing}
-          placeholder={`What did you have for ${
-            mealType === "snack" ? "your snack" : mealType
-          }? e.g. 2 eggs, oats with banana, black coffee`}
+        <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+          {MEAL_TYPES.map(({ value, label, icon: Icon, color }) => {
+            const isActive = mealType === value;
+            return (
+              <button
+                key={value}
+                onClick={() => setMealType(value)}
+                style={{
+                  flex: 1,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 6,
+                  padding: "9px 6px",
+                  borderRadius: 10,
+                  border: `1px solid ${isActive ? color : "var(--border)"}`,
+                  background: isActive ? "var(--surface2)" : "var(--surface)",
+                  color: isActive ? color : "var(--text-muted)",
+                  fontFamily: "var(--mono)",
+                  fontSize: 11,
+                  fontWeight: isActive ? 700 : 400,
+                  cursor: "pointer",
+                  transition: "all 0.15s",
+                }}
+              >
+                <Icon size={13} strokeWidth={isActive ? 2.25 : 1.75} />
+                {label}
+              </button>
+            );
+          })}
+        </div>
+
+        <div
           style={{
-            flex: 1,
-            padding: "13px 16px",
-            background: "var(--surface)",
-            border: "1px solid var(--border)",
-            borderRadius: 12,
-            color: "var(--text)",
-            outline: "none",
-            fontFamily: "var(--sans)",
-            fontSize: 14,
-            minWidth: 0,
-          }}
-        />
-        <button
-          onClick={handleParse}
-          disabled={parsing || !input.trim()}
-          style={{
-            padding: "0 22px",
-            background:
-              parsing || !input.trim() ? "var(--surface2)" : "var(--accent)",
-            color: parsing || !input.trim() ? "var(--text-dim)" : "var(--bg)",
-            border: "none",
-            borderRadius: 12,
-            fontFamily: "var(--mono)",
-            fontSize: 12,
-            fontWeight: 700,
-            cursor: parsing || !input.trim() ? "not-allowed" : "pointer",
-            letterSpacing: "0.05em",
+            display: "flex",
+            gap: 8,
           }}
         >
-          {parsing ? "..." : "LOG"}
-        </button>
+          <input
+            ref={inputRef}
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            disabled={parsing}
+            placeholder={`What did you have for ${
+              mealType === "snack" ? "your snack" : mealType
+            }? e.g. 2 eggs, oats with banana, black coffee`}
+            style={{
+              flex: 1,
+              padding: "13px 16px",
+              background: "var(--surface)",
+              border: "1px solid var(--border)",
+              borderRadius: 12,
+              color: "var(--text)",
+              outline: "none",
+              fontFamily: "var(--sans)",
+              fontSize: 14,
+              minWidth: 0,
+            }}
+          />
+          <button
+            onClick={handleParse}
+            disabled={parsing || !input.trim()}
+            style={{
+              padding: "0 22px",
+              background:
+                parsing || !input.trim() ? "var(--surface2)" : "var(--accent)",
+              color: parsing || !input.trim() ? "var(--text-dim)" : "var(--bg)",
+              border: "none",
+              borderRadius: 12,
+              fontFamily: "var(--mono)",
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: parsing || !input.trim() ? "not-allowed" : "pointer",
+              letterSpacing: "0.05em",
+            }}
+          >
+            {parsing ? "..." : "LOG"}
+          </button>
+        </div>
       </div>
 
       <style>{`
