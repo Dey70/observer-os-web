@@ -103,7 +103,7 @@ export function ExecutionStatusCard({ summary, today, onRecordReason }: Props) {
     <div
       className="dash-card"
       style={{
-        background:   "var(--surface)",
+        background:   "var(--glass-bg)",
         border:       "1px solid var(--border)",
         marginBottom: 12,
         overflow:     "hidden",

@@ -103,7 +103,7 @@ export function PerformanceForecastCard({
     <div
       className="dash-card"
       style={{
-        background:    "var(--surface)",
+        background:    "var(--glass-bg)",
         border:        "1px solid var(--accent)22",
         marginBottom:  12,
         overflow:      "hidden",

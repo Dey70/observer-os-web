@@ -68,6 +68,7 @@ import type {
   BehaviorRun,
 } from "@/lib/behaviorLearning";
 import { BehaviorInsightsCard } from "@/components/BehaviorInsightsCard";
+import { Sparkles, Dumbbell, Brain, HeartPulse } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -266,6 +267,7 @@ export default function DashboardPage() {
   const [userId,     setUserId]         = useState<string | null>(null);
   const [skipReasons, setSkipReasons]   = useState<Record<string, SkipReason>>({});
   const [behaviorProfile, setBehaviorProfile] = useState<BehaviorProfile | null>(null);
+  const [activeTab, setActiveTab] = useState<"today" | "training" | "growth" | "body">("today");
 
   const load = useCallback(async () => {
     const { data: { user } } = await sb.auth.getUser();
@@ -723,7 +725,7 @@ export default function DashboardPage() {
             style={{
               height: i === 1 ? 180 : 100,
               borderRadius: 14,
-              background: "var(--surface)",
+              background: "var(--glass-bg)",
               border: "1px solid var(--border)",
               animation: "pulse 1.8s ease-in-out infinite",
             }}
@@ -746,18 +748,69 @@ export default function DashboardPage() {
     <>
       <style>{`
         .dash-card {
-          border-radius: 14px;
+          border-radius: 20px;
+          position: relative;
+          overflow: hidden;
+          backdrop-filter: blur(28px);
+          -webkit-backdrop-filter: blur(28px);
+          box-shadow:
+            inset 0 1px 0 var(--glass-highlight),
+            inset 0 -1px 0 rgba(0,0,0,0.12),
+            0 10px 34px var(--glass-shadow);
           transition: box-shadow 0.22s ease, transform 0.22s ease, border-color 0.22s ease;
         }
+        .dash-card::before {
+          content: '';
+          position: absolute;
+          top: 0; left: 12%; right: 12%; height: 1px;
+          background: linear-gradient(90deg, transparent, var(--glass-highlight), transparent);
+          pointer-events: none;
+        }
         .dash-card:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 10px 32px rgba(0,0,0,0.28);
+          transform: translateY(-3px);
+          box-shadow:
+            inset 0 1px 0 var(--glass-highlight),
+            inset 0 -1px 0 rgba(0,0,0,0.12),
+            0 18px 46px rgba(0,0,0,0.3);
         }
         .dash-tile {
-          border-radius: 12px;
+          border-radius: 18px;
+          position: relative;
+          overflow: hidden;
+          backdrop-filter: blur(28px);
+          -webkit-backdrop-filter: blur(28px);
+          box-shadow:
+            inset 0 1px 0 var(--glass-highlight),
+            inset 0 -1px 0 rgba(0,0,0,0.12),
+            0 8px 26px var(--glass-shadow);
           transition: box-shadow 0.18s ease, transform 0.18s ease;
         }
-        .dash-tile:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(0,0,0,0.22); }
+        .dash-tile::before {
+          content: '';
+          position: absolute;
+          top: 0; left: 14%; right: 14%; height: 1px;
+          background: linear-gradient(90deg, transparent, var(--glass-highlight), transparent);
+          pointer-events: none;
+        }
+        .dash-tile:hover { transform: translateY(-2px); box-shadow: inset 0 1px 0 var(--glass-highlight), inset 0 -1px 0 rgba(0,0,0,0.12), 0 12px 32px rgba(0,0,0,0.26); }
+        .dash-tab {
+          display: flex; align-items: center; gap: 7px;
+          padding: 9px 18px; border-radius: 99px;
+          font-family: var(--mono); font-size: 11px; font-weight: 700; letter-spacing: 0.05em;
+          border: 1px solid var(--border); background: var(--glass-bg);
+          backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+          color: var(--text-muted); cursor: pointer;
+          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+          white-space: nowrap;
+        }
+        .dash-tab:hover:not(.active) { color: var(--text); border-color: var(--border2); transform: translateY(-1px); }
+        .dash-tab.active {
+          color: var(--bg);
+          background: linear-gradient(135deg, var(--accent), var(--green));
+          border-color: transparent;
+          box-shadow: 0 6px 20px var(--accent-glow);
+          transform: translateY(-1px);
+        }
         .rec-row {
           display: flex; align-items: flex-start; gap: 10;
           padding: 9px 0; border-bottom: 1px solid var(--border2);
@@ -802,7 +855,18 @@ export default function DashboardPage() {
       {/* ── Header ────────────────────────────────────────────────────────── */}
       <div className="a1" style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 20, flexWrap: "wrap", gap: 8 }}>
         <div>
-          <div style={{ fontFamily: "var(--mono)", fontSize: 20, fontWeight: 700, letterSpacing: "-0.01em", color: "var(--text)" }}>
+          <div
+            style={{
+              fontFamily: "var(--mono)",
+              fontSize: 24,
+              fontWeight: 800,
+              letterSpacing: "-0.02em",
+              background: "linear-gradient(120deg, var(--text) 40%, var(--accent))",
+              WebkitBackgroundClip: "text",
+              backgroundClip: "text",
+              color: "transparent",
+            }}
+          >
             DASHBOARD
           </div>
           <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 3 }}>
@@ -821,7 +885,7 @@ export default function DashboardPage() {
                 padding: "6px 14px",
                 borderRadius: 99,
                 border: "1px solid var(--border)",
-                background: "var(--surface)",
+                background: "var(--glass-bg)",
                 display: "flex",
                 alignItems: "center",
                 gap: 8,
@@ -843,7 +907,7 @@ export default function DashboardPage() {
         <div
           className="dash-card"
           style={{
-            background: "var(--surface)",
+            background: "var(--glass-bg)",
             border: `1px solid ${readScore > 0 ? readColor + "55" : "var(--border)"}`,
             padding: "20px 22px",
             display: "flex",
@@ -876,7 +940,7 @@ export default function DashboardPage() {
         <div
           className="dash-tile"
           style={{
-            background: "var(--surface)",
+            background: "var(--glass-bg)",
             border: recoveryStatus ? `1px solid ${recoveryStatus.color}33` : "1px solid var(--border)",
             padding: "18px 16px",
             display: "flex",
@@ -915,7 +979,7 @@ export default function DashboardPage() {
         <div
           className="dash-tile"
           style={{
-            background: "var(--surface)",
+            background: "var(--glass-bg)",
             border: "1px solid var(--accent)22",
             padding: "18px 16px",
             display: "flex",
@@ -955,7 +1019,7 @@ export default function DashboardPage() {
         <div
           className="dash-tile"
           style={{
-            background: "var(--surface)",
+            background: "var(--glass-bg)",
             border: "1px solid var(--border)",
             padding: "18px 16px",
             display: "flex",
@@ -1006,13 +1070,36 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* ── Tab navigation ────────────────────────────────────────────────── */}
+      <div className="a3" style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
+        {(
+          [
+            { key: "today" as const,    label: "Today",    icon: Sparkles },
+            { key: "training" as const, label: "Training", icon: Dumbbell },
+            { key: "growth" as const,   label: "Growth",   icon: Brain },
+            { key: "body" as const,     label: "Body",     icon: HeartPulse },
+          ]
+        ).map(({ key, label, icon: Icon }) => (
+          <button
+            key={key}
+            onClick={() => setActiveTab(key)}
+            className={`dash-tab${activeTab === key ? " active" : ""}`}
+          >
+            <Icon size={13} strokeWidth={2.25} />
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === "today" && (
+      <>
       {/* ── Observer Coach card ────────────────────────────────────────────── */}
       <div className="a3">
         {coachOutput && readinessOutput ? (
           <div
             className="dash-card"
             style={{
-              background: "var(--surface)",
+              background: "var(--glass-bg)",
               border: `1px solid ${readColor}44`,
               marginBottom: 12,
               overflow: "hidden",
@@ -1093,7 +1180,7 @@ export default function DashboardPage() {
               style={{
                 marginBottom: 12,
                 padding: "16px 22px",
-                background: "var(--surface)",
+                background: "var(--glass-bg)",
                 border: "1px solid var(--border)",
                 display: "flex",
                 alignItems: "center",
@@ -1121,7 +1208,7 @@ export default function DashboardPage() {
           style={{
             marginBottom: 12,
             padding: "16px 22px",
-            background: "var(--surface)",
+            background: "var(--glass-bg)",
             border: "1px solid var(--accent)33",
             borderLeft: "3px solid var(--accent)",
           }}
@@ -1147,39 +1234,11 @@ export default function DashboardPage() {
         />
       </div>
 
-      {/* ── Behavior Insights (Phase 6C) ─────────────────────────────────── */}
-      <div className="a4">
-        <BehaviorInsightsCard profile={behaviorProfile} />
-      </div>
-
-      {/* ── Adaptive Goals ───────────────────────────────────────────────── */}
-      <div className="a4">
-        <AdaptiveGoalsCard
-          goals={adaptiveGoalOutput}
-          userGoals={{
-            runKm:    profile?.weekly_run_km_target    ?? 0,
-            runCount: profile?.weekly_run_count_target ?? 0,
-            gym:      profile?.weekly_gym_target       ?? 0,
-          }}
-        />
-      </div>
-
-      {/* ── Performance Forecast (Phase 5C.1) ────────────────────────────── */}
-      <div className="a4">
-        <PerformanceForecastCard
-          ctl={ctl}
-          weeklyRunKm={weekDistM / 1000}
-          estimated5KMin={currentEstimates.estimated5KMin}
-          estimated10KMin={currentEstimates.estimated10KMin}
-          prediction={predictionOutput}
-        />
-      </div>
-
       {/* ── Next Session ─────────────────────────────────────────────────── */}
       <div
         className="dash-card a4"
         style={{
-          background: "var(--surface)",
+          background: "var(--glass-bg)",
           border: todayPlanDay.load === "high"
             ? "1px solid var(--red)33"
             : todayPlanDay.load === "rest"
@@ -1311,12 +1370,16 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+      </>
+      )}
 
+      {activeTab === "growth" && (
+      <>
       {/* ── Growth This Week ─────────────────────────────────────────────── */}
       <div
         className="dash-card a4"
         style={{
-          background: "var(--surface)",
+          background: "var(--glass-bg)",
           border: "1px solid var(--accent)22",
           marginBottom: 12,
           overflow: "hidden",
@@ -1427,46 +1490,43 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* ── Middle two-column ─────────────────────────────────────────────── */}
-      <div
-        className="dash-2col a4"
-        style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}
-      >
-        {/* Net calories */}
-        {todayNetCals !== null && (() => {
-          const net = todayNetCals.eaten - todayNetCals.burned;
-          const netColor = net > 300 ? "var(--yellow)" : net < -300 ? "var(--red)" : "var(--green)";
-          return (
-            <div
-              className="dash-card"
-              style={{ background: "var(--surface)", border: "1px solid var(--border)", padding: "18px 20px" }}
-            >
-              <div style={{ fontFamily: "var(--mono)", fontSize: 9, letterSpacing: "0.14em", color: "var(--text-dim)", textTransform: "uppercase", marginBottom: 14 }}>
-                Net Calories · Today
-              </div>
-              <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-                {[
-                  { label: "Eaten",  value: Math.round(todayNetCals.eaten),  color: "var(--yellow)" },
-                  { label: "Burned", value: Math.round(todayNetCals.burned), color: "var(--red)" },
-                  { label: "Net",    value: net > 0 ? `+${Math.round(net)}` : Math.round(net), color: netColor },
-                ].map(({ label, value, color }) => (
-                  <div key={label} style={{ flex: "1 1 60px" }}>
-                    <div style={{ fontFamily: "var(--mono)", fontSize: 22, fontWeight: 700, color, lineHeight: 1 }}>
-                      {value}
-                    </div>
-                    <div style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 4, letterSpacing: "0.08em" }}>{label}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          );
-        })()}
+      {/* ── Behavior Insights (Phase 6C) ─────────────────────────────────── */}
+      <div className="a4">
+        <BehaviorInsightsCard profile={behaviorProfile} />
+      </div>
+      </>
+      )}
+
+      {activeTab === "training" && (
+      <>
+      {/* ── Adaptive Goals ───────────────────────────────────────────────── */}
+      <div className="a4">
+        <AdaptiveGoalsCard
+          goals={adaptiveGoalOutput}
+          userGoals={{
+            runKm:    profile?.weekly_run_km_target    ?? 0,
+            runCount: profile?.weekly_run_count_target ?? 0,
+            gym:      profile?.weekly_gym_target       ?? 0,
+          }}
+        />
+      </div>
+
+      {/* ── Performance Forecast (Phase 5C.1) ────────────────────────────── */}
+      <div className="a4">
+        <PerformanceForecastCard
+          ctl={ctl}
+          weeklyRunKm={weekDistM / 1000}
+          estimated5KMin={currentEstimates.estimated5KMin}
+          estimated10KMin={currentEstimates.estimated10KMin}
+          prediction={predictionOutput}
+        />
+      </div>
 
         {/* Weekly goals */}
         {hasGoals && (
           <div
-            className="dash-card"
-            style={{ background: "var(--surface)", border: "1px solid var(--border)", padding: "18px 20px" }}
+            className="dash-card a4"
+            style={{ background: "var(--glass-bg)", border: "1px solid var(--border)", padding: "18px 20px", marginBottom: 12 }}
           >
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
               <div style={{ fontFamily: "var(--mono)", fontSize: 9, letterSpacing: "0.14em", color: "var(--text-dim)", textTransform: "uppercase" }}>
@@ -1530,13 +1590,12 @@ export default function DashboardPage() {
             )}
           </div>
         )}
-      </div>
 
       {/* ── Strava this week ──────────────────────────────────────────────── */}
       {stravaConnected && (
         <div
           className="dash-card a5"
-          style={{ background: "var(--surface)", border: "1px solid var(--border)", marginBottom: 12, overflow: "hidden" }}
+          style={{ background: "var(--glass-bg)", border: "1px solid var(--border)", marginBottom: 12, overflow: "hidden" }}
         >
           <div
             style={{
@@ -1623,6 +1682,40 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+      </>
+      )}
+
+      {activeTab === "body" && (
+      <>
+      {/* ── Net calories ──────────────────────────────────────────────────── */}
+      {todayNetCals !== null && (() => {
+        const net = todayNetCals.eaten - todayNetCals.burned;
+        const netColor = net > 300 ? "var(--yellow)" : net < -300 ? "var(--red)" : "var(--green)";
+        return (
+          <div
+            className="dash-card a4"
+            style={{ background: "var(--glass-bg)", border: "1px solid var(--border)", padding: "18px 20px", marginBottom: 12 }}
+          >
+            <div style={{ fontFamily: "var(--mono)", fontSize: 9, letterSpacing: "0.14em", color: "var(--text-dim)", textTransform: "uppercase", marginBottom: 14 }}>
+              Net Calories · Today
+            </div>
+            <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+              {[
+                { label: "Eaten",  value: Math.round(todayNetCals.eaten),  color: "var(--yellow)" },
+                { label: "Burned", value: Math.round(todayNetCals.burned), color: "var(--red)" },
+                { label: "Net",    value: net > 0 ? `+${Math.round(net)}` : Math.round(net), color: netColor },
+              ].map(({ label, value, color }) => (
+                <div key={label} style={{ flex: "1 1 60px" }}>
+                  <div style={{ fontFamily: "var(--mono)", fontSize: 22, fontWeight: 700, color, lineHeight: 1 }}>
+                    {value}
+                  </div>
+                  <div style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 4, letterSpacing: "0.08em" }}>{label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── Trend sparklines ──────────────────────────────────────────────── */}
       {logs.length > 0 && (
@@ -1638,7 +1731,7 @@ export default function DashboardPage() {
             <div
               key={label}
               className="dash-card"
-              style={{ background: "var(--surface)", border: "1px solid var(--border)", padding: "16px 16px 14px" }}
+              style={{ background: "var(--glass-bg)", border: "1px solid var(--border)", padding: "16px 16px 14px" }}
             >
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }}>
                 <div style={{ fontSize: 10, color: "var(--text-muted)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
@@ -1670,7 +1763,7 @@ export default function DashboardPage() {
           return (
             <div
               className="dash-card"
-              style={{ background: "var(--surface)", border: "1px solid var(--border)", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 14 }}
+              style={{ background: "var(--glass-bg)", border: "1px solid var(--border)", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 14 }}
             >
               {/* Header */}
               <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
@@ -1743,7 +1836,7 @@ export default function DashboardPage() {
         {/* Recent sessions */}
         <div
           className="dash-card"
-          style={{ background: "var(--surface)", border: "1px solid var(--border)", padding: "18px 20px" }}
+          style={{ background: "var(--glass-bg)", border: "1px solid var(--border)", padding: "18px 20px" }}
         >
           <div style={{ fontFamily: "var(--mono)", fontSize: 9, letterSpacing: "0.14em", color: "var(--text-dim)", textTransform: "uppercase", marginBottom: 14 }}>
             Recent Sessions
@@ -1784,6 +1877,8 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
+      </>
+      )}
     </>
   );
 }

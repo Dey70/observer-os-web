@@ -211,7 +211,7 @@ export function AdaptiveGoalsCard({ goals, userGoals }: AdaptiveGoalsCardProps) 
     <div
       className="dash-card"
       style={{
-        background:  "var(--surface)",
+        background:  "var(--glass-bg)",
         border:      `1px solid ${accentColor}33`,
         marginBottom: 12,
         overflow:    "hidden",
