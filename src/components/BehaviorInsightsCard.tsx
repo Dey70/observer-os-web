@@ -1,19 +1,42 @@
 "use client";
 
-/**
- * BehaviorInsightsCard — Phase 6C
- *
- * Displays the top 3 behavioral patterns discovered by the behavior learning
- * engine, plus any high-priority planner suggestions. Receives a pre-computed
- * BehaviorProfile; performs no data fetching of its own.
- *
- * Renders a "still learning" state when fewer than MIN_SAMPLES of data are
- * available, so it gracefully handles new users.
- */
-
-import type { BehaviorInsight, BehaviorProfile, PlannerSuggestion } from "@/lib/behaviorLearning";
+import type {
+  BehaviorInsight,
+  BehaviorProfile,
+  InsightType,
+  PlannerSuggestion,
+} from "@/lib/behaviorLearning";
 
 // ── Sub-components ───────────────────────────────────────────────────────────
+
+const TYPE_META: Record<InsightType, { label: string; color: string }> = {
+  strength:    { label: "STRENGTH",    color: "var(--green)"   },
+  warning:     { label: "WARNING",     color: "var(--red)"     },
+  opportunity: { label: "OPPORTUNITY", color: "var(--yellow)"  },
+  habit:       { label: "HABIT",       color: "var(--accent)"  },
+};
+
+function TypeBadge({ type }: { type: InsightType }) {
+  const meta = TYPE_META[type];
+  return (
+    <span
+      style={{
+        fontFamily:    "var(--mono)",
+        fontSize:      7,
+        fontWeight:    700,
+        letterSpacing: "0.10em",
+        color:         meta.color,
+        border:        `1px solid ${meta.color}55`,
+        borderRadius:  3,
+        padding:       "1px 5px",
+        flexShrink:    0,
+        whiteSpace:    "nowrap",
+      }}
+    >
+      {meta.label}
+    </span>
+  );
+}
 
 function ConfidenceBadge({ value, label }: { value: number; label?: string }) {
   const pct   = Math.round(value * 100);
@@ -76,10 +99,14 @@ function InsightRow({ insight }: { insight: BehaviorInsight }) {
         borderBottom: "1px solid var(--border2)",
       }}
     >
+      {/* Left column: type + confidence + stability badges */}
       <div style={{ display: "flex", flexDirection: "column", gap: 4, flexShrink: 0, paddingTop: 1 }}>
+        <TypeBadge       type={insight.type} />
         <ConfidenceBadge value={insight.confidence} label="Confidence" />
         <StabilityBadge  value={insight.stability} />
       </div>
+
+      {/* Right column: headline + evidence */}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 12, color: "var(--text)", lineHeight: 1.5 }}>
           {insight.pattern}
@@ -89,11 +116,22 @@ function InsightRow({ insight }: { insight: BehaviorInsight }) {
             fontFamily: "var(--mono)",
             fontSize:   9,
             color:      "var(--text-dim)",
-            marginTop:  4,
-            lineHeight: 1.4,
+            marginTop:  5,
+            lineHeight: 1.5,
           }}
         >
-          {insight.reason} · n={insight.sampleSize}
+          {insight.evidence}
+        </div>
+        <div
+          style={{
+            fontFamily: "var(--mono)",
+            fontSize:   8,
+            color:      "var(--text-dim)",
+            marginTop:  3,
+            opacity:    0.55,
+          }}
+        >
+          n={insight.sampleSize}
         </div>
       </div>
     </div>
