@@ -30,6 +30,17 @@ import { computeWeekPlan } from "@/lib/adaptivePlanner";
 import type { WeekPlan } from "@/lib/adaptivePlanner";
 import { computeExecutionSummary } from "@/lib/adaptiveExecution";
 import type { ExecutionSummary, ExecutionInput, SkipReason } from "@/lib/adaptiveExecution";
+import {
+  computeBehaviorProfile,
+} from "@/lib/behaviorLearning";
+import type {
+  BehaviorProfile,
+  BehaviorSession,
+  BehaviorGrowthLog,
+  BehaviorDailyLog,
+  BehaviorSkipReason,
+  BehaviorRun,
+} from "@/lib/behaviorLearning";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -94,6 +105,8 @@ export interface CoachContext {
   executionSummary: ExecutionSummary;
   // Phase 6B — Skip reasons
   skipReasons: Record<string, SkipReason>;
+  // Phase 6C — Behavior learning
+  behaviorProfile: BehaviorProfile;
 }
 
 // ── Builder ────────────────────────────────────────────────────────────────
@@ -120,6 +133,12 @@ export async function buildCoachContext(
     { data: rawWeights },
     { data: rawGrowth },
     { data: rawSkipReasons },
+    // Behavior history (90-day window, minimal columns for performance)
+    { data: rawBehSessions },
+    { data: rawBehGrowth },
+    { data: rawBehLogs },
+    { data: rawBehRuns },
+    { data: rawAllSkips },
   ] = await Promise.all([
     supabase.from("daily_logs").select("*")
       .eq("user_id", userId).gte("date", since14).order("date", { ascending: false }),
@@ -145,6 +164,25 @@ export async function buildCoachContext(
     supabase.from("session_skip_reasons")
       .select("date, reason")
       .eq("user_id", userId).gte("date", weekMonday).lte("date", weekSunday),
+    // Behavior history — 90-day window
+    supabase.from("sessions")
+      .select("date, type, duration, rpe")
+      .eq("user_id", userId).gte("date", since90).order("date"),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase as any).from("growth_logs")
+      .select("date, category, duration_min")
+      .eq("user_id", userId).gte("date", since90),
+    supabase.from("daily_logs")
+      .select("date, sleep_hours, sleep_quality, mood, energy, fatigue, soreness")
+      .eq("user_id", userId).gte("date", since90).order("date"),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase as any).from("running_activities")
+      .select("activity_date, distance_meters")
+      .eq("user_id", userId).gte("activity_date", since90),
+    // All recorded skip reasons (no date cap — behaviour engine needs full history)
+    supabase.from("session_skip_reasons")
+      .select("date, reason")
+      .eq("user_id", userId),
   ]);
 
   const logs     = (rawLogs     ?? []) as DailyLog[];
@@ -351,6 +389,17 @@ export async function buildCoachContext(
 
   const executionSummary = computeExecutionSummary(execInput);
 
+  // ── Behavior learning (Phase 6C) ───────────────────────────────────────────
+
+  const behaviorProfile = computeBehaviorProfile({
+    sessions:    (rawBehSessions ?? []) as BehaviorSession[],
+    growthLogs:  (rawBehGrowth   ?? []) as BehaviorGrowthLog[],
+    dailyLogs:   (rawBehLogs     ?? []) as BehaviorDailyLog[],
+    skipReasons: (rawAllSkips    ?? []) as BehaviorSkipReason[],
+    runs:        (rawBehRuns     ?? []) as BehaviorRun[],
+    today:       todayStr,
+  });
+
   return {
     userId,
     profileName:   profile?.name   ?? null,
@@ -386,5 +435,6 @@ export async function buildCoachContext(
     weekPlan,
     executionSummary,
     skipReasons,
+    behaviorProfile,
   };
 }

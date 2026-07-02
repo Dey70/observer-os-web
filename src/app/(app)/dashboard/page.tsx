@@ -58,6 +58,16 @@ import { PerformanceForecastCard } from "@/components/PerformanceForecastCard";
 import { computeExecutionSummary } from "@/lib/adaptiveExecution";
 import type { ExecutionInput, SkipReason } from "@/lib/adaptiveExecution";
 import { ExecutionStatusCard } from "@/components/ExecutionStatusCard";
+import { computeBehaviorProfile } from "@/lib/behaviorLearning";
+import type {
+  BehaviorProfile,
+  BehaviorSession,
+  BehaviorGrowthLog,
+  BehaviorDailyLog,
+  BehaviorSkipReason,
+  BehaviorRun,
+} from "@/lib/behaviorLearning";
+import { BehaviorInsightsCard } from "@/components/BehaviorInsightsCard";
 
 export const dynamic = "force-dynamic";
 
@@ -255,6 +265,7 @@ export default function DashboardPage() {
   const [growthLogs, setGrowthLogs]     = useState<GrowthLogSummary[]>([]);
   const [userId,     setUserId]         = useState<string | null>(null);
   const [skipReasons, setSkipReasons]   = useState<Record<string, SkipReason>>({});
+  const [behaviorProfile, setBehaviorProfile] = useState<BehaviorProfile | null>(null);
 
   const load = useCallback(async () => {
     const { data: { user } } = await sb.auth.getUser();
@@ -281,6 +292,12 @@ export default function DashboardPage() {
       { data: nutData },
       { data: growthData },
       { data: skipData },
+      // Behavior history (90-day window, minimal columns)
+      { data: behSess },
+      { data: behGrowth },
+      { data: behLogs },
+      { data: behRuns },
+      { data: allSkipData },
     ] = await Promise.all([
       sb.from("daily_logs").select("*").eq("user_id", user.id).gte("date", since).order("date"),
       sb.from("sessions").select("*").eq("user_id", user.id).gte("date", since).order("date", { ascending: false }),
@@ -304,6 +321,25 @@ export default function DashboardPage() {
       sb.from("session_skip_reasons")
         .select("date, reason")
         .eq("user_id", user.id).gte("date", weekMonday).lte("date", weekSunday),
+      // Behavior history — 90-day window for pattern recognition
+      sb.from("sessions")
+        .select("date, type, duration, rpe")
+        .eq("user_id", user.id).gte("date", metrics90Since).order("date"),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (sb as any).from("growth_logs")
+        .select("date, category, duration_min")
+        .eq("user_id", user.id).gte("date", metrics90Since),
+      sb.from("daily_logs")
+        .select("date, sleep_hours, sleep_quality, mood, energy, fatigue, soreness")
+        .eq("user_id", user.id).gte("date", metrics90Since).order("date"),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (sb as any).from("running_activities")
+        .select("activity_date, distance_meters")
+        .eq("user_id", user.id).gte("activity_date", metrics90Since),
+      // All recorded skip reasons — no date cap, behaviour engine needs full history
+      sb.from("session_skip_reasons")
+        .select("date, reason")
+        .eq("user_id", user.id),
     ]);
 
     const logsData   = (l      ?? []) as DailyLog[];
@@ -327,6 +363,14 @@ export default function DashboardPage() {
         ((skipData ?? []) as { date: string; reason: string }[]).map((r) => [r.date, r.reason as SkipReason]),
       ),
     );
+    setBehaviorProfile(computeBehaviorProfile({
+      sessions:    (behSess    ?? []) as BehaviorSession[],
+      growthLogs:  (behGrowth  ?? []) as BehaviorGrowthLog[],
+      dailyLogs:   (behLogs    ?? []) as BehaviorDailyLog[],
+      skipReasons: (allSkipData ?? []) as BehaviorSkipReason[],
+      runs:        (behRuns    ?? []) as BehaviorRun[],
+      today:       todayStr2,
+    }));
 
     const nutRows = (nutData ?? []) as { calories: number }[];
     const eaten   = nutRows.reduce((sum, r) => sum + (r.calories ?? 0), 0);
@@ -1101,6 +1145,11 @@ export default function DashboardPage() {
           today={executionSummary.days.find((d) => d.date === todayStr)}
           onRecordReason={handleRecordSkipReason}
         />
+      </div>
+
+      {/* ── Behavior Insights (Phase 6C) ─────────────────────────────────── */}
+      <div className="a4">
+        <BehaviorInsightsCard profile={behaviorProfile} />
       </div>
 
       {/* ── Adaptive Goals ───────────────────────────────────────────────── */}
