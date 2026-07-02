@@ -19,7 +19,8 @@ import type {
   DecisionRationale,
 } from "@/lib/adaptivePlanner";
 import { computeExecutionSummary, replanRemainingWeek } from "@/lib/adaptiveExecution";
-import type { ExecutionInput, ExecutionSummary, ExecutionDayStatus, ExecutionStatus } from "@/lib/adaptiveExecution";
+import type { ExecutionInput, ExecutionSummary, ExecutionDayStatus, ExecutionStatus, SkipReason } from "@/lib/adaptiveExecution";
+import { getWeekStart } from "@/lib/utils";
 import type { DailyLog } from "@/types";
 
 // ── Colour maps ────────────────────────────────────────────────────────────
@@ -421,6 +422,10 @@ export default function PlannerPage() {
       const since14      = new Date(Date.now() - 14 * 86400000).toISOString().split("T")[0];
       const since90      = new Date(Date.now() - 90 * 86400000).toISOString().split("T")[0];
       const weekStartStr = new Date(Date.now() -  7 * 86400000).toISOString().split("T")[0];
+      const weekMonday   = getWeekStart();
+      const weekSundayDate = new Date(weekMonday + "T00:00:00");
+      weekSundayDate.setDate(weekSundayDate.getDate() + 6);
+      const weekSunday   = weekSundayDate.toISOString().split("T")[0];
 
       const [
         { data: logsData },
@@ -430,6 +435,7 @@ export default function PlannerPage() {
         { data: runsData },
         { data: growthData },
         { data: weightData },
+        { data: skipData },
       ] = await Promise.all([
         sb.from("daily_logs").select("*").eq("user_id", user.id).gte("date", since14).order("date", { ascending: false }),
         sb.from("sessions").select("*").eq("user_id", user.id).gte("date", since14).order("date", { ascending: false }),
@@ -449,6 +455,9 @@ export default function PlannerPage() {
           .select("date, category, duration_min")
           .eq("user_id", user.id).gte("date", weekStartStr),
         sb.from("weight_logs").select("weight").eq("user_id", user.id).order("date", { ascending: false }).limit(1),
+        sb.from("session_skip_reasons")
+          .select("date, reason")
+          .eq("user_id", user.id).gte("date", weekMonday).lte("date", weekSunday),
       ]);
 
       const logs     = (logsData    ?? []) as DailyLog[];
@@ -561,6 +570,10 @@ export default function PlannerPage() {
         sessions.filter((s) => s.type === "lift").map((s) => s.date),
       ));
 
+      const resolvedSkipReasons: Record<string, SkipReason> = Object.fromEntries(
+        ((skipData ?? []) as { date: string; reason: string }[]).map((r) => [r.date, r.reason as SkipReason]),
+      );
+
       const execInput: ExecutionInput = {
         weekPlan,
         today,
@@ -570,6 +583,7 @@ export default function PlannerPage() {
         actualWeeklyLiftSessions: weeklyLifts,
         actualWeeklyGrowthHours:  growthHours,
         actualAvgDailyProtein:    null,
+        skipReasons:              resolvedSkipReasons,
       };
 
       const executionSummary = computeExecutionSummary(execInput);

@@ -8,6 +8,7 @@ import {
   calcSessionStreak,
   formatDuration,
   getLast14Days,
+  getWeekStart,
 } from "@/lib/utils";
 import {
   BarChart,
@@ -55,7 +56,7 @@ import {
 import type { PredictionInput } from "@/lib/predictionEngine";
 import { PerformanceForecastCard } from "@/components/PerformanceForecastCard";
 import { computeExecutionSummary } from "@/lib/adaptiveExecution";
-import type { ExecutionInput } from "@/lib/adaptiveExecution";
+import type { ExecutionInput, SkipReason } from "@/lib/adaptiveExecution";
 import { ExecutionStatusCard } from "@/components/ExecutionStatusCard";
 
 export const dynamic = "force-dynamic";
@@ -252,6 +253,8 @@ export default function DashboardPage() {
   const [profile, setProfile]           = useState<ProfileRow | null>(null);
   const [aiInsight, setAiInsight]       = useState<string | null>(null);
   const [growthLogs, setGrowthLogs]     = useState<GrowthLogSummary[]>([]);
+  const [userId,     setUserId]         = useState<string | null>(null);
+  const [skipReasons, setSkipReasons]   = useState<Record<string, SkipReason>>({});
 
   const load = useCallback(async () => {
     const { data: { user } } = await sb.auth.getUser();
@@ -262,6 +265,10 @@ export default function DashboardPage() {
     const metrics90Since = new Date(Date.now() - 90 * 86400000).toISOString().split("T")[0];
     const since30        = new Date(Date.now() - 30 * 86400000).toISOString().split("T")[0];
     const todayStr2      = new Date().toISOString().split("T")[0];
+    const weekMonday     = getWeekStart();
+    const weekSundayDate = new Date(weekMonday + "T00:00:00");
+    weekSundayDate.setDate(weekSundayDate.getDate() + 6);
+    const weekSunday     = weekSundayDate.toISOString().split("T")[0];
 
     const [
       { data: l },
@@ -273,6 +280,7 @@ export default function DashboardPage() {
       { data: profileData },
       { data: nutData },
       { data: growthData },
+      { data: skipData },
     ] = await Promise.all([
       sb.from("daily_logs").select("*").eq("user_id", user.id).gte("date", since).order("date"),
       sb.from("sessions").select("*").eq("user_id", user.id).gte("date", since).order("date", { ascending: false }),
@@ -293,6 +301,9 @@ export default function DashboardPage() {
       (sb as any).from("growth_logs")
         .select("date, category, duration_min")
         .eq("user_id", user.id).gte("date", since30).order("date", { ascending: false }),
+      sb.from("session_skip_reasons")
+        .select("date, reason")
+        .eq("user_id", user.id).gte("date", weekMonday).lte("date", weekSunday),
     ]);
 
     const logsData   = (l      ?? []) as DailyLog[];
@@ -310,6 +321,12 @@ export default function DashboardPage() {
     setTrainingMetrics((metricsData ?? []) as TrainingMetricRow[]);
     setProfile(profileData as ProfileRow | null);
     setGrowthLogs((growthData ?? []) as GrowthLogSummary[]);
+    setUserId(user.id);
+    setSkipReasons(
+      Object.fromEntries(
+        ((skipData ?? []) as { date: string; reason: string }[]).map((r) => [r.date, r.reason as SkipReason]),
+      ),
+    );
 
     const nutRows = (nutData ?? []) as { calories: number }[];
     const eaten   = nutRows.reduce((sum, r) => sum + (r.calories ?? 0), 0);
@@ -379,6 +396,16 @@ export default function DashboardPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
   }, [load]);
+
+  const handleRecordSkipReason = useCallback(async (date: string, reason: SkipReason) => {
+    if (!userId) return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (sb as any).from("session_skip_reasons").upsert(
+      { user_id: userId, date, reason },
+      { onConflict: "user_id,date" },
+    );
+    setSkipReasons((prev) => ({ ...prev, [date]: reason }));
+  }, [sb, userId]);
 
   async function logWeight() {
     const val = parseFloat(weightInput);
@@ -602,6 +629,7 @@ export default function DashboardPage() {
     actualWeeklyLiftSessions: weekGymCount,
     actualWeeklyGrowthHours:  totalGrowthHours,
     actualAvgDailyProtein:    null,
+    skipReasons,
   };
 
   const executionSummary = computeExecutionSummary(execInput);
@@ -1071,6 +1099,7 @@ export default function DashboardPage() {
         <ExecutionStatusCard
           summary={executionSummary}
           today={executionSummary.days.find((d) => d.date === todayStr)}
+          onRecordReason={handleRecordSkipReason}
         />
       </div>
 

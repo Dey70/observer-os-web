@@ -1,3 +1,20 @@
+export type SkipReason =
+  | "fatigue"
+  | "injury"
+  | "busy"
+  | "travel"
+  | "motivation"
+  | "weather"
+  | "unknown";
+
+export interface SessionSkipReason {
+  id:         string;
+  user_id:    string;
+  date:       string;
+  reason:     SkipReason;
+  created_at: string;
+}
+
 export interface DailyLog {
   id: number;
   user_id: string;

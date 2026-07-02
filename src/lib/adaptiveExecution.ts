@@ -22,6 +22,9 @@ import type {
   DayPriority,
   PlanBalance,
 } from "@/lib/adaptivePlanner";
+import type { SkipReason } from "@/types";
+
+export type { SkipReason };
 
 // ── Public types ────────────────────────────────────────────────────────────
 
@@ -39,6 +42,7 @@ export interface ExecutionDayStatus {
   status:       ExecutionStatus;
   plannedLabel: string;
   note:         string;
+  skipReason:   SkipReason | null;
 }
 
 export interface ExecutionDeviation {
@@ -81,6 +85,7 @@ export interface ExecutionInput {
   actualWeeklyLiftSessions: number;
   actualWeeklyGrowthHours:  number;
   actualAvgDailyProtein:    number | null;   // null = no nutrition logging
+  skipReasons:              Record<string, SkipReason>;  // date → recorded reason; {} if none yet
 }
 
 // ── Small helpers ───────────────────────────────────────────────────────────
@@ -126,6 +131,7 @@ function classifyDays(
   today:              string,
   completedRunDates:  Set<string>,
   completedLiftDates: Set<string>,
+  skipReasons:        Record<string, SkipReason>,
 ): ExecutionDayStatus[] {
   return days.map((d) => {
     const sess       = d.sessions[0];
@@ -134,11 +140,11 @@ function classifyDays(
     const label      = sess?.label ?? "Rest";
 
     if (d.date > today) {
-      return { date: d.date, dayOfWeek: d.dayOfWeek, status: "planned", plannedLabel: label, note: "Scheduled." };
+      return { date: d.date, dayOfWeek: d.dayOfWeek, status: "planned", plannedLabel: label, note: "Scheduled.", skipReason: null };
     }
 
     if (isRestLike) {
-      return { date: d.date, dayOfWeek: d.dayOfWeek, status: "completed", plannedLabel: label, note: "Rest day." };
+      return { date: d.date, dayOfWeek: d.dayOfWeek, status: "completed", plannedLabel: label, note: "Rest day.", skipReason: null };
     }
 
     const matched = type.startsWith("run_")
@@ -149,13 +155,13 @@ function classifyDays(
 
     if (d.date === today) {
       return matched
-        ? { date: d.date, dayOfWeek: d.dayOfWeek, status: "completed",   plannedLabel: label, note: `${label} logged today.` }
-        : { date: d.date, dayOfWeek: d.dayOfWeek, status: "in_progress", plannedLabel: label, note: `${label} not yet logged today.` };
+        ? { date: d.date, dayOfWeek: d.dayOfWeek, status: "completed",   plannedLabel: label, note: `${label} logged today.`, skipReason: null }
+        : { date: d.date, dayOfWeek: d.dayOfWeek, status: "in_progress", plannedLabel: label, note: `${label} not yet logged today.`, skipReason: null };
     }
 
     return matched
-      ? { date: d.date, dayOfWeek: d.dayOfWeek, status: "completed", plannedLabel: label, note: `${label} logged.` }
-      : { date: d.date, dayOfWeek: d.dayOfWeek, status: "skipped",   plannedLabel: label, note: `${label} not logged — marked skipped.` };
+      ? { date: d.date, dayOfWeek: d.dayOfWeek, status: "completed", plannedLabel: label, note: `${label} logged.`, skipReason: null }
+      : { date: d.date, dayOfWeek: d.dayOfWeek, status: "skipped",   plannedLabel: label, note: `${label} not logged — marked skipped.`, skipReason: skipReasons[d.date] ?? "unknown" };
   });
 }
 
@@ -329,7 +335,7 @@ export function computeExecutionSummary(input: ExecutionInput): ExecutionSummary
   const completedRunSet  = new Set(input.completedRunDates);
   const completedLiftSet = new Set(input.completedLiftDates);
 
-  const baseDays = classifyDays(days, today, completedRunSet, completedLiftSet);
+  const baseDays = classifyDays(days, today, completedRunSet, completedLiftSet, input.skipReasons);
 
   const elapsedDays = days.filter((d) => d.date <= today);
 
@@ -397,6 +403,7 @@ export function computeExecutionSummary(input: ExecutionInput): ExecutionSummary
       status:       "rescheduled",
       plannedLabel: mv.session.label,
       note:         mv.reason,
+      skipReason:   null,
     };
   }
   if (cancellation) {
@@ -405,6 +412,7 @@ export function computeExecutionSummary(input: ExecutionInput): ExecutionSummary
       status:       "cancelled",
       plannedLabel: "Active Recovery",
       note:         cancellation.reason,
+      skipReason:   null,
     };
   }
 
@@ -508,6 +516,15 @@ export function replanRemainingWeek(
 // ── Coach prompt block ──────────────────────────────────────────────────────
 
 export function buildExecutionSummaryBlock(summary: ExecutionSummary): string {
+  const skippedWithReasons = summary.days.filter(
+    (d) => d.status === "skipped" && d.skipReason !== null && d.skipReason !== "unknown",
+  );
+  const skipReasonLine = skippedWithReasons.length > 0
+    ? `Skip reasons: ${skippedWithReasons.map((d) => `${d.date} → ${d.skipReason!}`).join(", ")}`
+    : summary.missedSessions > 0
+    ? "Skip reasons: not yet recorded"
+    : "Skip reasons: n/a";
+
   const lines = [
     `## Execution status (Phase 6A — adaptive execution)`,
     `Completion: ${summary.completedSessions} completed · ${summary.missedSessions} missed (${summary.completionPct}% completion rate)`,
@@ -521,6 +538,7 @@ export function buildExecutionSummaryBlock(summary: ExecutionSummary): string {
     summary.replanningRequired
       ? `Replanning: ${summary.reason}`
       : `Replanning: not needed — ${summary.reason}`,
+    skipReasonLine,
   ];
   return lines.join("\n");
 }

@@ -22,14 +22,14 @@ import { computeHybridScore }        from "@/lib/hybridScore";
 import type { HybridScoreOutput }    from "@/lib/hybridScore";
 import { calculateDailyTargets }     from "@/lib/nutritionEngine";
 import type { NutritionProfileInputs } from "@/lib/nutritionEngine";
-import { calcCheckinStreak, calcSessionStreak } from "@/lib/utils";
+import { calcCheckinStreak, calcSessionStreak, getWeekStart } from "@/lib/utils";
 import type { DailyLog, Session, RunningActivity } from "@/types";
 import { computeAdaptiveGoals } from "@/lib/adaptiveGoals";
 import type { AdaptiveGoalOutput } from "@/lib/adaptiveGoals";
 import { computeWeekPlan } from "@/lib/adaptivePlanner";
 import type { WeekPlan } from "@/lib/adaptivePlanner";
 import { computeExecutionSummary } from "@/lib/adaptiveExecution";
-import type { ExecutionSummary, ExecutionInput } from "@/lib/adaptiveExecution";
+import type { ExecutionSummary, ExecutionInput, SkipReason } from "@/lib/adaptiveExecution";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -92,6 +92,8 @@ export interface CoachContext {
   // Phase 5B/6A — Weekly plan + execution tracking
   weekPlan:         WeekPlan;
   executionSummary: ExecutionSummary;
+  // Phase 6B — Skip reasons
+  skipReasons: Record<string, SkipReason>;
 }
 
 // ── Builder ────────────────────────────────────────────────────────────────
@@ -104,6 +106,10 @@ export async function buildCoachContext(
   const since7   = new Date(Date.now() -  7 * 86400000).toISOString().split("T")[0];
   const since14  = new Date(Date.now() - 14 * 86400000).toISOString().split("T")[0];
   const since90  = new Date(Date.now() - 90 * 86400000).toISOString().split("T")[0];
+  const weekMonday = getWeekStart();
+  const weekSundayDate = new Date(weekMonday + "T00:00:00");
+  weekSundayDate.setDate(weekSundayDate.getDate() + 6);
+  const weekSunday = weekSundayDate.toISOString().split("T")[0];
 
   const [
     { data: rawLogs },
@@ -113,6 +119,7 @@ export async function buildCoachContext(
     { data: rawRuns },
     { data: rawWeights },
     { data: rawGrowth },
+    { data: rawSkipReasons },
   ] = await Promise.all([
     supabase.from("daily_logs").select("*")
       .eq("user_id", userId).gte("date", since14).order("date", { ascending: false }),
@@ -135,6 +142,9 @@ export async function buildCoachContext(
     (supabase as any).from("growth_logs")
       .select("date, category, duration_min")
       .eq("user_id", userId).gte("date", since7),
+    supabase.from("session_skip_reasons")
+      .select("date, reason")
+      .eq("user_id", userId).gte("date", weekMonday).lte("date", weekSunday),
   ]);
 
   const logs     = (rawLogs     ?? []) as DailyLog[];
@@ -145,6 +155,9 @@ export async function buildCoachContext(
   const growthLogs = (rawGrowth ?? []) as { date: string; category: string; duration_min: number }[];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const currentWeightKg = ((rawWeights as any[])?.[0])?.weight ?? null;
+  const skipReasons: Record<string, SkipReason> = Object.fromEntries(
+    ((rawSkipReasons ?? []) as { date: string; reason: string }[]).map((r) => [r.date, r.reason as SkipReason]),
+  );
 
   // ── Streaks & training load ─────────────────────────────────────────────
 
@@ -333,6 +346,7 @@ export async function buildCoachContext(
     actualWeeklyLiftSessions: weeklyLiftSessions,
     actualWeeklyGrowthHours:  weeklyGrowthHours,
     actualAvgDailyProtein:    null,
+    skipReasons,
   };
 
   const executionSummary = computeExecutionSummary(execInput);
@@ -371,5 +385,6 @@ export async function buildCoachContext(
     adaptiveGoals,
     weekPlan,
     executionSummary,
+    skipReasons,
   };
 }
