@@ -51,7 +51,6 @@ const mobileNavItems = [
   { href: "/log", label: "Log", icon: Dumbbell },
   { href: "/nutrition", label: "Nutrition", icon: Apple },
   { href: "/coach", label: "Coach", icon: Bot },
-  { href: "/profile", label: "Profile", icon: User },
 ];
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
@@ -399,6 +398,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   { href: "/goals", label: "Goals", icon: Target },
                   { href: "/planner", label: "Planner", icon: ClipboardList },
                   { href: "/review", label: "Review", icon: ScrollText },
+                  { href: "/profile", label: "Profile", icon: User },
                   { href: "/settings", label: "Settings", icon: Settings },
                 ].map(({ href, label, icon: Icon }) => {
                   const isActive = pathname === href;
