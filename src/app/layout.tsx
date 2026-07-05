@@ -35,6 +35,9 @@ export default function RootLayout({
           href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=DM+Sans:wght@300;400;500&display=swap"
           rel="stylesheet"
         />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+        <link rel="icon" href="/favicon-32.png" sizes="32x32" />
+        <link rel="icon" href="/favicon-16.png" sizes="16x16" />
         {/*
           iOS Safari ignores parts of the web manifest spec (e.g. display:
           standalone), so these Apple-specific tags are required for "Add to
@@ -46,7 +49,6 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="Observer OS" />
-        <link rel="apple-touch-icon" href="/icon-192.png" />
       </head>
       <body>
         <ServiceWorkerRegister />
