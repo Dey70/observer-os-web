@@ -1,10 +1,20 @@
 // src/app/layout.tsx
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
 
 export const metadata: Metadata = {
   title: "Observer OS",
   description: "Personal AI performance coach — training, sleep, study",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Observer OS",
+  },
+  icons: {
+    apple: "/icon-192.png",
+  },
 };
 
 export const viewport: Viewport = {
@@ -22,6 +32,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
+        {/* This fork of Next.js's appleWebApp.capable only emits
+            mobile-web-app-capable, not the apple-prefixed tag iOS Safari
+            reads for "Add to Home Screen" — add it explicitly. */}
+        <meta name="apple-mobile-web-app-capable" content="yes" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link
           rel="preconnect"
@@ -33,7 +47,10 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body>{children}</body>
+      <body>
+        <ServiceWorkerRegister />
+        {children}
+      </body>
     </html>
   );
 }
