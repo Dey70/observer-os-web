@@ -33,12 +33,12 @@ const SOCIAL_LINKS: { icon: React.ElementType; label: string; href: string }[] =
     {
       icon: Briefcase,
       label: "LinkedIn",
-      href: "https://linkedin.com/in/your-handle",
+      href: "https://www.linkedin.com/in/rajdeep-dey-188784289/",
     },
     {
       icon: Camera,
       label: "Instagram",
-      href: "https://instagram.com/your-handle",
+      href: "https://www.instagram.com/rajdeep.x70",
     },
     { icon: Mail, label: "Email", href: "mailto:rajdeep.x70@gmail.com" },
   ];
@@ -168,7 +168,9 @@ function StravaIntegrationCard() {
               width: 40,
               height: 40,
               borderRadius: 10,
-              background: isConnected ? "rgba(252,76,2,0.12)" : "var(--surface2)",
+              background: isConnected
+                ? "rgba(252,76,2,0.12)"
+                : "var(--surface2)",
               border: `1px solid ${isConnected ? "rgba(252,76,2,0.35)" : "var(--border)"}`,
               display: "flex",
               alignItems: "center",
@@ -196,7 +198,11 @@ function StravaIntegrationCard() {
             </div>
             {status === null ? (
               <div
-                style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}
+                style={{
+                  fontSize: 12,
+                  color: "var(--text-muted)",
+                  marginTop: 2,
+                }}
               >
                 Loading...
               </div>
@@ -245,7 +251,9 @@ function StravaIntegrationCard() {
                 >
                   <span>{status.activity_count} activities imported</span>
                   <span>·</span>
-                  <span>Synced {formatRelativeTime(status.last_synced_at)}</span>
+                  <span>
+                    Synced {formatRelativeTime(status.last_synced_at)}
+                  </span>
                   {status.week_km > 0 && (
                     <>
                       <span>·</span>
@@ -356,10 +364,11 @@ function StravaIntegrationCard() {
             padding: "8px 12px",
             borderRadius: 8,
             background:
-              syncMsg.type === "success" ? "var(--green-dim)" : "var(--red-dim)",
+              syncMsg.type === "success"
+                ? "var(--green-dim)"
+                : "var(--red-dim)",
             border: `1px solid ${syncMsg.type === "success" ? "var(--green)" : "var(--red)"}`,
-            color:
-              syncMsg.type === "success" ? "var(--green)" : "var(--red)",
+            color: syncMsg.type === "success" ? "var(--green)" : "var(--red)",
             fontSize: 11,
             fontFamily: "var(--mono)",
             display: "flex",
