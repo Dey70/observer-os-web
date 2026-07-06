@@ -3,6 +3,8 @@
 
 import { useState, useRef, useEffect } from "react";
 import { Card, PageHeader, SectionLabel, Spinner } from "@/components/ui";
+import { ThemeSwitcher } from "@/components/ThemeSwitcher";
+import { useTheme } from "@/hooks/useTheme";
 import {
   Bug,
   Lightbulb,
@@ -52,6 +54,18 @@ const CREATOR_NOTE_PARAGRAPHS = [
 ];
 
 const TECH_STACK = "Next.js, Supabase, and Groq-powered AI";
+
+// ─── Appearance ───────────────────────────────────────────────────────────────
+
+function AppearanceCard() {
+  const { theme, setTheme } = useTheme();
+  return (
+    <Card style={{ marginBottom: 16 }}>
+      <SectionLabel>Appearance</SectionLabel>
+      <ThemeSwitcher value={theme} onChange={setTheme} variant="grid" />
+    </Card>
+  );
+}
 
 // ─── Strava Integration ───────────────────────────────────────────────────────
 
@@ -469,6 +483,7 @@ export default function SettingsPage() {
           subtitle="Integrations, feedback, and a bit about this app"
         />
 
+        <AppearanceCard />
         <StravaIntegrationCard />
 
         <Card style={{ marginBottom: 16 }}>

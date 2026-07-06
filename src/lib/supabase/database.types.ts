@@ -216,6 +216,7 @@ export interface Database {
           latitude: number | null;
           longitude: number | null;
           city_name: string | null;
+          theme: "dark" | "light" | "indian";
           updated_at: string;
         };
         Insert: {
@@ -240,6 +241,7 @@ export interface Database {
           latitude?: number | null;
           longitude?: number | null;
           city_name?: string | null;
+          theme?: "dark" | "light" | "indian";
         };
         Update: {
           name?: string | null;
@@ -262,6 +264,7 @@ export interface Database {
           latitude?: number | null;
           longitude?: number | null;
           city_name?: string | null;
+          theme?: "dark" | "light" | "indian";
         };
       };
       nutrition_logs: {

@@ -1,7 +1,22 @@
 // src/app/layout.tsx
 import type { Metadata, Viewport } from "next";
+import { Mukta } from "next/font/google";
 import "./globals.css";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
+
+// Loaded upfront (small, fixed set) so the Indian full-aesthetic theme has
+// no runtime font-loading flicker when switched to. Mukta was chosen over
+// more decorative options like Baloo 2 because this UI leans on 10-13px
+// labels everywhere — Mukta is a warm, humanist sans built as the Latin
+// companion to a Devanagari family, and stays crisp at small sizes where
+// rounder display faces turn mushy. Exposed as --font-indian; indian.css
+// points --sans/--soft at it so it cascades with zero component changes.
+const mukta = Mukta({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-indian",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "Observer OS",
@@ -23,8 +38,19 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" className={mukta.variable}>
       <head>
+        {/*
+          Applies the user's saved theme before first paint so there's no
+          flash of the default dark theme. Mirrors THEME_IDS in
+          src/lib/themes.ts — keep the fallback list there in sync since a
+          plain script can't import a TS module.
+        */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem("theme");if(t&&["dark","light","indian"].indexOf(t)!==-1){document.documentElement.setAttribute("data-theme",t);}}catch(e){}})();`,
+          }}
+        />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link
           rel="preconnect"
