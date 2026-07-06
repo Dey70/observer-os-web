@@ -1,20 +1,42 @@
 // src/app/layout.tsx
 import type { Metadata, Viewport } from "next";
-import { Mukta } from "next/font/google";
+import { Mukta, Shippori_Mincho, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
+import { DEFAULT_THEME, THEME_IDS } from "@/lib/themes";
 
-// Loaded upfront (small, fixed set) so the Indian full-aesthetic theme has
-// no runtime font-loading flicker when switched to. Mukta was chosen over
-// more decorative options like Baloo 2 because this UI leans on 10-13px
-// labels everywhere — Mukta is a warm, humanist sans built as the Latin
-// companion to a Devanagari family, and stays crisp at small sizes where
-// rounder display faces turn mushy. Exposed as --font-indian; indian.css
-// points --sans/--soft at it so it cascades with zero component changes.
+// Loaded upfront (small, fixed set) so full-aesthetic themes have no
+// runtime font-loading flicker when switched to. Each is exposed as a CSS
+// variable that the matching theme's stylesheet points --sans/--soft at,
+// so it cascades with zero component changes.
+
+// Mukta was chosen over more decorative options like Baloo 2 because this
+// UI leans on 10-13px labels everywhere — it's a warm, humanist sans built
+// as the Latin companion to a Devanagari family, and stays crisp at small
+// sizes where rounder display faces turn mushy.
 const mukta = Mukta({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
   variable: "--font-indian",
+  display: "swap",
+});
+
+// Shippori Mincho — a brush-like Mincho serif for the Japanese theme.
+// Chosen over rounder options (e.g. Shippori Mincho B1) for a more
+// traditional, elegant ink-and-washi feel.
+const shipporiMincho = Shippori_Mincho({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-japanese",
+  display: "swap",
+});
+
+// Space Grotesk — a clean geometric grotesk for the Scandinavian theme,
+// in line with the modernist grotesque sans typography common to Nordic
+// design. Variable font, so no explicit weight is needed.
+const spaceGrotesk = Space_Grotesk({
+  subsets: ["latin"],
+  variable: "--font-scandi",
   display: "swap",
 });
 
@@ -38,17 +60,28 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={mukta.variable}>
+    <html
+      lang="en"
+      className={`${mukta.variable} ${shipporiMincho.variable} ${spaceGrotesk.variable}`}
+      data-theme={DEFAULT_THEME}
+      suppressHydrationWarning
+    >
       <head>
         {/*
           Applies the user's saved theme before first paint so there's no
-          flash of the default dark theme. Mirrors THEME_IDS in
-          src/lib/themes.ts — keep the fallback list there in sync since a
-          plain script can't import a TS module.
+          flash of the default dark theme. Reads THEME_IDS from
+          src/lib/themes.ts at build time (inlined into the script string
+          below, since a plain script can't import a TS module at runtime).
+          `data-theme` on <html> has a static default above plus
+          suppressHydrationWarning, since this script rewrites it before
+          React hydrates — see
+          node_modules/next/dist/docs/01-app/02-guides/preventing-flash-before-hydration.md
+          ("Themes" section) for why this pairing is required in this
+          Next.js version.
         */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem("theme");if(t&&["dark","light","indian"].indexOf(t)!==-1){document.documentElement.setAttribute("data-theme",t);}}catch(e){}})();`,
+            __html: `(function(){try{var t=localStorage.getItem("theme");if(t&&${JSON.stringify(THEME_IDS)}.indexOf(t)!==-1){document.documentElement.setAttribute("data-theme",t);}}catch(e){}})();`,
           }}
         />
         <link rel="preconnect" href="https://fonts.googleapis.com" />

@@ -24,20 +24,25 @@ interface ThemeContextValue {
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
-function readStoredTheme(): string {
-  if (typeof window === "undefined") return DEFAULT_THEME;
-  const stored = localStorage.getItem("theme");
-  return isThemeId(stored) ? stored : DEFAULT_THEME;
-}
-
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  // Lazy-initialized from localStorage (mirrors the no-flash script in
-  // layout.tsx that already set the DOM attribute) so there's no extra
-  // render/flash from syncing it inside an effect.
-  const [theme, setThemeState] = useState(readStoredTheme);
+  // Starts at DEFAULT_THEME to match the server-rendered output — the
+  // <html> element's *color* is corrected before paint by the inline
+  // script in layout.tsx (paired with suppressHydrationWarning there), but
+  // React state can't be corrected pre-hydration the same way. Deeper
+  // consumers (ThemeDecorations, the active swatch) depend on this state,
+  // so a lazy localStorage-read initializer here would make their first
+  // client render diverge from the server-rendered tree and trigger a
+  // hydration mismatch. Reading localStorage in the effect below means
+  // those consumers pop in a beat after mount instead — an acceptable
+  // trade-off since the color scheme itself never flashes.
+  const [theme, setThemeState] = useState(DEFAULT_THEME);
   const supabase = createClient();
 
   useEffect(() => {
+    const stored = localStorage.getItem("theme");
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- see comment above; this is the localStorage/Supabase reconciliation pass, not a derived-state anti-pattern.
+    if (isThemeId(stored)) setThemeState(stored);
+
     // Reconciles with the Supabase profile once the user loads (e.g. a
     // theme picked on another device).
     supabase.auth.getUser().then(async ({ data }) => {

@@ -8,11 +8,16 @@
 // checklist in src/lib/themes.ts calls for a decoration component.
 import type { ComponentType } from "react";
 import IndianMotif from "./IndianMotif";
+import EnsoMotif from "./EnsoMotif";
 
 export const THEME_DECORATIONS: Record<string, ComponentType | null> = {
   dark: null,
   light: null,
   indian: IndianMotif,
+  japanese: EnsoMotif,
+  scandinavian: null,
+  nord: null,
+  dracula: null,
 };
 
 export function ThemeDecorations({ themeId }: { themeId: string }) {

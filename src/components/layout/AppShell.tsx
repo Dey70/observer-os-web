@@ -5,7 +5,6 @@ import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useState, useEffect } from "react";
 import { ThemeProvider, useTheme } from "@/hooks/useTheme";
-import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 import { ThemeDecorations } from "@/components/theme-decorations";
 import {
   Activity,
@@ -70,7 +69,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   const supabase = createClient();
   const [email, setEmail] = useState<string | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
-  const { theme, setTheme } = useTheme();
+  const { theme } = useTheme();
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -184,10 +183,6 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
             {email}
           </div>
         )}
-
-        <div style={{ marginBottom: "24px" }}>
-          <ThemeSwitcher value={theme} onChange={setTheme} variant="compact" />
-        </div>
 
         <nav
           style={{
@@ -406,13 +401,11 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
                 })}
               </div>
 
-              <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-                <div style={{ flex: 1 }}>
-                  <ThemeSwitcher value={theme} onChange={setTheme} variant="compact" />
-                </div>
+              <div style={{ marginBottom: 8 }}>
                 <button
                   onClick={handleSignOut}
                   style={{
+                    width: "100%",
                     padding: "12px 16px",
                     background: "var(--red-dim)",
                     border: "1px solid var(--red-dim)",
@@ -420,6 +413,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
                     cursor: "pointer",
                     display: "flex",
                     alignItems: "center",
+                    justifyContent: "center",
                     gap: 6,
                   }}
                 >
@@ -431,7 +425,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
                       color: "var(--red)",
                     }}
                   >
-                    OUT
+                    SIGN OUT
                   </span>
                 </button>
               </div>

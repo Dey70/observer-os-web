@@ -7,6 +7,10 @@
 @import "../styles/themes/dark.css";
 @import "../styles/themes/light.css";
 @import "../styles/themes/indian.css";
+@import "../styles/themes/japanese.css";
+@import "../styles/themes/scandinavian.css";
+@import "../styles/themes/nord.css";
+@import "../styles/themes/dracula.css";
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html { overflow-x: hidden; }

@@ -59,6 +59,40 @@ export const THEMES: ThemeDefinition[] = [
     description:
       "Deep maroon with saffron and temple-gold, warm Mukta typography, and a paisley motif.",
   },
+  {
+    id: "japanese",
+    label: "Japanese",
+    category: "full-aesthetic",
+    previewBg: "#14100D",
+    previewAccent: "#3B5787",
+    description:
+      "Sumi-ink black with aizome indigo and vermillion, a Mincho serif, and a seigaiha wave pattern.",
+  },
+  {
+    id: "scandinavian",
+    label: "Scandinavian",
+    category: "full-aesthetic",
+    previewBg: "#F2EFEA",
+    previewAccent: "#7A9471",
+    description:
+      "Linen-white with sage and muted heather, a geometric grotesk font, and a folk chevron pattern.",
+  },
+  {
+    id: "nord",
+    label: "Nord",
+    category: "palette",
+    previewBg: "#2E3440",
+    previewAccent: "#88C0D0",
+    description: "The arctic blue-grey palette from the Nord color scheme.",
+  },
+  {
+    id: "dracula",
+    label: "Dracula",
+    category: "palette",
+    previewBg: "#282A36",
+    previewAccent: "#BD93F9",
+    description: "The classic purple-and-pink-on-slate Dracula color scheme.",
+  },
 ];
 
 export const DEFAULT_THEME = "dark";
