@@ -880,6 +880,7 @@ export default function HomePage() {
   const [todayCals, setTodayCals] = useState<number | null>(null);
   const [calTarget, setCalTarget] = useState<number | null>(null);
   const [latestWeight, setLatestWeight] = useState<number | null>(null);
+  const [todaySteps, setTodaySteps] = useState<number | null>(null);
   const [activeGoal, setActiveGoal] = useState<Goal | null>(null);
   const [checkinStreak, setCheckinStreak] = useState(0);
   const [sessionStreak, setSessionStreak] = useState(0);
@@ -915,6 +916,7 @@ export default function HomePage() {
         { data: recentLogs },
         { data: recentSessions },
         { data: todaySessions },
+        { data: stepsData },
       ] = await Promise.all([
         sb.from("profiles").select("name, age, height_cm, sex, nutrition_goal_type, weekly_goal").eq("user_id", user.id).maybeSingle(),
         sb.from("daily_logs").select("*").eq("user_id", user.id).eq("date", todayStr).maybeSingle(),
@@ -924,6 +926,7 @@ export default function HomePage() {
         sb.from("daily_logs").select("*").eq("user_id", user.id).gte("date", since14).order("date"),
         sb.from("sessions").select("*").eq("user_id", user.id).gte("date", since14).order("date", { ascending: false }),
         sb.from("sessions").select("id").eq("user_id", user.id).eq("date", todayStr),
+        sb.from("daily_steps").select("steps").eq("user_id", user.id).eq("date", todayStr).maybeSingle(),
       ]);
 
       const profile = profileData as {
@@ -942,6 +945,7 @@ export default function HomePage() {
       setNeedsOnboarding(missingProfile || missingWeight);
 
       setTodayLog(todayLogData ? (todayLogData as unknown as DailyLog) : null);
+      setTodaySteps(stepsData ? (stepsData as { steps: number }).steps : null);
 
       const nutRows = (nutritionData ?? []) as { calories: number }[];
       const cals = nutRows.reduce((s, r) => s + (r.calories ?? 0), 0);
@@ -1037,6 +1041,10 @@ export default function HomePage() {
   const calProgress = calTarget && todayCals !== null ? (todayCals / calTarget) * 100 : undefined;
 
   const weightVal = latestWeight ? `${latestWeight} kg` : "—";
+
+  const STEPS_TARGET = 10000;
+  const stepsVal = todaySteps !== null ? todaySteps.toLocaleString() : "—";
+  const stepsProgress = todaySteps !== null ? (todaySteps / STEPS_TARGET) * 100 : undefined;
 
   let goalVal = "—";
   let goalSub = "";
@@ -1342,6 +1350,15 @@ export default function HomePage() {
             sub={latestWeight ? "latest logged" : "not logged yet"}
             color="var(--purple)"
             href="/dashboard"
+          />
+          <StatTile
+            label="Steps"
+            value={stepsVal}
+            sub={todaySteps !== null ? `/ ${STEPS_TARGET.toLocaleString()} goal` : undefined}
+            color="var(--green)"
+            href="/dashboard"
+            progress={stepsProgress}
+            empty={todaySteps === null ? "Not synced yet today" : undefined}
           />
           <StatTile
             label={activeGoal ? activeGoal.title : "Active Goal"}
