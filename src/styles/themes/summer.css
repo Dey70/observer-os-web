@@ -1,0 +1,78 @@
+/* ── SUMMER THEME (full-aesthetic) ──
+   Bright pale-aqua surface with ocean teal and coral, plus a wave-line
+   pattern replacing the grid. Colors only — reuses the default typeface
+   stack rather than a custom font. */
+[data-theme="summer"] {
+  --bg: #EAF6F6;
+  --surface: #FFFFFF;
+  --surface2: rgba(10,50,50,0.04);
+  --border: rgba(10,50,50,0.1);
+  --border2: rgba(10,50,50,0.06);
+
+  --accent: #1B9C85;
+  --accent-dim: rgba(27,156,133,0.14);
+  --accent-glow: rgba(27,156,133,0.25);
+
+  --red: #FF6B6B;
+  --red-dim: rgba(255,107,107,0.12);
+  --yellow: #FFB627;
+  --yellow-dim: rgba(255,182,39,0.12);
+  --green: #4CAF7D;
+  --green-dim: rgba(76,175,125,0.12);
+  --purple: #6C8EBF;
+  --purple-dim: rgba(108,142,191,0.12);
+
+  --text: #10393A;
+  --text-muted: rgba(16,57,58,0.55);
+  --text-dim: rgba(16,57,58,0.3);
+
+  --mono: 'JetBrains Mono', monospace;
+  --sans: 'Inter', sans-serif;
+  --soft: 'DM Sans', sans-serif;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+
+  --grid-line: rgba(10,50,50,0.045);
+  --orb-glow: rgba(27,156,133,0.07);
+  --scrollbar-thumb: rgba(10,50,50,0.15);
+  --range-track: rgba(10,50,50,0.1);
+  --skeleton-1: rgba(10,50,50,0.04);
+  --skeleton-2: rgba(10,50,50,0.08);
+
+  --glass-bg: rgba(255,255,255,0.7);
+  --glass-highlight: rgba(255,255,255,0.9);
+  --glass-shadow: rgba(10,50,50,0.08);
+  --glass-orb: rgba(27,156,133,0.05);
+
+  --select-bg: #FFFFFF;
+  --select-text: #10393A;
+  --color-scheme: light;
+}
+
+/* Ocean wave lines replace the default grid backdrop. */
+[data-theme="summer"] body::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='40' viewBox='0 0 80 40'%3E%3Cpath d='M0 20C10 10 20 30 30 20C40 10 50 30 60 20C70 10 80 30 80 20' fill='none' stroke='%231B9C85' stroke-width='1.2' stroke-opacity='0.14'/%3E%3C/svg%3E");
+  background-size: 80px 40px;
+}
+
+[data-theme="summer"] .glass {
+  border: 1px solid rgba(27,156,133,0.28);
+}
+
+/* Rising-bubble drift for the floating SummerBubbles decoration. Fades in
+   near the bottom and out near the top so the loop reset is invisible. */
+@keyframes bubbleRise {
+  0% { transform: translateY(0) translateX(0); opacity: 0; }
+  10% { opacity: 0.55; }
+  50% { transform: translateY(-300px) translateX(15px); opacity: 0.55; }
+  90% { opacity: 0.55; }
+  100% { transform: translateY(-650px) translateX(-10px); opacity: 0; }
+}
+[data-theme="summer"] .bubble-rise {
+  animation-name: bubbleRise;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}

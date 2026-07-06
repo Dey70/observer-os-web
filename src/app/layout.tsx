@@ -1,6 +1,13 @@
 // src/app/layout.tsx
 import type { Metadata, Viewport } from "next";
-import { Mukta, Shippori_Mincho, Space_Grotesk } from "next/font/google";
+import {
+  Mukta,
+  Shippori_Mincho,
+  Space_Grotesk,
+  Oswald,
+  Saira_Condensed,
+  EB_Garamond,
+} from "next/font/google";
 import "./globals.css";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 import { DEFAULT_THEME, THEME_IDS } from "@/lib/themes";
@@ -40,6 +47,37 @@ const spaceGrotesk = Space_Grotesk({
   display: "swap",
 });
 
+// Oswald — a condensed, cinematic-poster sans for the Stranger Things
+// theme. Bold enough to carry the retro-horror mood without tipping into
+// an unreadable novelty font (e.g. the show's actual Benguiat-style logo
+// face) once applied across body text.
+const oswald = Oswald({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-stranger-things",
+  display: "swap",
+});
+
+// Saira Condensed — a bold, energetic condensed sans for the Marvel
+// theme. Chosen over comic-lettering novelty fonts (e.g. Bangers) for the
+// same reason as Oswald above: those go illegible fast at 10-13px.
+const sairaCondensed = Saira_Condensed({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-marvel",
+  display: "swap",
+});
+
+// EB Garamond — a classic literary serif for the Lord of the Mysteries
+// theme, evoking Victorian print and tarot-card typography while staying
+// fully legible for extended UI text.
+const ebGaramond = EB_Garamond({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-mysteries",
+  display: "swap",
+});
+
 export const metadata: Metadata = {
   title: "Observer OS",
   description: "Personal AI performance coach — training, sleep, study",
@@ -62,7 +100,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${mukta.variable} ${shipporiMincho.variable} ${spaceGrotesk.variable}`}
+      className={`${mukta.variable} ${shipporiMincho.variable} ${spaceGrotesk.variable} ${oswald.variable} ${sairaCondensed.variable} ${ebGaramond.variable}`}
       data-theme={DEFAULT_THEME}
       suppressHydrationWarning
     >

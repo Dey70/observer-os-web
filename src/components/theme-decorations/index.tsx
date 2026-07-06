@@ -9,6 +9,13 @@
 import type { ComponentType } from "react";
 import IndianMotif from "./IndianMotif";
 import EnsoMotif from "./EnsoMotif";
+import UpsideDownSpores from "./UpsideDownSpores";
+import ComicBurst from "./ComicBurst";
+import MysteryEye from "./MysteryEye";
+import SpringPetals from "./SpringPetals";
+import SummerBubbles from "./SummerBubbles";
+import AutumnLeaves from "./AutumnLeaves";
+import WinterSnow from "./WinterSnow";
 
 export const THEME_DECORATIONS: Record<string, ComponentType | null> = {
   dark: null,
@@ -18,6 +25,13 @@ export const THEME_DECORATIONS: Record<string, ComponentType | null> = {
   scandinavian: null,
   nord: null,
   dracula: null,
+  spring: SpringPetals,
+  summer: SummerBubbles,
+  autumn: AutumnLeaves,
+  winter: WinterSnow,
+  "stranger-things": UpsideDownSpores,
+  marvel: ComicBurst,
+  "lord-of-mysteries": MysteryEye,
 };
 
 export function ThemeDecorations({ themeId }: { themeId: string }) {

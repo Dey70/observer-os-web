@@ -11,6 +11,13 @@
 @import "../styles/themes/scandinavian.css";
 @import "../styles/themes/nord.css";
 @import "../styles/themes/dracula.css";
+@import "../styles/themes/spring.css";
+@import "../styles/themes/summer.css";
+@import "../styles/themes/autumn.css";
+@import "../styles/themes/winter.css";
+@import "../styles/themes/stranger-things.css";
+@import "../styles/themes/marvel.css";
+@import "../styles/themes/lord-of-mysteries.css";
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html { overflow-x: hidden; }

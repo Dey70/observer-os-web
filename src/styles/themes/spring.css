@@ -1,0 +1,78 @@
+/* ── SPRING THEME (full-aesthetic) ──
+   Soft blossom-pink surface with fresh green and lilac, plus a scattered
+   sakura-petal pattern replacing the grid. Colors only — reuses the
+   default typeface stack rather than a custom font. */
+[data-theme="spring"] {
+  --bg: #FBF3F4;
+  --surface: #FFFFFF;
+  --surface2: rgba(60,20,35,0.04);
+  --border: rgba(60,20,35,0.1);
+  --border2: rgba(60,20,35,0.06);
+
+  --accent: #E58AA0;
+  --accent-dim: rgba(229,138,160,0.14);
+  --accent-glow: rgba(229,138,160,0.28);
+
+  --red: #D65B6B;
+  --red-dim: rgba(214,91,107,0.12);
+  --yellow: #E8B94E;
+  --yellow-dim: rgba(232,185,78,0.12);
+  --green: #7CB37B;
+  --green-dim: rgba(124,179,123,0.12);
+  --purple: #A480C2;
+  --purple-dim: rgba(164,128,194,0.12);
+
+  --text: #3A2530;
+  --text-muted: rgba(58,37,48,0.55);
+  --text-dim: rgba(58,37,48,0.3);
+
+  --mono: 'JetBrains Mono', monospace;
+  --sans: 'Inter', sans-serif;
+  --soft: 'DM Sans', sans-serif;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+
+  --grid-line: rgba(60,20,35,0.04);
+  --orb-glow: rgba(229,138,160,0.08);
+  --scrollbar-thumb: rgba(60,20,35,0.15);
+  --range-track: rgba(60,20,35,0.1);
+  --skeleton-1: rgba(60,20,35,0.04);
+  --skeleton-2: rgba(60,20,35,0.08);
+
+  --glass-bg: rgba(255,255,255,0.7);
+  --glass-highlight: rgba(255,255,255,0.9);
+  --glass-shadow: rgba(60,20,35,0.08);
+  --glass-orb: rgba(229,138,160,0.06);
+
+  --select-bg: #FFFFFF;
+  --select-text: #3A2530;
+  --color-scheme: light;
+}
+
+/* Scattered sakura petals replace the default grid backdrop. */
+[data-theme="spring"] body::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='70' height='70' viewBox='0 0 70 70'%3E%3Cg fill='%23E58AA0' fill-opacity='0.12'%3E%3Cpath d='M35 26c3-4 8-4 9 0 1 4-3 8-9 9-6-1-10-5-9-9 1-4 6-4 9 0Z'/%3E%3Cpath d='M35 26c-3-4-8-4-9 0-1 4 3 8 9 9 6-1 10-5 9-9-1-4-6-4-9 0Z' transform='rotate(72 35 35)'/%3E%3Cpath d='M35 26c-3-4-8-4-9 0-1 4 3 8 9 9 6-1 10-5 9-9-1-4-6-4-9 0Z' transform='rotate(144 35 35)'/%3E%3Cpath d='M35 26c-3-4-8-4-9 0-1 4 3 8 9 9 6-1 10-5 9-9-1-4-6-4-9 0Z' transform='rotate(216 35 35)'/%3E%3Cpath d='M35 26c-3-4-8-4-9 0-1 4 3 8 9 9 6-1 10-5 9-9-1-4-6-4-9 0Z' transform='rotate(288 35 35)'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: 70px 70px;
+}
+
+[data-theme="spring"] .glass {
+  border: 1px solid rgba(229,138,160,0.3);
+}
+
+/* Falling-petal drift for the floating SpringPetals decoration. Fades in
+   near the top and out near the bottom so the loop reset is invisible. */
+@keyframes petalFall {
+  0% { transform: translateY(0) translateX(0) rotate(0deg); opacity: 0; }
+  10% { opacity: 0.7; }
+  50% { transform: translateY(300px) translateX(20px) rotate(180deg); opacity: 0.7; }
+  90% { opacity: 0.7; }
+  100% { transform: translateY(650px) translateX(-10px) rotate(360deg); opacity: 0; }
+}
+[data-theme="spring"] .petal-fall {
+  animation-name: petalFall;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}

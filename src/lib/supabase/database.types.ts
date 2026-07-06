@@ -216,7 +216,7 @@ export interface Database {
           latitude: number | null;
           longitude: number | null;
           city_name: string | null;
-          theme: "dark" | "light" | "indian" | "japanese" | "scandinavian" | "nord" | "dracula";
+          theme: "dark" | "light" | "indian" | "japanese" | "scandinavian" | "nord" | "dracula" | "spring" | "summer" | "autumn" | "winter" | "stranger-things" | "marvel" | "lord-of-mysteries";
           updated_at: string;
         };
         Insert: {
@@ -241,7 +241,7 @@ export interface Database {
           latitude?: number | null;
           longitude?: number | null;
           city_name?: string | null;
-          theme?: "dark" | "light" | "indian" | "japanese" | "scandinavian" | "nord" | "dracula";
+          theme?: "dark" | "light" | "indian" | "japanese" | "scandinavian" | "nord" | "dracula" | "spring" | "summer" | "autumn" | "winter" | "stranger-things" | "marvel" | "lord-of-mysteries";
         };
         Update: {
           name?: string | null;
@@ -264,7 +264,7 @@ export interface Database {
           latitude?: number | null;
           longitude?: number | null;
           city_name?: string | null;
-          theme?: "dark" | "light" | "indian" | "japanese" | "scandinavian" | "nord" | "dracula";
+          theme?: "dark" | "light" | "indian" | "japanese" | "scandinavian" | "nord" | "dracula" | "spring" | "summer" | "autumn" | "winter" | "stranger-things" | "marvel" | "lord-of-mysteries";
         };
       };
       nutrition_logs: {
