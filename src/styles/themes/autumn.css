@@ -1,0 +1,80 @@
+/* ── AUTUMN THEME (full-aesthetic) ──
+   Deep bark-brown ground with pumpkin and maple tones, plus a falling-leaf
+   pattern replacing the grid. Colors only — reuses the default typeface
+   stack rather than a custom font. */
+[data-theme="autumn"] {
+  --bg: #241209;
+  --surface: rgba(230,160,90,0.045);
+  --surface2: rgba(230,160,90,0.075);
+  --border: rgba(230,160,90,0.14);
+  --border2: rgba(230,160,90,0.07);
+
+  --accent: #D97B29;
+  --accent-dim: rgba(217,123,41,0.14);
+  --accent-glow: rgba(217,123,41,0.3);
+
+  --red: #A83232;
+  --red-dim: rgba(168,50,50,0.14);
+  --yellow: #E0A526;
+  --yellow-dim: rgba(224,165,38,0.14);
+  --green: #6B7A3C;
+  --green-dim: rgba(107,122,60,0.14);
+  --purple: #7A5245;
+  --purple-dim: rgba(122,82,69,0.14);
+
+  --text: #EFDDC4;
+  --text-muted: rgba(239,221,196,0.55);
+  --text-dim: rgba(239,221,196,0.22);
+
+  --mono: 'JetBrains Mono', monospace;
+  --sans: 'Inter', sans-serif;
+  --soft: 'DM Sans', sans-serif;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+
+  --grid-line: rgba(239,221,196,0.03);
+  --orb-glow: rgba(217,123,41,0.09);
+  --scrollbar-thumb: rgba(239,221,196,0.16);
+  --range-track: rgba(239,221,196,0.12);
+  --skeleton-1: rgba(239,221,196,0.05);
+  --skeleton-2: rgba(239,221,196,0.09);
+
+  --glass-bg: rgba(239,221,196,0.045);
+  --glass-highlight: rgba(239,221,196,0.24);
+  --glass-shadow: rgba(15,7,4,0.4);
+  --glass-orb: rgba(217,123,41,0.07);
+
+  --select-bg: #2E1810;
+  --select-text: #EFDDC4;
+  --color-scheme: dark;
+}
+
+/* Falling maple leaves replace the default grid backdrop. */
+[data-theme="autumn"] body::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='70' height='70' viewBox='0 0 70 70'%3E%3Cpath d='M35 14c4 8 14 10 16 18 1 6-4 10-8 9-1 4-6 6-8 2-2 4-7 2-8-2-4 1-9-3-8-9 2-8 12-10 16-18Z' fill='%23D97B29' fill-opacity='0.1'/%3E%3C/svg%3E");
+  background-size: 70px 70px;
+}
+
+[data-theme="autumn"] .glass {
+  border: 1px solid rgba(217,123,41,0.32);
+}
+
+/* Tumbling falling-leaf drift for the floating AutumnLeaves decoration.
+   Fades in near the top and out near the bottom so the loop reset is
+   invisible. More rotation and sway than the other seasons for a
+   tumbling-in-the-wind feel. */
+@keyframes leafFall {
+  0% { transform: translateY(0) translateX(0) rotate(0deg); opacity: 0; }
+  10% { opacity: 0.55; }
+  50% { transform: translateY(300px) translateX(-25px) rotate(200deg); opacity: 0.55; }
+  90% { opacity: 0.55; }
+  100% { transform: translateY(650px) translateX(15px) rotate(400deg); opacity: 0; }
+}
+[data-theme="autumn"] .leaf-fall {
+  animation-name: leafFall;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}

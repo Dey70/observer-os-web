@@ -1,0 +1,82 @@
+/* ── JAPANESE THEME (full-aesthetic) ──
+   Sumi-ink ground, aizome indigo and vermillion accents, washi-paper text
+   tones — with a Mincho serif (via --font-japanese, set in
+   src/app/layout.tsx) and a seigaiha wave-fan pattern replacing the grid.
+   Self-contained: every variable from the base set is redefined here. */
+[data-theme="japanese"] {
+  --bg: #14100D;
+  --surface: rgba(237,230,214,0.045);
+  --surface2: rgba(237,230,214,0.075);
+  --border: rgba(237,230,214,0.14);
+  --border2: rgba(237,230,214,0.07);
+
+  --accent: #4A6FA5;
+  --accent-dim: rgba(74,111,165,0.14);
+  --accent-glow: rgba(74,111,165,0.3);
+
+  --red: #C1440E;
+  --red-dim: rgba(193,68,14,0.14);
+  --yellow: #C9A15A;
+  --yellow-dim: rgba(201,161,90,0.14);
+  --green: #6B8E5A;
+  --green-dim: rgba(107,142,90,0.14);
+  --purple: #7A5C8E;
+  --purple-dim: rgba(122,92,142,0.14);
+
+  --text: #EDE6D6;
+  --text-muted: rgba(237,230,214,0.55);
+  --text-dim: rgba(237,230,214,0.22);
+
+  /* --mono stays JetBrains Mono for functional/data labels; --sans/--soft
+     switch to the Mincho serif, which cascades through every component. */
+  --mono: 'JetBrains Mono', monospace;
+  --sans: var(--font-japanese), serif;
+  --soft: var(--font-japanese), serif;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+
+  --grid-line: rgba(237,230,214,0.03);
+  --orb-glow: rgba(74,111,165,0.09);
+  --scrollbar-thumb: rgba(237,230,214,0.16);
+  --range-track: rgba(237,230,214,0.12);
+  --skeleton-1: rgba(237,230,214,0.05);
+  --skeleton-2: rgba(237,230,214,0.09);
+
+  --glass-bg: rgba(237,230,214,0.045);
+  --glass-highlight: rgba(237,230,214,0.24);
+  --glass-shadow: rgba(10,8,6,0.4);
+  --glass-orb: rgba(74,111,165,0.07);
+
+  --select-bg: #201A15;
+  --select-text: #EDE6D6;
+  --color-scheme: dark;
+}
+
+/* Seigaiha (wave-fan) pattern replaces the default grid backdrop. */
+[data-theme="japanese"] body::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60' viewBox='0 0 60 60'%3E%3Cpath d='M20 60A10 10 0 0 1 40 60' fill='none' stroke='%234A6FA5' stroke-width='1' stroke-opacity='0.14'/%3E%3Cpath d='M12 60A18 18 0 0 1 48 60' fill='none' stroke='%234A6FA5' stroke-width='1' stroke-opacity='0.14'/%3E%3Cpath d='M4 60A26 26 0 0 1 56 60' fill='none' stroke='%234A6FA5' stroke-width='1' stroke-opacity='0.14'/%3E%3C/svg%3E");
+  background-size: 60px 60px;
+}
+
+/* Minimal "ma" (negative-space) ornamentation — the highlight strip
+   becomes a thin indigo-to-vermillion hairline instead of a flourish. */
+[data-theme="japanese"] .glass {
+  border: 1px solid rgba(237,230,214,0.16);
+}
+[data-theme="japanese"] .glass::before {
+  background: linear-gradient(90deg, transparent, var(--accent), var(--red), transparent);
+  height: 2px;
+  opacity: 0.55;
+}
+
+/* Slow drift for the fixed-position EnsoMotif decoration component. */
+@keyframes ensoMotifDrift {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(-6deg); }
+}
+[data-theme="japanese"] .enso-motif {
+  animation: ensoMotifDrift 18s ease-in-out infinite;
+}

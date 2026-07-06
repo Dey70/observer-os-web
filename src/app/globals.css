@@ -1,120 +1,23 @@
 @import "tailwindcss";
 
-:root {
-  /* ── BASE DARK THEME ── */
-  --bg: #060608;
-  --surface: rgba(255,255,255,0.04);
-  --surface2: rgba(255,255,255,0.06);
-  --border: rgba(255,255,255,0.1);
-  --border2: rgba(255,255,255,0.06);
-  
-  --accent: #E8FF47;
-  --accent-dim: rgba(232,255,71,0.08);
-  --accent-glow: rgba(232,255,71,0.2);
-  
-  --red: #FF4444;
-  --red-dim: rgba(255,68,68,0.12);
-  --yellow: #FFB800;
-  --yellow-dim: rgba(255,184,0,0.12);
-  --green: #00E676;
-  --green-dim: rgba(0,230,118,0.12);
-  --purple: #A78BFA;
-  --purple-dim: rgba(167,139,250,0.12);
-  
-  --text: #F0F0F0;
-  --text-muted: rgba(255,255,255,0.45);
-  --text-dim: rgba(255,255,255,0.18);
-  
-  --mono: 'JetBrains Mono', monospace;
-  --sans: 'Inter', sans-serif;
-  --soft: 'DM Sans', sans-serif;
-  
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-xl: 20px;
-
-  /* ── UI COMPONENT VARIABLES (Dynamically Swapped) ── */
-  --grid-line: rgba(255,255,255,0.015);
-  --orb-glow: rgba(232,255,71,0.055);
-  --scrollbar-thumb: rgba(255,255,255,0.1);
-  --range-track: rgba(255,255,255,0.08);
-  --skeleton-1: rgba(255,255,255,0.04);
-  --skeleton-2: rgba(255,255,255,0.08);
-  
-  /* Glassmorphism Variables */
-  --glass-bg: rgba(255,255,255,0.04);
-  --glass-highlight: rgba(255,255,255,0.25);
-  --glass-shadow: rgba(0,0,0,0.3);
-  --glass-orb: rgba(232,255,71,0.05);
-  
-  /* Native Input Overrides */
-  --select-bg: #1a1a1a;
-  --select-text: #f0f0f0;
-  --color-scheme: dark;
-}
-
-/* ── LIGHT THEME (Applies via OS preference OR manual data attribute) ── */
-@media (prefers-color-scheme: light) {
-  :root {
-    --bg: #F4F4F0;
-    --surface: #FFFFFF;
-    --surface2: rgba(0,0,0,0.04);
-    --border: rgba(0,0,0,0.1);
-    --border2: rgba(0,0,0,0.07);
-    
-    --accent: #5B8A00;
-    --accent-dim: rgba(91,138,0,0.1);
-    --accent-glow: rgba(91,138,0,0.2);
-    
-    --red: #D63031;
-    --red-dim: rgba(214,48,49,0.1);
-    --yellow: #E67E22;
-    --yellow-dim: rgba(230,126,34,0.1);
-    --green: #00897B;
-    --green-dim: rgba(0,137,123,0.1);
-    --purple: #6C3483;
-    --purple-dim: rgba(108,52,131,0.1);
-    
-    --text: #0A0A0A;
-    --text-muted: rgba(0,0,0,0.55);
-    --text-dim: rgba(0,0,0,0.3);
-
-    /* Light UI Overrides */
-    --grid-line: rgba(0,0,0,0.04);
-    --orb-glow: rgba(91,138,0,0.06);
-    --scrollbar-thumb: rgba(0,0,0,0.15);
-    --range-track: rgba(0,0,0,0.1);
-    --skeleton-1: rgba(0,0,0,0.04);
-    --skeleton-2: rgba(0,0,0,0.08);
-    
-    --glass-bg: rgba(255,255,255,0.75);
-    --glass-highlight: rgba(255,255,255,0.9);
-    --glass-shadow: rgba(0,0,0,0.08);
-    --glass-orb: rgba(91,138,0,0.05);
-
-    --select-bg: #ffffff;
-    --select-text: #0a0a0a;
-    --color-scheme: light;
-  }
-}
-
-[data-theme="light"] {
-  --bg: #F4F4F0; --surface: #FFFFFF; --surface2: rgba(0,0,0,0.04);
-  --border: rgba(0,0,0,0.1); --border2: rgba(0,0,0,0.07);
-  --accent: #5B8A00; --accent-dim: rgba(91,138,0,0.1); --accent-glow: rgba(91,138,0,0.2);
-  --red: #D63031; --red-dim: rgba(214,48,49,0.1);
-  --yellow: #E67E22; --yellow-dim: rgba(230,126,34,0.1);
-  --green: #00897B; --green-dim: rgba(0,137,123,0.1);
-  --purple: #6C3483; --purple-dim: rgba(108,52,131,0.1);
-  --text: #0A0A0A; --text-muted: rgba(0,0,0,0.55); --text-dim: rgba(0,0,0,0.3);
-  --grid-line: rgba(0,0,0,0.04); --orb-glow: rgba(91,138,0,0.06);
-  --scrollbar-thumb: rgba(0,0,0,0.15); --range-track: rgba(0,0,0,0.1);
-  --skeleton-1: rgba(0,0,0,0.04); --skeleton-2: rgba(0,0,0,0.08);
-  --glass-bg: rgba(255,255,255,0.75); --glass-highlight: rgba(255,255,255,0.9);
-  --glass-shadow: rgba(0,0,0,0.08); --glass-orb: rgba(91,138,0,0.05);
-  --select-bg: #ffffff; --select-text: #0a0a0a; --color-scheme: light;
-}
+/* Full-aesthetic theme system — one self-contained file per theme, each
+   defining the complete CSS variable set plus any decorative rules scoped
+   under its own [data-theme="X"] selector. See src/lib/themes.ts for the
+   registry and the "add a new theme" checklist. */
+@import "../styles/themes/dark.css";
+@import "../styles/themes/light.css";
+@import "../styles/themes/indian.css";
+@import "../styles/themes/japanese.css";
+@import "../styles/themes/scandinavian.css";
+@import "../styles/themes/nord.css";
+@import "../styles/themes/dracula.css";
+@import "../styles/themes/spring.css";
+@import "../styles/themes/summer.css";
+@import "../styles/themes/autumn.css";
+@import "../styles/themes/winter.css";
+@import "../styles/themes/stranger-things.css";
+@import "../styles/themes/marvel.css";
+@import "../styles/themes/lord-of-mysteries.css";
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html { overflow-x: hidden; }

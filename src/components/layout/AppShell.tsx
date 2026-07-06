@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useState, useEffect } from "react";
+import { ThemeProvider, useTheme } from "@/hooks/useTheme";
+import { ThemeDecorations } from "@/components/theme-decorations";
 import {
   Activity,
   Dumbbell,
@@ -54,25 +56,27 @@ const mobileNavItems = [
 ];
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
+  return (
+    <ThemeProvider>
+      <AppShellInner>{children}</AppShellInner>
+    </ThemeProvider>
+  );
+}
+
+function AppShellInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
   const [email, setEmail] = useState<string | null>(null);
-  const [darkMode, setDarkMode] = useState(true);
   const [moreOpen, setMoreOpen] = useState(false);
+  const { theme } = useTheme();
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       setEmail(data.user?.email ?? null);
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  useEffect(() => {
-    document.documentElement.setAttribute(
-      "data-theme",
-      darkMode ? "dark" : "light",
-    );
-  }, [darkMode]);
 
   useEffect(() => {
     setMoreOpen(false);
@@ -92,6 +96,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         color: "var(--text)",
       }}
     >
+      <ThemeDecorations themeId={theme} />
+
       {/* ── DESKTOP SIDEBAR ── */}
       <aside
         id="sidebar"
@@ -177,58 +183,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             {email}
           </div>
         )}
-
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "10px 12px",
-            marginBottom: "24px",
-            borderRadius: "10px",
-            border: "1px solid var(--border2)",
-            backgroundColor: "var(--surface2)",
-          }}
-        >
-          <span
-            style={{
-              fontFamily: "var(--mono)",
-              fontSize: "11px",
-              letterSpacing: "0.08em",
-              color: "var(--text-muted)",
-            }}
-          >
-            {darkMode ? "DARK MODE" : "LIGHT MODE"}
-          </span>
-          <button
-            onClick={() => setDarkMode(!darkMode)}
-            style={{
-              width: "40px",
-              height: "22px",
-              borderRadius: "11px",
-              border: "none",
-              cursor: "pointer",
-              backgroundColor: darkMode ? "var(--accent)" : "var(--surface2)",
-              position: "relative",
-              transition: "background-color 0.2s ease",
-              flexShrink: 0,
-            }}
-          >
-            <span
-              style={{
-                position: "absolute",
-                top: "3px",
-                left: darkMode ? "21px" : "3px",
-                width: "16px",
-                height: "16px",
-                borderRadius: "50%",
-                backgroundColor: darkMode ? "var(--bg)" : "var(--text)",
-                transition: "left 0.2s ease",
-                display: "block",
-              }}
-            />
-          </button>
-        </div>
 
         <nav
           style={{
@@ -447,61 +401,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 })}
               </div>
 
-              <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-                <button
-                  onClick={() => setDarkMode(!darkMode)}
-                  style={{
-                    flex: 1,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "12px 14px",
-                    background: "var(--surface2)",
-                    border: "1px solid var(--border2)",
-                    borderRadius: 10,
-                    cursor: "pointer",
-                  }}
-                >
-                  <span
-                    style={{
-                      fontFamily: "var(--mono)",
-                      fontSize: 11,
-                      color: "var(--text-muted)",
-                      letterSpacing: "0.08em",
-                    }}
-                  >
-                    {darkMode ? "DARK MODE" : "LIGHT MODE"}
-                  </span>
-                  <div
-                    style={{
-                      width: 36,
-                      height: 20,
-                      borderRadius: 10,
-                      background: darkMode
-                        ? "var(--accent)"
-                        : "var(--surface2)",
-                      position: "relative",
-                      flexShrink: 0,
-                    }}
-                  >
-                    <span
-                      style={{
-                        position: "absolute",
-                        top: 2,
-                        left: darkMode ? 18 : 2,
-                        width: 16,
-                        height: 16,
-                        borderRadius: "50%",
-                        background: darkMode ? "var(--bg)" : "var(--text)",
-                        transition: "left 0.2s ease",
-                        display: "block",
-                      }}
-                    />
-                  </div>
-                </button>
+              <div style={{ marginBottom: 8 }}>
                 <button
                   onClick={handleSignOut}
                   style={{
+                    width: "100%",
                     padding: "12px 16px",
                     background: "var(--red-dim)",
                     border: "1px solid var(--red-dim)",
@@ -509,6 +413,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                     cursor: "pointer",
                     display: "flex",
                     alignItems: "center",
+                    justifyContent: "center",
                     gap: 6,
                   }}
                 >
@@ -520,7 +425,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                       color: "var(--red)",
                     }}
                   >
-                    OUT
+                    SIGN OUT
                   </span>
                 </button>
               </div>

@@ -1,0 +1,79 @@
+/* ── WINTER THEME (full-aesthetic) ──
+   Deep frosted-navy ground with icy cyan, plus a drifting snowflake
+   pattern replacing the grid. Colors only — reuses the default typeface
+   stack rather than a custom font. */
+[data-theme="winter"] {
+  --bg: #0B1E33;
+  --surface: rgba(200,225,245,0.045);
+  --surface2: rgba(200,225,245,0.075);
+  --border: rgba(200,225,245,0.14);
+  --border2: rgba(200,225,245,0.07);
+
+  --accent: #7EC8E3;
+  --accent-dim: rgba(126,200,227,0.14);
+  --accent-glow: rgba(126,200,227,0.3);
+
+  --red: #D9615B;
+  --red-dim: rgba(217,97,91,0.14);
+  --yellow: #E8D48A;
+  --yellow-dim: rgba(232,212,138,0.14);
+  --green: #5F9E8F;
+  --green-dim: rgba(95,158,143,0.14);
+  --purple: #8C9FD4;
+  --purple-dim: rgba(140,159,212,0.14);
+
+  --text: #E7F1F8;
+  --text-muted: rgba(231,241,248,0.55);
+  --text-dim: rgba(231,241,248,0.22);
+
+  --mono: 'JetBrains Mono', monospace;
+  --sans: 'Inter', sans-serif;
+  --soft: 'DM Sans', sans-serif;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+
+  --grid-line: rgba(231,241,248,0.03);
+  --orb-glow: rgba(126,200,227,0.09);
+  --scrollbar-thumb: rgba(231,241,248,0.16);
+  --range-track: rgba(231,241,248,0.12);
+  --skeleton-1: rgba(231,241,248,0.05);
+  --skeleton-2: rgba(231,241,248,0.09);
+
+  --glass-bg: rgba(231,241,248,0.045);
+  --glass-highlight: rgba(231,241,248,0.26);
+  --glass-shadow: rgba(3,10,20,0.4);
+  --glass-orb: rgba(126,200,227,0.07);
+
+  --select-bg: #0F273F;
+  --select-text: #E7F1F8;
+  --color-scheme: dark;
+}
+
+/* Drifting snowflakes replace the default grid backdrop. */
+[data-theme="winter"] body::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60' viewBox='0 0 60 60'%3E%3Cg stroke='%237EC8E3' stroke-width='1' stroke-opacity='0.16' stroke-linecap='round'%3E%3Cpath d='M30 14v32M18 20l24 20M42 20l-24 20'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: 60px 60px;
+}
+
+[data-theme="winter"] .glass {
+  border: 1px solid rgba(126,200,227,0.3);
+}
+
+/* Gentle falling-snow drift for the floating WinterSnow decoration. Fades
+   in near the top and out near the bottom so the loop reset is
+   invisible. Slower and calmer than autumn's tumbling leaves. */
+@keyframes snowFall {
+  0% { transform: translateY(0) translateX(0) rotate(0deg); opacity: 0; }
+  10% { opacity: 0.6; }
+  50% { transform: translateY(300px) translateX(10px) rotate(60deg); opacity: 0.6; }
+  90% { opacity: 0.6; }
+  100% { transform: translateY(650px) translateX(-10px) rotate(120deg); opacity: 0; }
+}
+[data-theme="winter"] .snow-fall {
+  animation-name: snowFall;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}

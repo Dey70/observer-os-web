@@ -1,0 +1,85 @@
+/* ── MARVEL THEME (full-aesthetic) ──
+   Ink-black with comic-book red and Infinity gold, a bold condensed font
+   (via --font-marvel, set in src/app/layout.tsx), and a halftone-dot
+   print-texture pattern. Self-contained: every variable from the base
+   set is redefined here. */
+[data-theme="marvel"] {
+  --bg: #0D0D0D;
+  --surface: rgba(255,255,255,0.045);
+  --surface2: rgba(255,255,255,0.075);
+  --border: rgba(237,29,36,0.2);
+  --border2: rgba(255,255,255,0.06);
+
+  --accent: #ED1D24;
+  --accent-dim: rgba(237,29,36,0.14);
+  --accent-glow: rgba(237,29,36,0.32);
+
+  --red: #C81E22;
+  --red-dim: rgba(200,30,34,0.14);
+  --yellow: #FFC72C;
+  --yellow-dim: rgba(255,199,44,0.14);
+  --green: #1FA97F;
+  --green-dim: rgba(31,169,127,0.14);
+  --purple: #7B4B94;
+  --purple-dim: rgba(123,75,148,0.14);
+
+  --text: #F2F0EF;
+  --text-muted: rgba(242,240,239,0.55);
+  --text-dim: rgba(242,240,239,0.22);
+
+  /* --mono stays JetBrains Mono for functional/data labels; --sans/--soft
+     switch to the bold condensed font, which cascades through every
+     component. */
+  --mono: 'JetBrains Mono', monospace;
+  --sans: var(--font-marvel), sans-serif;
+  --soft: var(--font-marvel), sans-serif;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+
+  --grid-line: rgba(242,240,239,0.03);
+  --orb-glow: rgba(237,29,36,0.1);
+  --scrollbar-thumb: rgba(242,240,239,0.14);
+  --range-track: rgba(242,240,239,0.1);
+  --skeleton-1: rgba(242,240,239,0.04);
+  --skeleton-2: rgba(242,240,239,0.08);
+
+  --glass-bg: rgba(255,255,255,0.05);
+  --glass-highlight: rgba(255,255,255,0.24);
+  --glass-shadow: rgba(0,0,0,0.45);
+  --glass-orb: rgba(237,29,36,0.08);
+
+  --select-bg: #1A1A1A;
+  --select-text: #F2F0EF;
+  --color-scheme: dark;
+}
+
+/* Halftone-dot comic print texture replaces the default grid backdrop. */
+[data-theme="marvel"] body::before {
+  background-image: radial-gradient(rgba(242,240,239,0.09) 1.1px, transparent 1.1px);
+  background-size: 14px 14px;
+}
+
+[data-theme="marvel"] .glass {
+  border: 1.5px solid rgba(237,29,36,0.35);
+}
+
+/* Slow drift for the fixed-position ComicBurst decoration component. */
+@keyframes comicBurstPulse {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  50% { transform: scale(1.06) rotate(3deg); }
+}
+[data-theme="marvel"] .comic-burst {
+  animation: comicBurstPulse 5s ease-in-out infinite;
+}
+
+/* Twinkling drift for the floating comic-spark particles. */
+@keyframes sparkTwinkle {
+  0%, 100% { transform: translateY(0) scale(0.85) rotate(0deg); opacity: 0.35; }
+  50% { transform: translateY(-16px) scale(1.15) rotate(12deg); opacity: 0.85; }
+}
+[data-theme="marvel"] .comic-spark {
+  animation: sparkTwinkle 5s ease-in-out infinite;
+}
