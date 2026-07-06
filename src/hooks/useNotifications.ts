@@ -62,8 +62,8 @@ export function useNotifications() {
 
       // Send welcome notification
       await sendPushNotification(
-        "Observer OS",
-        "Notifications enabled. You'll be reminded to check in and log sessions.",
+        "Notifications On",
+        "You'll be reminded to check in and log sessions.",
         "welcome",
       );
 
@@ -103,14 +103,14 @@ export function useNotifications() {
   async function sendTestNotification(type: "checkin" | "session") {
     if (type === "checkin") {
       await sendPushNotification(
-        "Observer OS",
-        "☀ Morning check-in time. Log your sleep, mood, and energy.",
+        "☀ Morning Check-in",
+        "Log your sleep, mood, and energy.",
         "checkin",
       );
     } else {
       await sendPushNotification(
-        "Observer OS",
-        "⚡ Evening session log. What did you train today?",
+        "⚡ Evening Session Log",
+        "What did you train today?",
         "session",
       );
     }
