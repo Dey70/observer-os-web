@@ -32,8 +32,51 @@ export function ThemeSwitcher({
 }: {
   value: string;
   onChange: (id: string) => void;
-  variant?: "compact" | "grid";
+  variant?: "compact" | "grid" | "dropdown";
 }) {
+  if (variant === "dropdown") {
+    const active = THEMES.find((t) => t.id === value) ?? THEMES[0];
+    return (
+      <div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <Swatch previewBg={active.previewBg} previewAccent={active.previewAccent} size={20} />
+          <select
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            style={{
+              flex: 1,
+              padding: "10px 14px",
+              background: "var(--surface2)",
+              border: "1px solid var(--border)",
+              borderRadius: "var(--radius-sm)",
+              color: "var(--text)",
+              outline: "none",
+              fontFamily: "var(--mono)",
+              fontSize: 13,
+              cursor: "pointer",
+            }}
+          >
+            {THEMES.map((theme) => (
+              <option key={theme.id} value={theme.id}>
+                {theme.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div
+          style={{
+            fontSize: 11,
+            color: "var(--text-dim)",
+            marginTop: 8,
+            lineHeight: 1.5,
+          }}
+        >
+          {active.description}
+        </div>
+      </div>
+    );
+  }
+
   if (variant === "grid") {
     return (
       <div

@@ -62,7 +62,7 @@ function AppearanceCard() {
   return (
     <Card style={{ marginBottom: 16 }}>
       <SectionLabel>Appearance</SectionLabel>
-      <ThemeSwitcher value={theme} onChange={setTheme} variant="grid" />
+      <ThemeSwitcher value={theme} onChange={setTheme} variant="dropdown" />
     </Card>
   );
 }
