@@ -391,6 +391,30 @@ export interface Database {
           elevation_gain?: number | null;
         };
       };
+      daily_steps: {
+        Row: {
+          id: string;
+          user_id: string;
+          date: string;
+          steps: number;
+          source: string;
+          synced_at: string;
+          created_at: string;
+        };
+        Insert: {
+          user_id: string;
+          date: string;
+          steps: number;
+          source?: string;
+          synced_at?: string;
+        };
+        Update: {
+          date?: string;
+          steps?: number;
+          source?: string;
+          synced_at?: string;
+        };
+      };
       food_cache: {
         Row: {
           id: number;

@@ -130,6 +130,16 @@ export interface RunningActivity {
   created_at: string;
 }
 
+export interface DailyStep {
+  id: string;
+  user_id: string;
+  date: string;
+  steps: number;
+  source: string;
+  synced_at: string;
+  created_at: string;
+}
+
 export interface TrainingMetric {
   id: string;
   user_id: string;

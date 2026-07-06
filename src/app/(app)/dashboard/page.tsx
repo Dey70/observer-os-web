@@ -43,6 +43,7 @@ import type {
   WeightLog,
   DashboardStats,
   RunningActivity,
+  DailyStep,
 } from "@/types";
 import { computeAdaptiveGoals } from "@/lib/adaptiveGoals";
 import type { AdaptiveGoalOutput } from "@/lib/adaptiveGoals";
@@ -259,6 +260,7 @@ export default function DashboardPage() {
   const [weekRuns, setWeekRuns]         = useState<RunningActivity[]>([]);
   const [recentActivities, setRecentActivities] = useState<RunningActivity[]>([]);
   const [stravaConnected, setStravaConnected]   = useState(false);
+  const [weekSteps, setWeekSteps]       = useState<DailyStep[]>([]);
   const [trainingMetrics, setTrainingMetrics]   = useState<TrainingMetricRow[]>([]);
   const [todayNetCals, setTodayNetCals] = useState<{ eaten: number; burned: number } | null>(null);
   const [profile, setProfile]           = useState<ProfileRow | null>(null);
@@ -289,6 +291,7 @@ export default function DashboardPage() {
       { data: w },
       { data: runs },
       { data: recent },
+      { data: steps },
       { data: metricsData },
       { data: profileData },
       { data: nutData },
@@ -308,6 +311,7 @@ export default function DashboardPage() {
       (sb as any).from("running_activities").select("*").eq("user_id", user.id).gte("activity_date", weekStart).order("activity_date", { ascending: false }),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (sb as any).from("running_activities").select("*").eq("user_id", user.id).order("activity_date", { ascending: false }).limit(5),
+      sb.from("daily_steps").select("*").eq("user_id", user.id).gte("date", weekStart).order("date"),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (sb as any).from("training_metrics")
         .select("activity_date, tss, trimp, pace_seconds_per_km, load_score, source")
@@ -356,6 +360,7 @@ export default function DashboardPage() {
     setWeekRuns(runsData);
     setRecentActivities(recentData);
     setStravaConnected(recentData.length > 0);
+    setWeekSteps((steps ?? []) as DailyStep[]);
     setTrainingMetrics((metricsData ?? []) as TrainingMetricRow[]);
     setProfile(profileData as ProfileRow | null);
     setGrowthLogs((growthData ?? []) as GrowthLogSummary[]);
@@ -695,6 +700,8 @@ export default function DashboardPage() {
   const sleepChartData  = logs.map((l) => ({ label: l.date.slice(5), value: l.sleep_hours }));
   const moodChartData   = logs.map((l) => ({ label: l.date.slice(5), value: l.mood }));
   const energyChartData = logs.map((l) => ({ label: l.date.slice(5), value: l.energy }));
+  const stepsChartData  = weekSteps.map((s) => ({ label: s.date.slice(5), value: s.steps }));
+  const todaySteps      = weekSteps.find((s) => s.date === new Date().toISOString().split("T")[0])?.steps ?? null;
   const weightChartData = [...weights].reverse().map((w) => ({ label: w.date.slice(5), value: w.weight }));
   const weightMax       = weights.length ? Math.max(...weights.map((w) => w.weight)) + 2 : 100;
 
@@ -1682,6 +1689,38 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+
+      {/* ── Steps · Apple Health ─────────────────────────────────────────── */}
+      <div
+        className="dash-card a5"
+        style={{ background: "var(--glass-bg)", border: "1px solid var(--border)", marginBottom: 12, overflow: "hidden" }}
+      >
+        <div
+          style={{
+            padding: "14px 20px",
+            borderBottom: "1px solid var(--border2)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <div style={{ fontFamily: "var(--mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.16em", color: "var(--text-muted)" }}>
+            STEPS TODAY
+          </div>
+          {todaySteps !== null && (
+            <div style={{ fontFamily: "var(--mono)", fontSize: 16, fontWeight: 700, color: "var(--green)" }}>
+              {todaySteps.toLocaleString()}
+            </div>
+          )}
+        </div>
+        <div style={{ padding: "16px 20px" }}>
+          {stepsChartData.length > 0 ? (
+            <BarChart data={stepsChartData} color="var(--green)" />
+          ) : (
+            <EmptyState message="No steps synced yet — connect the Apple Health Shortcut to see your trend here." />
+          )}
+        </div>
+      </div>
       </>
       )}
 
