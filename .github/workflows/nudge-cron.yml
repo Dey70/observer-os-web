@@ -1,0 +1,20 @@
+name: Nudge cron
+
+# Vercel's Hobby plan limits Cron Jobs to once per day, which isn't
+# frequent enough for the contextual nudge notifications (six checks
+# spread across the day). GitHub Actions' scheduler works regardless of
+# Vercel plan, so it triggers the endpoint instead. The route itself
+# no-ops unless the current time matches one of its fixed nudge slots.
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call nudge endpoint
+        run: |
+          curl -sf -X GET "${{ secrets.NUDGE_CRON_URL }}" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
