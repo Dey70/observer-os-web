@@ -65,7 +65,7 @@ Give ONE specific, actionable coaching insight for today. Max 2 sentences. Base 
         Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
+        model: "llama-3.1-8b-instant",
         max_tokens: 100,
         temperature: 0.7,
         messages: [{ role: "user", content: prompt }],

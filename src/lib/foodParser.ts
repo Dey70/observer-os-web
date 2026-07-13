@@ -559,7 +559,7 @@ async function estimateWithAI(
         Authorization: `Bearer ${groqApiKey}`,
       },
       body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
+        model: "llama-3.1-8b-instant",
         max_tokens: 150,
         temperature: 0.3,
         messages: [{ role: "user", content: prompt }],

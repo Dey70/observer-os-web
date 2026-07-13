@@ -6,11 +6,25 @@ import { loadMemoryFacts, extractAndPersistMemory }        from "@/lib/observerM
 import { AGENT_TOOLS, executeTool }                        from "@/lib/agent-tools";
 
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
-const MODEL    = "llama-3.3-70b-versatile";
+const MODEL    = "openai/gpt-oss-120b";
+
+// Keep request payloads bounded so a long thread or one huge paste can't
+// trip Groq's request-size limit the way a fixed conversation window does
+// in Claude/ChatGPT.
+const MAX_HISTORY_MESSAGES = 16;
+const MAX_MESSAGE_CHARS    = 8000;
 
 function estimateTokens(messages: Array<Record<string, unknown>>): number {
   return Math.ceil(
     messages.reduce((sum, m) => sum + String(m.content ?? "").length, 0) / 4,
+  );
+}
+
+function truncateContent(content: unknown): unknown {
+  if (typeof content !== "string" || content.length <= MAX_MESSAGE_CHARS) return content;
+  return (
+    content.slice(0, MAX_MESSAGE_CHARS) +
+    `\n\n[...truncated ${content.length - MAX_MESSAGE_CHARS} characters — message was too long to send in full]`
   );
 }
 
@@ -60,12 +74,19 @@ export async function POST(req: NextRequest) {
 
     const systemPrompt = buildChatSystemPrompt(ctx, facts);
 
+    // Sliding window: only replay the most recent turns, and cap any single
+    // message's size, instead of resending the whole thread every request.
+    const recentMessages = messages.slice(-MAX_HISTORY_MESSAGES);
+    if (recentMessages.length < messages.length) {
+      log("history_truncated", { originalCount: messages.length, keptCount: recentMessages.length });
+    }
+
     const groqMessages: Array<Record<string, unknown>> = [
       { role: "system", content: systemPrompt },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ...messages.map((m: any) => ({
+      ...recentMessages.map((m: any) => ({
         role:    m.role,
-        content: m.content,
+        content: truncateContent(m.content),
         ...(m.tool_calls   ? { tool_calls:   m.tool_calls   } : {}),
         ...(m.tool_call_id ? { tool_call_id: m.tool_call_id } : {}),
         ...(m.name         ? { name:         m.name         } : {}),

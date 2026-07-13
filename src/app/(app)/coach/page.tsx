@@ -874,7 +874,7 @@ export default function CoachPage() {
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: "var(--text-muted)" }}>
-            <span>Groq · llama-3.3-70b</span>
+            <span>Groq · gpt-oss-120b</span>
             {messages.length > 1 && (
               <span style={{ color: "var(--text-dim)" }}>
                 · {messages.filter((m) => m.role === "user").length} turn{messages.filter((m) => m.role === "user").length !== 1 ? "s" : ""}
