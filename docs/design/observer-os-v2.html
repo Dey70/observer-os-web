@@ -1,0 +1,393 @@
+<title>Observer OS v2 — Design Philosophy</title>
+<meta name="description" content="The design language spec for Observer OS v2 — a Personal Performance Operating System.">
+<style>
+  :root{
+    --ink:#0B0D11;
+    --paper:#F6F7F9;
+    --signal:#22C7B8;
+    --signal-soft:rgba(34,199,184,.14);
+    --text:#1B2027;
+    --text-dim:#5B6472;
+    --text-faint:#8A93A0;
+    --surface:rgba(15,23,32,.035);
+    --surface-2:rgba(15,23,32,.055);
+    --border:rgba(15,23,32,.10);
+    --border-strong:rgba(15,23,32,.16);
+    --bg:var(--paper);
+    --bg-grad: radial-gradient(1100px 620px at 14% -8%, rgba(34,199,184,.07), transparent 60%),
+               radial-gradient(900px 700px at 100% 10%, rgba(91,141,239,.05), transparent 55%);
+
+    --recovery:#4E86D9;
+    --running:#E08A34;
+    --strength:#D8464C;
+    --growth:#8A73F0;
+    --prediction-a:#22C7B8;
+    --prediction-b:#8A73F0;
+    --warn:#D98C1F;
+    --success:#2FA871;
+
+    --radius:14px;
+    --serif-num: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  }
+
+  :root[data-theme="dark"], :root:not([data-theme="light"]) {
+    @media (prefers-color-scheme: dark){
+      --bg:var(--ink);
+      --text:#E7EAEE;
+      --text-dim:#9AA3B0;
+      --text-faint:#5B6472;
+      --surface:rgba(255,255,255,.035);
+      --surface-2:rgba(255,255,255,.055);
+      --border:rgba(255,255,255,.09);
+      --border-strong:rgba(255,255,255,.16);
+      --bg-grad: radial-gradient(1100px 620px at 14% -8%, rgba(34,199,184,.10), transparent 60%),
+                 radial-gradient(900px 700px at 100% 10%, rgba(91,141,239,.08), transparent 55%);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:var(--ink);
+    --text:#E7EAEE;
+    --text-dim:#9AA3B0;
+    --text-faint:#5B6472;
+    --surface:rgba(255,255,255,.035);
+    --surface-2:rgba(255,255,255,.055);
+    --border:rgba(255,255,255,.09);
+    --border-strong:rgba(255,255,255,.16);
+    --bg-grad: radial-gradient(1100px 620px at 14% -8%, rgba(34,199,184,.10), transparent 60%),
+               radial-gradient(900px 700px at 100% 10%, rgba(91,141,239,.08), transparent 55%);
+  }
+  :root[data-theme="light"]{
+    --bg:var(--paper);
+    --text:#1B2027;
+    --text-dim:#5B6472;
+    --text-faint:#8A93A0;
+    --surface:rgba(15,23,32,.035);
+    --surface-2:rgba(15,23,32,.055);
+    --border:rgba(15,23,32,.10);
+    --border-strong:rgba(15,23,32,.16);
+    --bg-grad: radial-gradient(1100px 620px at 14% -8%, rgba(34,199,184,.07), transparent 60%),
+               radial-gradient(900px 700px at 100% 10%, rgba(91,141,239,.05), transparent 55%);
+  }
+
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  @media (prefers-reduced-motion: reduce){ html{scroll-behavior:auto;} *{animation-duration:.001ms !important; transition-duration:.001ms !important;} }
+
+  body{
+    margin:0; background:var(--bg); background-image:var(--bg-grad); background-attachment:fixed;
+    color:var(--text); font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;
+  }
+
+  .shell{ display:grid; grid-template-columns: 236px minmax(0,1fr); gap:0; max-width:1180px; margin:0 auto; }
+
+  /* ---- Rail ---- */
+  nav.rail{
+    position:sticky; top:0; align-self:start; height:100vh; overflow-y:auto;
+    padding:40px 18px 40px 28px; border-right:1px solid var(--border);
+    scrollbar-width:thin;
+  }
+  .rail .kicker{ font:600 11px/1 var(--serif-num); letter-spacing:.09em; color:var(--signal); text-transform:uppercase; margin-bottom:4px; }
+  .rail h1{ font-size:17px; margin:0 0 2px; letter-spacing:-.01em; }
+  .rail .sub{ font-size:12.5px; color:var(--text-dim); margin:0 0 28px; line-height:1.5; }
+  .rail ol{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:1px; }
+  .rail a{
+    display:flex; gap:10px; align-items:baseline; text-decoration:none; color:var(--text-dim);
+    font-size:13px; padding:7px 8px; border-radius:8px; transition:background .15s, color .15s;
+  }
+  .rail a .n{ font:500 10.5px/1 var(--serif-num); color:var(--text-faint); min-width:16px; }
+  .rail a:hover{ background:var(--surface); color:var(--text); }
+  .rail a.active{ background:var(--signal-soft); color:var(--text); }
+  .rail a.active .n{ color:var(--signal); }
+
+  /* ---- Content ---- */
+  main{ padding:64px 56px 140px; min-width:0; }
+  .intro{ max-width:640px; margin-bottom:64px; }
+  .intro .kicker{ font:600 11px/1 var(--serif-num); letter-spacing:.09em; color:var(--signal); text-transform:uppercase; margin:0 0 14px; }
+  .intro h0{ font-size:clamp(28px,4vw,38px); line-height:1.12; letter-spacing:-.015em; margin:0 0 16px; text-wrap:balance; }
+  .intro p{ font-size:16px; line-height:1.65; color:var(--text-dim); margin:0; max-width:60ch; }
+
+  section{ max-width:680px; padding:56px 0; border-top:1px solid var(--border); scroll-margin-top:32px; }
+  section:first-of-type{ border-top:none; }
+  .eyebrow{ font:600 11px/1 var(--serif-num); letter-spacing:.09em; color:var(--text-faint); text-transform:uppercase; margin:0 0 14px; }
+  h2{ font-size:24px; letter-spacing:-.01em; margin:0 0 20px; text-wrap:balance; }
+  h3{ font-size:15.5px; margin:30px 0 10px; color:var(--text); }
+  p{ font-size:15.5px; line-height:1.7; color:var(--text-dim); margin:0 0 14px; max-width:64ch; }
+  strong{ color:var(--text); font-weight:600; }
+  .lede{ font-size:17px; color:var(--text); line-height:1.6; margin-bottom:22px; }
+
+  .principle{ display:grid; grid-template-columns:32px 1fr; gap:14px; padding:16px 0; border-top:1px solid var(--border); }
+  .principle:first-of-type{ border-top:none; padding-top:6px; }
+  .principle .idx{ font:500 12px/1.4 var(--serif-num); color:var(--signal); padding-top:2px; }
+  .principle h4{ font-size:15px; margin:0 0 6px; }
+  .principle p{ margin:0; font-size:14.5px; }
+
+  /* swatches */
+  .swatchgrid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:10px; margin:18px 0 8px; }
+  .swatch{ border:1px solid var(--border); border-radius:12px; overflow:hidden; background:var(--surface); }
+  .swatch .chip{ height:52px; }
+  .swatch .meta{ padding:10px 12px; }
+  .swatch .name{ font-size:13px; font-weight:600; }
+  .swatch .hex{ font:400 11px/1 var(--serif-num); color:var(--text-faint); margin-top:3px; }
+  .swatch .why{ font-size:12.5px; color:var(--text-dim); margin-top:6px; line-height:1.5; }
+
+  /* glass demo */
+  .glassdemo{ position:relative; border-radius:18px; padding:40px 18px; margin:18px 0 10px;
+    background: linear-gradient(135deg, rgba(34,199,184,.18), rgba(91,141,239,.12)); }
+  .glevels{ display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+  .glevel{ border-radius:var(--radius); padding:16px 14px; border:1px solid rgba(255,255,255,.22); color:#fff; }
+  .glevel .lv{ font:600 10.5px/1 var(--serif-num); letter-spacing:.08em; opacity:.85; text-transform:uppercase; }
+  .glevel .desc{ font-size:12px; margin-top:8px; line-height:1.5; opacity:.92; }
+  .g1{ background:rgba(255,255,255,.08); backdrop-filter:blur(6px); }
+  .g2{ background:rgba(255,255,255,.14); backdrop-filter:blur(14px); }
+  .g3{ background:rgba(255,255,255,.20); backdrop-filter:blur(24px); box-shadow:0 12px 30px rgba(0,0,0,.25); }
+
+  /* type demo */
+  .typedemo{ border:1px solid var(--border); border-radius:var(--radius); padding:22px 24px; margin:18px 0 8px; background:var(--surface); }
+  .metric{ display:flex; align-items:baseline; gap:10px; padding:10px 0; border-top:1px solid var(--border); }
+  .metric:first-of-type{ border-top:none; }
+  .metric .label{ font:600 10.5px/1 var(--serif-num); letter-spacing:.07em; color:var(--text-faint); text-transform:uppercase; width:110px; flex-shrink:0; }
+  .metric .val{ font:500 22px/1 var(--serif-num); font-variant-numeric:tabular-nums; color:var(--text); }
+  .metric .delta{ font:500 13px/1 var(--serif-num); font-variant-numeric:tabular-nums; }
+  .up{ color:var(--success); } .down{ color:var(--strength); }
+
+  /* component gallery */
+  .gallery{ display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:12px; margin:18px 0 6px; }
+  .gcard{ border:1px solid var(--border); border-radius:var(--radius); padding:16px; background:var(--surface); }
+  .gcard .glabel{ font:600 10px/1 var(--serif-num); letter-spacing:.08em; color:var(--text-faint); text-transform:uppercase; margin-bottom:12px; }
+  .btn-demo{ display:inline-flex; align-items:center; gap:6px; background:var(--text); color:var(--bg); border:none; padding:8px 14px; border-radius:9px; font-size:13px; font-weight:600; cursor:pointer; transition:transform .12s ease; }
+  .btn-demo:hover{ transform:translateY(-1px); }
+  .btn-demo:active{ transform:scale(.98); }
+  .badge-demo{ display:inline-flex; align-items:center; gap:6px; font:600 11px/1 var(--serif-num); padding:5px 9px; border-radius:7px; background:var(--signal-soft); color:var(--signal); }
+  .ring{ width:56px; height:56px; border-radius:50%; background:conic-gradient(var(--signal) 0 72%, var(--border) 72% 100%); display:flex; align-items:center; justify-content:center; }
+  .ring span{ width:40px; height:40px; border-radius:50%; background:var(--bg); display:flex; align-items:center; justify-content:center; font:600 12px var(--serif-num); }
+  .progress-demo{ height:6px; border-radius:4px; background:var(--border); overflow:hidden; }
+  .progress-demo i{ display:block; height:100%; width:64%; background:var(--signal); border-radius:4px; }
+
+  .roadmap{ list-style:none; margin:18px 0 0; padding:0; counter-reset:rm; }
+  .roadmap li{ counter-increment:rm; position:relative; padding:16px 0 16px 40px; border-top:1px solid var(--border); }
+  .roadmap li:first-child{ border-top:none; }
+  .roadmap li::before{ content:counter(rm); position:absolute; left:0; top:16px; font:600 12px/1 var(--serif-num); color:var(--signal); }
+  .roadmap h4{ margin:0 0 5px; font-size:15px; }
+  .roadmap p{ margin:0; font-size:13.5px; }
+
+  footer{ max-width:680px; padding-top:40px; border-top:1px solid var(--border); }
+  footer p{ font-size:12.5px; color:var(--text-faint); }
+
+  @media (max-width:860px){
+    .shell{ grid-template-columns:1fr; }
+    nav.rail{ position:relative; height:auto; border-right:none; border-bottom:1px solid var(--border); padding:24px 20px; }
+    .rail ol{ flex-direction:row; overflow-x:auto; gap:4px; }
+    .rail a{ white-space:nowrap; }
+    main{ padding:40px 22px 100px; }
+  }
+</style>
+
+<div class="shell">
+  <nav class="rail" aria-label="Sections">
+    <div class="kicker">Design Spec</div>
+    <h1>Observer OS v2</h1>
+    <p class="sub">Design philosophy — the source of truth for every UI implementation going forward.</p>
+    <ol id="railList">
+      <li><a href="#s1"><span class="n">01</span>Brand Identity</a></li>
+      <li><a href="#s2"><span class="n">02</span>Design Principles</a></li>
+      <li><a href="#s3"><span class="n">03</span>Visual Language</a></li>
+      <li><a href="#s4"><span class="n">04</span>Color Philosophy</a></li>
+      <li><a href="#s5"><span class="n">05</span>Typography</a></li>
+      <li><a href="#s6"><span class="n">06</span>Layout Philosophy</a></li>
+      <li><a href="#s7"><span class="n">07</span>Glass System</a></li>
+      <li><a href="#s8"><span class="n">08</span>Motion</a></li>
+      <li><a href="#s9"><span class="n">09</span>Components</a></li>
+      <li><a href="#s10"><span class="n">10</span>Personality</a></li>
+      <li><a href="#s11"><span class="n">11</span>Recognizability</a></li>
+      <li><a href="#s12"><span class="n">12</span>Roadmap</a></li>
+    </ol>
+  </nav>
+
+  <main>
+    <div class="intro">
+      <div class="kicker">Observer OS v2 — Phase 7 Prelude</div>
+      <h0>A Personal Performance Operating System, not a fitness app.</h0>
+      <p>This document defines the design language every Observer OS surface will follow — Coach, Planner, Growth, Review, Profile. It replaces functionality-first thinking with product-experience-first thinking. Nothing here is final UI; it is the grammar that UI will be written in.</p>
+    </div>
+
+    <section id="s1">
+      <div class="eyebrow">Section 01</div>
+      <h2>Brand Identity</h2>
+      <p class="lede">Observer OS is the instrument panel for a life spent training, recovering, eating, and building — not a log you check in on, but a process that runs underneath your day and reports back only what matters.</p>
+      <h3>What is Observer OS?</h3>
+      <p>It's the difference between a diary and a flight recorder. A diary waits for you to write in it. A flight recorder is always running, always correlating — training load against sleep, protein against recovery, deep-work hours against readiness — and it only speaks when it has something load-bearing to say. Observer already computes CTL, ATL, TSB, a Readiness score, and a Hybrid Athlete score from your logs; v2's job is to make the <em>interface</em> feel as disciplined as that math already is.</p>
+      <h3>What emotions should users feel?</h3>
+      <p><strong>Calibrated, not congratulated.</strong> Seen accurately rather than cheered at. The feeling of stepping onto a scale that's actually correct, or checking an instrument you trust — quiet relief, not dopamine. A secondary feeling is momentum: every screen should make the athlete believe the system has been paying attention even when they weren't looking.</p>
+      <h3>How Observer differs from every fitness app</h3>
+      <p>Fitness apps optimize for the "open again tomorrow" loop: streaks, badges, confetti, social comparison. Observer OS has no opponent and no audience — it optimizes for the "trust this number" loop instead. It also differs from ChatGPT-style assistants: the Coach is not a blank text box waiting for a question, it's a running process with an opinion, surfaced proactively (nudges, insights) and available for interrogation on demand, not the other way around.</p>
+      <h3>If Apple made a personal operating system</h3>
+      <p>It would look less like an app and more like a control surface — instrument clusters with generous negative space, one primary reading per glance, glass used to imply depth of time (now vs. history) rather than to look expensive. Observer OS v2 borrows that restraint, not Apple's rounded-corner vocabulary specifically.</p>
+    </section>
+
+    <section id="s2">
+      <div class="eyebrow">Section 02</div>
+      <h2>Design Principles</h2>
+      <p class="lede">Twelve rules that should be able to settle any future design argument on their own.</p>
+
+      <div class="principle"><div class="idx">01</div><div><h4>Clarity before decoration</h4><p>Glass, blur, and gradient exist to separate layers of truth — current state vs. history vs. chrome — never to make a screen look expensive. If a glass effect doesn't change what the eye reads first, remove it.</p></div></div>
+      <div class="principle"><div class="idx">02</div><div><h4>Instrument, not application</h4><p>Design every screen like a cockpit gauge: the current reading is always visible without scrolling; everything else — trend, history, detail — sits one deliberate layer below it.</p></div></div>
+      <div class="principle"><div class="idx">03</div><div><h4>AI is ambient, not a chat window bolted on</h4><p>The Coach already reasons and calls tools server-side; the UI should feel like overhearing a process that's been thinking about you, not opening a search bar. Chat is one entry point, not the identity.</p></div></div>
+      <div class="principle"><div class="idx">04</div><div><h4>Action before analytics</h4><p>"What do I do today" always outranks "here's a chart of the last 30 days." Recommendations sit above the graphs that justify them, never below.</p></div></div>
+      <div class="principle"><div class="idx">05</div><div><h4>One accent, many domains</h4><p>The signal color belongs to Observer's own voice alone. Recovery, Running, Strength, and Growth each get a fixed hue, but none of them may borrow the signal color — so the eye always knows when Observer itself is speaking.</p></div></div>
+      <div class="principle"><div class="idx">06</div><div><h4>Data never overwhelms</h4><p>Every number on screen must answer a question the athlete has <em>today</em>. If a metric can't be tied to a decision, it belongs one tap deeper, not on the surface.</p></div></div>
+      <div class="principle"><div class="idx">07</div><div><h4>Motion has meaning</h4><p>An animation is only justified if it shows causality (this number moved because of that logged set) or a state transition. Motion that exists to feel alive is banned.</p></div></div>
+      <div class="principle"><div class="idx">08</div><div><h4>Glass creates hierarchy, not texture</h4><p>Blur and opacity are a distance function: the more blurred a panel, the further it sits from "right now." A pattern language, not a decoration.</p></div></div>
+      <div class="principle"><div class="idx">09</div><div><h4>Numbers are typeset, not printed</h4><p>Every measured value is monospaced, tabular, and sign-prefixed (+2.3 kg, −4 TSB) so trend is legible before magnitude is.</p></div></div>
+      <div class="principle"><div class="idx">10</div><div><h4>Silence is a feature</h4><p>Observer is allowed to have nothing to say. The insight and nudge engines already return null rather than force a sentence — the UI must honor that by rendering absence cleanly, not with a spinner or a placeholder joke.</p></div></div>
+      <div class="principle"><div class="idx">11</div><div><h4>Continuity over novelty</h4><p>The same rail, meter, badge, and card grammar repeats across Training, Nutrition, Recovery, and Growth. Switching pillars should never mean re-learning the interface.</p></div></div>
+      <div class="principle"><div class="idx">12</div><div><h4>Earn every pixel of chrome</h4><p>No sidebar, breadcrumb, or card exists because "dashboards have those." Every piece of chrome must trace back to a real athlete task.</p></div></div>
+    </section>
+
+    <section id="s3">
+      <div class="eyebrow">Section 03</div>
+      <h2>Visual Language</h2>
+      <p class="lede">Mood: a nocturnal instrument panel — calibrated, still, slightly cold, never sterile.</p>
+      <p><strong>Lighting</strong> comes from one soft source, upper-left, like a HUD glow — not scattered highlights. <strong>Depth</strong> is capped at three shallow planes: ground, glass, content. A fourth plane collapses the hierarchy and is not allowed. <strong>Glass</strong> is frosted and low-saturation — never a rainbow-tinted blur. <strong>Blur</strong> runs 6–24px depending on layer, tuned so text behind a panel is unreadable (real separation) while color still bleeds through as "something is there." <strong>Contrast</strong> is always checked against the glass layer itself, never against the raw background behind it.</p>
+      <p><strong>Whitespace</strong> is generous between instrument clusters and tight within one — the gap itself communicates "these numbers belong together." <strong>Corner radius</strong> holds at 12–16px everywhere except true pills (badges, tags). <strong>Shadows</strong> are soft and cool-toned, used only to lift the one active layer — never for decoration. <strong>Transparency</strong> is reserved for encoding time (now vs. history), not for looking premium. <strong>Border language</strong> is a 1px hairline, near-invisible until hover or focus brightens it. <strong>Background philosophy</strong>: never flat black or flat white — a faint directional gradient so the surface reads as lit, not switched off.</p>
+    </section>
+
+    <section id="s4">
+      <div class="eyebrow">Section 04</div>
+      <h2>Color Philosophy</h2>
+      <p class="lede">Color is assigned by function, not decoration — each hue is a domain's fixed radio frequency.</p>
+      <div class="swatchgrid">
+        <div class="swatch"><div class="chip" style="background:var(--signal)"></div><div class="meta"><div class="name">Signal</div><div class="hex">#22C7B8</div><div class="why">Observer's own voice — AI commentary, the active rail item, focus states. Never used for a domain, so its appearance always means "the system is speaking."</div></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--recovery)"></div><div class="meta"><div class="name">Recovery</div><div class="hex">#4E86D9</div><div class="why">Cool, still-water blue — parasympathetic, unhurried. Sleep, HRV-adjacent readiness, rest days.</div></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--running)"></div><div class="meta"><div class="name">Running</div><div class="hex">#E08A34</div><div class="why">Warm, kinetic amber — pace, distance, sunrise-run energy. The only genuinely warm domain hue.</div></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--strength)"></div><div class="meta"><div class="name">Strength</div><div class="hex">#D8464C</div><div class="why">Load-bearing red — max effort, volume, fatigue accumulation. Reused nowhere else so it always reads as "effort," not "error."</div></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--growth)"></div><div class="meta"><div class="name">Growth</div><div class="hex">#8A73F0</div><div class="why">Violet for cognition — study, deep work, the parts of the Hybrid Athlete score that aren't physical.</div></div></div>
+        <div class="swatch"><div class="chip" style="background:linear-gradient(135deg,var(--prediction-a),var(--prediction-b))"></div><div class="meta"><div class="name">Prediction</div><div class="hex">gradient</div><div class="why">A dashed blend of Signal → Growth. The only element allowed a gradient, because forecasts are literally a blend of present signal and modeled reasoning.</div></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--warn)"></div><div class="meta"><div class="name">Warning</div><div class="hex">#D98C1F</div><div class="why">Semantic, not aesthetic — reserved strictly for "this needs attention," kept distinct from Running's amber by weight and context, never decorative.</div></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--success)"></div><div class="meta"><div class="name">Success</div><div class="hex">#2FA871</div><div class="why">Confirmation only — goal hit, streak intact, sync complete. Never doubles as Recovery or Growth.</div></div></div>
+      </div>
+      <h3 style="margin-top:26px;">Neutral, surface, glass, background</h3>
+      <p>The neutral text color is never pure grey — it carries a faint cool bias toward Signal (<span style="font-family:var(--serif-num)">#9AA3B0</span> on dark, <span style="font-family:var(--serif-num)">#5B6472</span> on light) so muted text still feels like it belongs to the same instrument. Surfaces are near-transparent white or ink washes (3.5–5.5% opacity) rather than a flat grey card color — glass is the surface system, not a separate one. Backgrounds carry two soft radial gradients (Signal top-left, Recovery-blue top-right) at low opacity, faint enough to read as ambient light rather than a "hero" gradient.</p>
+    </section>
+
+    <section id="s5">
+      <div class="eyebrow">Section 05</div>
+      <h2>Typography Philosophy</h2>
+      <p class="lede">Two families only: the reader's own system sans for everything read, and monospace for everything measured. Observer OS runs on your device, so it borrows your device's own voice rather than importing a branded typeface — the one place the design deliberately disappears.</p>
+      <div class="typedemo">
+        <div class="metric"><div class="label">Readiness</div><div class="val">87</div><div class="delta up">+4</div></div>
+        <div class="metric"><div class="label">TSB</div><div class="val">−4.2</div><div class="delta down">−1.1</div></div>
+        <div class="metric"><div class="label">Protein</div><div class="val">148g</div><div class="delta up">96%</div></div>
+        <div class="metric"><div class="label">AI · Model</div><div class="val" style="font-size:14px;">gpt-oss-120b</div><div class="delta" style="color:var(--text-faint)">tool-use</div></div>
+      </div>
+      <h3>Heading hierarchy</h3>
+      <p>Display appears once per page — the single "mission" statement. H2 marks a pillar (Training, Nutrition, Recovery, Growth). H3 marks one instrument cluster inside a pillar. Nothing below H3 is ever bold.</p>
+      <h3>Metric typography</h3>
+      <p>Monospace, tabular-nums, sign always shown. The label is smaller and dimmer than the value by design — the number should be legible before the reader has consciously read the label.</p>
+      <h3>Body, labels, metadata</h3>
+      <p>Body copy sits at 15.5–17px, 1.6–1.7 line height, capped near 64–68 characters. Labels are uppercase, 10.5–11px, wide tracking, faint color — always paired with a unit, never assumed. Metadata (timestamps, sources, model names) is the dimmest, smallest text on the page and always monospace, since it's technically "measured" information too.</p>
+    </section>
+
+    <section id="s6">
+      <div class="eyebrow">Section 06</div>
+      <h2>Layout Philosophy</h2>
+      <p class="lede">Every page reads in one fixed order: <strong>Mission → Actions → AI → Analytics → History/Planner.</strong></p>
+      <p>Mission is a single instrument reading — today's readiness, today's plan, today's one number that matters — never a chart, never plural. Actions follow immediately: the two or three things Observer recommends doing about that reading. AI commentary sits beside or just below actions, framed as reasoning over the mission, not a separate chat destination. Analytics and Insight visualizations justify the recommendation and always come after it, never before. History and Planner — the heaviest, most scrollable content — sit lowest, since they answer "what happened" and "what's next," which matter less than "what's true right now."</p>
+      <p>Nothing on a page may compete with the Mission line for visual weight — if a chart's color, size, or animation pulls the eye before the top instrument does, the chart is wrong, not the rule.</p>
+    </section>
+
+    <section id="s7">
+      <div class="eyebrow">Section 07</div>
+      <h2>Glass System</h2>
+      <p class="lede">Three base levels, plus four purpose-built variants. Each level is a fixed recipe, not a slider — no screen improvises its own blur value.</p>
+      <div class="glassdemo">
+        <div class="glevels">
+          <div class="glevel g1"><div class="lv">Level 1</div><div class="desc">6px blur, 8% fill. Inline cards sitting directly on the page — the most common surface.</div></div>
+          <div class="glevel g2"><div class="lv">Level 2</div><div class="desc">14px blur, 14% fill. Grouped instrument clusters and the navigation rail — one visible step "above" the page.</div></div>
+          <div class="glevel g3"><div class="lv">Level 3</div><div class="desc">24px blur, 20% fill, soft lift shadow. Modals, the AI panel, anything temporarily commanding full attention.</div></div>
+        </div>
+      </div>
+      <h3>Purpose-built variants</h3>
+      <p><strong>Glass Hero</strong> — Level 1 only, oversized radius, no shadow; the mission line sits on the calmest glass in the system so nothing outranks it visually. <strong>Glass Modal</strong> — Level 3, always with a dimmed backdrop, never edge-to-edge. <strong>Glass Sidebar / Navigation</strong> — Level 2, static, never changes blur on scroll. <strong>Glass Charts</strong> — no glass at all on the plotting surface itself; charts sit on flat background so data ink stays maximally legible, with only their container card at Level 1.</p>
+    </section>
+
+    <section id="s8">
+      <div class="eyebrow">Section 08</div>
+      <h2>Motion Philosophy</h2>
+      <p class="lede">Nothing plays for its own sake. Every motion either reveals state or shows causality.</p>
+      <h3>Hover, loading, transitions</h3>
+      <p><strong>Hover</strong> reveals affordance in ~120ms (lift 1px, brighten border) — nothing bounces. <strong>Loading</strong> is a skeleton pulsing at the same opacity as Level 1 glass, never a spinner; the shape of what's coming is more honest than a generic loader. <strong>Page transitions</strong> are a 180ms crossfade with a 4px rise — enough to signal "new context," not enough to feel like an app splash.</p>
+      <h3>Metric, chart, and micro-interactions</h3>
+      <p><strong>Metric animations</strong> (count-up) only fire the first time a value is freshly computed in a session — revisiting a page never replays the count. <strong>Chart animations</strong> draw on once, on first mount, then stay static. <strong>Micro-interactions</strong>: pressed controls compress 2%, nothing more. <strong>Scroll</strong> never drives parallax or reveal animations — the only scroll-linked motion allowed is the rail's active-section highlight, because that's information, not flourish.</p>
+      <div class="gallery" style="grid-template-columns:repeat(auto-fill,minmax(170px,1fr));">
+        <div class="gcard"><div class="glabel">Hover demo</div><button class="btn-demo">Log set</button></div>
+      </div>
+    </section>
+
+    <section id="s9">
+      <div class="eyebrow">Section 09</div>
+      <h2>Component Language</h2>
+      <p class="lede">A small, repeating vocabulary — new components are a last resort, not a first instinct.</p>
+      <div class="gallery">
+        <div class="gcard"><div class="glabel">Button</div><button class="btn-demo">Primary</button></div>
+        <div class="gcard"><div class="glabel">Badge</div><span class="badge-demo">● Live</span></div>
+        <div class="gcard"><div class="glabel">Ring</div><div class="ring"><span>72%</span></div></div>
+        <div class="gcard"><div class="glabel">Progress</div><div class="progress-demo"><i></i></div></div>
+      </div>
+      <p>Buttons carry one filled primary style (solid text-color fill, inverted) and one ghost style (hairline border, transparent) — no third variant. Cards are always Level 1 glass with a 1px hairline; they never use a solid opaque fill. Inputs are flat, bottom-border only, no boxed chrome, so they read as "editable text" rather than a form widget. Dropdowns and tabs share the rail's selection language — a soft signal-tinted fill on the active item, nothing else changes. Badges are pills, always paired with a single word and, where relevant, a live dot. Charts plot on flat background, data-ink only, domain-colored per pillar. Progress bars and rings are the same primitive at different geometries — always signal-colored unless reporting a specific domain. Tooltips and dialogs are Level 3 glass, appear on a 120ms fade, and never auto-dismiss faster than a user can read them. The <strong>AI Chat</strong> surface is deliberately not a messaging-app bubble thread — messages are left-aligned, undivided by bubbles, with Observer's turns marked only by the Signal-colored hairline rule beside them. <strong>Planner cards</strong> are Level 1 glass, domain-colored on the left edge only, with the recommendation as the largest text on the card and the reasoning as secondary, dimmer text beneath it.</p>
+    </section>
+
+    <section id="s10">
+      <div class="eyebrow">Section 10</div>
+      <h2>Observer Personality</h2>
+      <p class="lede">Not friendly. Not corporate. Observer talks like a flight engineer who respects you enough to tell you the truth plainly.</p>
+      <p>It is dry, precise, and occasionally wry — never a cheerleader, never apologetic. It speaks in present tense about present facts ("Training load is climbing faster than recovery" — not "We're crushing it!" or "Great job today!"). It doesn't perform enthusiasm and it doesn't perform concern; it reports, and lets the number carry the emotional weight. When it has nothing worth saying, it says nothing — silence is part of its voice, not a gap in it.</p>
+    </section>
+
+    <section id="s11">
+      <div class="eyebrow">Section 11</div>
+      <h2>What Makes Observer Instantly Recognizable</h2>
+      <p class="lede">Strip the logo. These five things still say "Observer OS":</p>
+      <p><strong>1.</strong> One accent color (Signal) that only ever means "the system is speaking," never decoration. <strong>2.</strong> Every measured number is monospaced, tabular, and sign-prefixed — no other product logs a "+4 Readiness" the same way. <strong>3.</strong> Glass used as a depth-of-time function (now vs. history), never as a texture applied to everything. <strong>4.</strong> The total absence of gamification chrome — no flame streaks, no confetti, no badge shelf. <strong>5.</strong> A rail-first, mission-first layout order that never leads with a chart.</p>
+    </section>
+
+    <section id="s12">
+      <div class="eyebrow">Section 12</div>
+      <h2>Implementation Roadmap</h2>
+      <p class="lede">Order chosen to prove the language on the highest-traffic surface first, then propagate it outward from cheapest-risk to highest-risk layouts.</p>
+      <ol class="roadmap">
+        <li><h4>Coach</h4><p>Highest-traffic surface and the one furthest from the new language today (it just had backend work land — model swap, context trimming). It's a single-column, reading-first layout, which makes it the lowest-layout-risk place to prove glass, typography, and the "ambient AI" principle before touching data-dense screens.</p></li>
+        <li><h4>Dashboard</h4><p>Establishes the Mission → Actions → AI → Analytics ordering for every other page. Every later page inherits its instrument-cluster grammar from here.</p></li>
+        <li><h4>Review (Weekly Intelligence)</h4><p>Reuses the Dashboard's metric and glass grammar at much higher density — the real stress test for whether "data never overwhelms" survives contact with a full weekly report.</p></li>
+        <li><h4>Planner &amp; Growth</h4><p>Once Coach, Dashboard, and Review exist, Planner cards and Growth's study/deep-work tracking can adopt the same components almost for free.</p></li>
+        <li><h4>Profile &amp; Settings</h4><p>Lowest emotional stakes, most utilitarian. Last, because they can inherit the finished system with the least original design work.</p></li>
+      </ol>
+    </section>
+
+    <footer>
+      <p>Observer OS v2 — Design Language Spec. No code, no components, no Tailwind were written to produce this document; it defines the grammar that implementation will follow next.</p>
+    </footer>
+  </main>
+</div>
+
+<script>
+  (function(){
+    var links = Array.prototype.slice.call(document.querySelectorAll('.rail a'));
+    var map = {};
+    links.forEach(function(a){ map[a.getAttribute('href').slice(1)] = a; });
+    var sections = Array.prototype.slice.call(document.querySelectorAll('main section'));
+    if (!('IntersectionObserver' in window)) return;
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(entry){
+        var link = map[entry.target.id];
+        if (!link) return;
+        if (entry.isIntersecting) {
+          links.forEach(function(l){ l.classList.remove('active'); });
+          link.classList.add('active');
+        }
+      });
+    }, { rootMargin: '-10% 0px -75% 0px', threshold: 0 });
+    sections.forEach(function(s){ io.observe(s); });
+  })();
+</script>
