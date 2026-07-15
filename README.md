@@ -12,7 +12,7 @@ Personal AI performance coach for training, recovery, and nutrition — built fo
 - Body metrics tracking (HRV, resting HR, VO2 max, body fat)
 
 **Nutrition**
-- Natural-language meal logging — type what you ate, an AI pipeline (cache → Open Food Facts → USDA → AI estimation) resolves it into calories and macros
+- Natural-language meal logging — type what you ate, an AI pipeline (cache → Open Food Facts → AI estimation) resolves it into calories and macros
 - Handles fractions ("half a plate"), diminutive phrases ("a little bit of"), explicit grams, countable units, and container sizes ("a small bowl of")
 - Daily macro and water targets computed from BMR/TDEE (Mifflin-St Jeor), goal type, today's training load, creatine intake, and local weather (hotter days raise the water target automatically)
 - Meal-type tagging (breakfast / lunch / dinner / snack / junk) with a dedicated history view tracking junk-food frequency and daily averages
@@ -64,7 +64,6 @@ NEXT_PUBLIC_VAPID_PUBLIC_KEY=
 VAPID_PRIVATE_KEY=
 RESEND_API_KEY=
 BUG_REPORT_TO_EMAIL=
-USDA_API_KEY=        # optional — nutrition lookup falls back to AI estimation without it
 ```
 
 ### Database setup

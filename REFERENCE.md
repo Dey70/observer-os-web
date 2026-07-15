@@ -73,7 +73,7 @@ All tables except `food_cache` are RLS-scoped to `auth.uid() = user_id`.
 Per food item, in order:
 1. **Supplements table** — exact macros for creatine, BCAA, EAA, electrolytes, multivitamin, fish oil, glutamine, pre-workout, whey (bypasses AI entirely to avoid hallucination)
 2. **Generic foods table** — hardcoded values for plain vegetables/greens and plain salad, since AI estimates for these are inconsistent; skipped if the text implies oil/dressing/added protein
-3. **Cache → Open Food Facts → USDA → AI estimation**, in that order, for everything else
+3. **Cache → Open Food Facts → AI estimation**, in that order, for everything else
 
 Portion-size handling: explicit grams > countable units (eggs, rotis, slices) > a leading number qualifying a container ("1 small bowl of X") > diminutive phrases ("a little bit of", with or without a leading "a") > size words with optional half/quarter fraction modifiers > generic 100g assumption as a last resort. Confidence is downgraded to medium whenever the portion was inferred rather than explicitly stated.
 
@@ -85,7 +85,6 @@ Portion-size handling: explicit grams > countable units (eggs, rotis, slices) > 
 | Groq (Llama 3.3 70B) | Coach chat, nutrition AI estimation, weekly review | Yes |
 | Open-Meteo | Current temperature for water target, city geocoding | No |
 | Open Food Facts | Branded food nutrition lookup | No |
-| USDA FoodData Central | Generic food nutrition lookup | Optional |
 | Resend | Bug/feedback report emails | Yes |
 | web-push (VAPID) | Push notifications | Self-generated keys |
 

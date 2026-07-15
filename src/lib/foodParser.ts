@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { estimatePortionGrams } from "./nutritionEngine";
 
 export type FoodConfidence = "verified" | "learned" | "imported" | "high" | "medium" | "low";
-export type FoodSource = "off" | "usda" | "ai" | "manual" | "user";
+export type FoodSource = "off" | "ai" | "manual" | "user";
 
 export interface ParsedFoodItem {
   name: string;
@@ -410,96 +410,57 @@ async function getPer100g(
     }
   }
 
-  const usdaKey = process.env.USDA_API_KEY;
-
-  // When USDA is configured, use it first and skip OFF entirely.
-  // USDA (lab-measured whole foods) is far more accurate than OFF
-  // (crowdsourced packaged products) for common meal ingredients.
-  if (usdaKey) {
-    try {
-      const usdaRes = await fetch(
-        `https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${usdaKey}&query=${encodeURIComponent(
+  // Open Food Facts (packaged product database).
+  // Fetch 5 candidates, score by name similarity, and reject implausibly
+  // high-calorie products to avoid caching wrong matches (e.g. "banana"
+  // returning banana chips at 500 kcal/100g instead of fresh banana at 89).
+  try {
+    const offRes = await fetch(
+      `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(
+        foodName,
+      )}&search_simple=1&action=process&json=1&page_size=5`,
+    );
+    if (offRes.ok) {
+      const offData = await offRes.json();
+      // Oils, nuts, and butter legitimately exceed 600 kcal/100g.
+      const isFatFood =
+        /\b(oil|ghee|butter|lard|mayo|mayonnaise|peanut\s+butter|tahini|coconut\s+cream|coconut\s+oil|almonds?|cashews?|walnuts?|peanuts?)\b/i.test(
           foodName,
-        )}&pageSize=3&dataType=Survey%20(FNDDS),SR%20Legacy,Foundation`,
-      );
-      if (usdaRes.ok) {
-        const usdaData = await usdaRes.json();
-        // Pick the first result that has a meaningful calorie value
-        for (const food of usdaData?.foods ?? []) {
-          if (!food?.foodNutrients) continue;
-          const findNutrient = (term: string) =>
-            food.foodNutrients.find((n: any) =>
-              n.nutrientName?.toLowerCase().includes(term),
-            )?.value ?? 0;
-          const per100g = {
-            calories: findNutrient("energy"),
-            protein: findNutrient("protein"),
-            carbs: findNutrient("carbohydrate"),
-            fat: findNutrient("total lipid"),
-            fiber: findNutrient("fiber"),
-          };
-          if (per100g.calories > 0) {
-            await cacheResult(supabase, normalized, "usda", per100g);
-            return { source: "usda", confidence: "high", per100g };
-          }
-        }
-      }
-    } catch {
-      // fall through to AI
-    }
-  } else {
-    // No USDA key — fall back to OFF (packaged product database).
-    // Fetch 5 candidates, score by name similarity, and reject implausibly
-    // high-calorie products to avoid caching wrong matches (e.g. "banana"
-    // returning banana chips at 500 kcal/100g instead of fresh banana at 89).
-    try {
-      const offRes = await fetch(
-        `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(
-          foodName,
-        )}&search_simple=1&action=process&json=1&page_size=5`,
-      );
-      if (offRes.ok) {
-        const offData = await offRes.json();
-        // Oils, nuts, and butter legitimately exceed 600 kcal/100g.
-        const isFatFood =
-          /\b(oil|ghee|butter|lard|mayo|mayonnaise|peanut\s+butter|tahini|coconut\s+cream|coconut\s+oil|almonds?|cashews?|walnuts?|peanuts?)\b/i.test(
-            foodName,
-          );
-        const candidates: Array<{ product: any; score: number }> = (
-          offData?.products ?? []
-        )
-          .filter((p: any) => {
-            const cal = p?.nutriments?.["energy-kcal_100g"];
-            return cal && cal > 0 && (isFatFood || cal <= 900);
-          })
-          .map((p: any) => ({
-            product: p,
-            score: scoreOFFProductName(p.product_name, foodName),
-          }))
-          .filter((c: { product: any; score: number }) => c.score > 0)
-          .sort(
-            (
-              a: { product: any; score: number },
-              b: { product: any; score: number },
-            ) => b.score - a.score,
-          );
+        );
+      const candidates: Array<{ product: any; score: number }> = (
+        offData?.products ?? []
+      )
+        .filter((p: any) => {
+          const cal = p?.nutriments?.["energy-kcal_100g"];
+          return cal && cal > 0 && (isFatFood || cal <= 900);
+        })
+        .map((p: any) => ({
+          product: p,
+          score: scoreOFFProductName(p.product_name, foodName),
+        }))
+        .filter((c: { product: any; score: number }) => c.score > 0)
+        .sort(
+          (
+            a: { product: any; score: number },
+            b: { product: any; score: number },
+          ) => b.score - a.score,
+        );
 
-        if (candidates.length > 0) {
-          const n = candidates[0].product.nutriments;
-          const per100g = {
-            calories: n["energy-kcal_100g"],
-            protein: n["proteins_100g"] ?? 0,
-            carbs: n["carbohydrates_100g"] ?? 0,
-            fat: n["fat_100g"] ?? 0,
-            fiber: n["fiber_100g"] ?? 0,
-          };
-          await cacheResult(supabase, normalized, "off", per100g);
-          return { source: "off", confidence: "high", per100g };
-        }
+      if (candidates.length > 0) {
+        const n = candidates[0].product.nutriments;
+        const per100g = {
+          calories: n["energy-kcal_100g"],
+          protein: n["proteins_100g"] ?? 0,
+          carbs: n["carbohydrates_100g"] ?? 0,
+          fat: n["fat_100g"] ?? 0,
+          fiber: n["fiber_100g"] ?? 0,
+        };
+        await cacheResult(supabase, normalized, "off", per100g);
+        return { source: "off", confidence: "high", per100g };
       }
-    } catch {
-      // fall through to AI
     }
+  } catch {
+    // fall through to AI
   }
 
   const aiResult = await estimateWithAI(foodName, groqApiKey);
@@ -923,7 +884,7 @@ export async function parseMeal(
       continue;
     }
 
-    // ── 4. Cache → USDA → OFF → AI ───────────────────────────────────────────
+    // ── 4. Cache → OFF → AI ───────────────────────────────────────────────────
     const { source, confidence, per100g } = await getPer100g(
       name,
       supabase,

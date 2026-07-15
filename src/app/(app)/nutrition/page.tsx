@@ -48,8 +48,6 @@ function getSourceBadge(
     return { label: "LOW", color: "var(--red)", icon: false };
   if (source === "manual")
     return { label: "VERIFIED", color: "var(--green)", icon: false };
-  if (source === "usda")
-    return { label: "USDA", color: "var(--accent)", icon: false };
   if (source === "off")
     return { label: "DATABASE", color: "var(--yellow)", icon: false };
   if (source === "ai")
@@ -94,6 +92,7 @@ type NutritionLogRow = {
   meal_type: MealType;
   item_name: string;
   portion_desc: string | null;
+  raw_input: string | null;
   source: string;
   confidence: string;
   calories: number;
@@ -227,6 +226,25 @@ function groupLogsByMeal(
     groups[key].push(l);
   }
   return groups;
+}
+
+function groupByMealGroupId(
+  items: NutritionLogRow[],
+): { groupId: string; rawInput: string | null; items: NutritionLogRow[] }[] {
+  const order: string[] = [];
+  const map = new Map<string, NutritionLogRow[]>();
+  for (const item of items) {
+    if (!map.has(item.meal_group_id)) {
+      order.push(item.meal_group_id);
+      map.set(item.meal_group_id, []);
+    }
+    map.get(item.meal_group_id)!.push(item);
+  }
+  return order.map((groupId) => ({
+    groupId,
+    rawInput: map.get(groupId)![0].raw_input,
+    items: map.get(groupId)!,
+  }));
 }
 
 function MacroRing({
@@ -1322,78 +1340,103 @@ export default function NutritionPage() {
                     </span>
                   </div>
                   <div
-                    style={{ display: "flex", flexDirection: "column", gap: 6 }}
+                    style={{ display: "flex", flexDirection: "column", gap: 12 }}
                   >
-                    {items.map((l) => (
-                      <div
-                        key={l.id}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          padding: "10px 12px",
-                          background: "var(--surface2)",
-                          border: "1px solid var(--border2)",
-                          borderRadius: 8,
-                          gap: 8,
-                        }}
-                      >
-                        <div style={{ minWidth: 0, flex: 1 }}>
+                    {groupByMealGroupId(items).map((group) => (
+                      <div key={group.groupId}>
+                        {group.rawInput && (
                           <div
                             style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 8,
-                              flexWrap: "wrap",
-                            }}
-                          >
-                            <span
-                              style={{
-                                fontSize: 13,
-                                color: "var(--text)",
-                                textTransform: "capitalize",
-                              }}
-                            >
-                              {l.item_name}
-                            </span>
-                            <SourceBadge
-                              source={l.source}
-                              confidence={l.confidence}
-                            />
-                          </div>
-                          <div
-                            style={{
-                              fontSize: 10,
+                              fontSize: 11,
                               color: "var(--text-dim)",
-                              fontFamily: "var(--mono)",
-                              marginTop: 2,
+                              fontStyle: "italic",
+                              marginBottom: 6,
+                              paddingLeft: 2,
                             }}
                           >
-                            {l.portion_desc} · {l.calories} kcal · P{l.protein}{" "}
-                            C{l.carbs} F{l.fat}
+                            &ldquo;{group.rawInput}&rdquo;
                           </div>
-                        </div>
-                        <button
-                          onClick={() => deleteLogItem(l.id)}
+                        )}
+                        <div
                           style={{
-                            width: 26,
-                            height: 26,
                             display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            background: "transparent",
-                            border: "1px solid var(--border2)",
-                            borderRadius: 6,
-                            cursor: "pointer",
-                            flexShrink: 0,
+                            flexDirection: "column",
+                            gap: 6,
                           }}
                         >
-                          <Trash2
-                            size={11}
-                            color="var(--text-dim)"
-                            strokeWidth={1.75}
-                          />
-                        </button>
+                          {group.items.map((l) => (
+                            <div
+                              key={l.id}
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                padding: "10px 12px",
+                                background: "var(--surface2)",
+                                border: "1px solid var(--border2)",
+                                borderRadius: 8,
+                                gap: 8,
+                              }}
+                            >
+                              <div style={{ minWidth: 0, flex: 1 }}>
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 8,
+                                    flexWrap: "wrap",
+                                  }}
+                                >
+                                  <span
+                                    style={{
+                                      fontSize: 13,
+                                      color: "var(--text)",
+                                      textTransform: "capitalize",
+                                    }}
+                                  >
+                                    {l.item_name}
+                                  </span>
+                                  <SourceBadge
+                                    source={l.source}
+                                    confidence={l.confidence}
+                                  />
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: 10,
+                                    color: "var(--text-dim)",
+                                    fontFamily: "var(--mono)",
+                                    marginTop: 2,
+                                  }}
+                                >
+                                  {l.portion_desc} · {l.calories} kcal · P
+                                  {l.protein} C{l.carbs} F{l.fat}
+                                </div>
+                              </div>
+                              <button
+                                onClick={() => deleteLogItem(l.id)}
+                                style={{
+                                  width: 26,
+                                  height: 26,
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  background: "transparent",
+                                  border: "1px solid var(--border2)",
+                                  borderRadius: 6,
+                                  cursor: "pointer",
+                                  flexShrink: 0,
+                                }}
+                              >
+                                <Trash2
+                                  size={11}
+                                  color="var(--text-dim)"
+                                  strokeWidth={1.75}
+                                />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     ))}
                   </div>
