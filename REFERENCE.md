@@ -71,9 +71,20 @@ All tables except `food_cache` are RLS-scoped to `auth.uid() = user_id`.
 ## Nutrition parsing pipeline (`src/lib/foodParser.ts`)
 
 Per food item, in order:
-1. **Supplements table** — exact macros for creatine, BCAA, EAA, electrolytes, multivitamin, fish oil, glutamine, pre-workout, whey (bypasses AI entirely to avoid hallucination)
-2. **Generic foods table** — hardcoded values for plain vegetables/greens and plain salad, since AI estimates for these are inconsistent; skipped if the text implies oil/dressing/added protein
-3. **Cache → Open Food Facts → AI estimation**, in that order, for everything else
+1. **User's personal food library** (`user_foods`) — private per-user overrides/corrections, always win
+2. **Global food database** (`global_foods`) — admin-curated, shared by every account (e.g. accurate Indian dishes); see "Global vs personal foods" below
+3. **Supplements table** — exact macros for creatine, BCAA, EAA, electrolytes, multivitamin, fish oil, glutamine, pre-workout, whey (bypasses AI entirely to avoid hallucination)
+4. **Generic foods table** — hardcoded values for plain vegetables/greens and plain salad, since AI estimates for these are inconsistent; skipped if the text implies oil/dressing/added protein
+5. **Cache → Open Food Facts → AI estimation**, in that order, for everything else
+
+### Global vs personal foods
+
+Two lookup tables sit ahead of the hardcoded/AI fallbacks:
+
+- `user_foods` — private per-user memory ("Remember this food" while logging, or manual add/edit on `/nutrition/my-foods`). Every user has their own.
+- `global_foods` — one shared table every account reads from, populated only by admins (accounts listed in `app_admins`) via `/nutrition/global-foods`, including CSV import. This is the fix for weak AI/OFF estimates on Indian food: correct it once as an admin, every user benefits immediately.
+
+Regular users no longer have CSV import — that surface is admin-only now, since bad crowdsourced data in a shared table affects everyone. See `supabase/global_foods_schema.sql` for the RLS policies and admin-seeding query.
 
 Portion-size handling: explicit grams > countable units (eggs, rotis, slices) > a leading number qualifying a container ("1 small bowl of X") > diminutive phrases ("a little bit of", with or without a leading "a") > size words with optional half/quarter fraction modifiers > generic 100g assumption as a last resort. Confidence is downgraded to medium whenever the portion was inferred rather than explicitly stated.
 

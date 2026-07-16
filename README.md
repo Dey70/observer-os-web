@@ -12,7 +12,7 @@ Personal AI performance coach for training, recovery, and nutrition — built fo
 - Body metrics tracking (HRV, resting HR, VO2 max, body fat)
 
 **Nutrition**
-- Natural-language meal logging — type what you ate, an AI pipeline (cache → Open Food Facts → AI estimation) resolves it into calories and macros
+- Natural-language meal logging — type what you ate, resolved via personal food memory → a shared admin-curated food database → an AI pipeline (cache → Open Food Facts → AI estimation) for anything not already known
 - Handles fractions ("half a plate"), diminutive phrases ("a little bit of"), explicit grams, countable units, and container sizes ("a small bowl of")
 - Daily macro and water targets computed from BMR/TDEE (Mifflin-St Jeor), goal type, today's training load, creatine intake, and local weather (hotter days raise the water target automatically)
 - Meal-type tagging (breakfast / lunch / dinner / snack / junk) with a dedicated history view tracking junk-food frequency and daily averages
@@ -74,6 +74,8 @@ Run these in the Supabase SQL Editor, in order:
 3. Water tracking table (`water_logs`, with RLS policies)
 4. Profile location fields (`latitude`, `longitude`, `city_name`) for weather-adjusted hydration
 5. Extend the `nutrition_logs.meal_type` check constraint to include `'junk'`
+6. `supabase/user_foods_schema.sql` then `supabase/user_foods_v2.sql` — per-user personal food memory
+7. `supabase/global_foods_schema.sql` — shared admin-curated food database; edit the seed email in that file to grant yourself admin
 
 ### Install & run
 
@@ -84,6 +86,6 @@ npm run dev
 
 ## Notes
 
-- Every personal-data table is scoped with RLS to `auth.uid() = user_id` — this app supports multiple accounts cleanly, with no data crossover between users.
+- Every personal-data table is scoped with RLS to `auth.uid() = user_id` — this app supports multiple accounts cleanly, with no data crossover between users. `global_foods` is the one deliberate exception: readable by every account, writable only by admins (`app_admins`).
 - Nutrition parsing is AI-assisted and improves iteratively as edge cases get found in real use — it's a "good enough for daily logging" tool, not a lab-grade measurement.
 - Built by Rajdeep Dey, a BTech AI & Data Science student and hybrid athlete from Assam, India.

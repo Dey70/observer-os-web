@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { estimatePortionGrams } from "./nutritionEngine";
 
 export type FoodConfidence = "verified" | "learned" | "imported" | "high" | "medium" | "low";
-export type FoodSource = "off" | "ai" | "manual" | "user";
+export type FoodSource = "off" | "ai" | "manual" | "user" | "global";
 
 export interface ParsedFoodItem {
   name: string;
@@ -75,9 +75,11 @@ function getAliasesNormalized(food: any): string[] {
   return arr.map((a) => normalizeQuery(String(a))).filter(Boolean);
 }
 
-function findUserFood(
+// Shared matcher for both the user's personal food library and the global
+// (admin-curated) food database — both tables have the same name/aliases shape.
+function findFoodMatch(
   query: string,
-  userFoods: any[],
+  foods: any[],
 ): {
   food: any;
   matchType: "exact" | "alias" | "fuzzyName" | "fuzzyAlias" | "substring";
@@ -87,12 +89,12 @@ function findUserFood(
   if (!q) return null;
 
   // 1. Exact name match
-  const byName = userFoods.find((f) => f.name === q);
+  const byName = foods.find((f) => f.name === q);
   if (byName) return { food: byName, matchType: "exact", score: 1 };
 
   // 2. Exact alias match — each alias is normalized before comparison so
   //    whitespace/casing variations in stored values don't cause misses.
-  for (const food of userFoods) {
+  for (const food of foods) {
     if (getAliasesNormalized(food).includes(q)) {
       return { food, matchType: "alias", score: 1 };
     }
@@ -101,7 +103,7 @@ function findUserFood(
   // 3. Fuzzy name match (Levenshtein ≥ FUZZY_THRESHOLD)
   let bestFood: any = null;
   let bestScore = FUZZY_THRESHOLD;
-  for (const food of userFoods) {
+  for (const food of foods) {
     const s = strSimilarity(q, food.name);
     if (s > bestScore) { bestScore = s; bestFood = food; }
   }
@@ -110,7 +112,7 @@ function findUserFood(
   // 4. Fuzzy alias match
   bestFood = null;
   bestScore = FUZZY_THRESHOLD;
-  for (const food of userFoods) {
+  for (const food of foods) {
     for (const alias of getAliasesNormalized(food)) {
       const s = strSimilarity(q, alias);
       if (s > bestScore) { bestScore = s; bestFood = food; }
@@ -123,7 +125,7 @@ function findUserFood(
   try {
     const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const re = new RegExp(`\\b${escaped}\\b`);
-    const bySub = userFoods.find((f) => re.test(f.name));
+    const bySub = foods.find((f) => re.test(f.name));
     if (bySub) return { food: bySub, matchType: "substring", score: q.length / bySub.name.length };
   } catch {
     /* skip malformed regex */
@@ -809,13 +811,15 @@ export async function parseMeal(
   const itemTexts = splitItems(rawInput);
   const items: ParsedFoodItem[] = [];
 
-  // Prefetch user's personal food library once — single DB round trip for
-  // all items in this meal, and lets us check it BEFORE generic/supplement
-  // tables so user-defined serving sizes always take precedence.
-  const { data: rawUserFoods } = await (supabase as any)
-    .from("user_foods")
-    .select("*");
+  // Prefetch user's personal food library and the shared global database once —
+  // single round trip each for all items in this meal, checked BEFORE
+  // generic/supplement tables so verified serving sizes always take precedence.
+  const [{ data: rawUserFoods }, { data: rawGlobalFoods }] = await Promise.all([
+    (supabase as any).from("user_foods").select("*"),
+    (supabase as any).from("global_foods").select("*"),
+  ]);
   const userFoods: any[] = rawUserFoods ?? [];
+  const globalFoods: any[] = rawGlobalFoods ?? [];
 
   for (const itemText of itemTexts) {
     const { name, portionDesc, explicitGrams, isApproximate } =
@@ -827,8 +831,8 @@ export async function parseMeal(
     // over generic tables, cache, or external APIs.
     // Lookup order: exact name → alias → fuzzy (Levenshtein ≥ 82%)
     const userMatch =
-      findUserFood(name, userFoods) ??
-      findUserFood(normalizeQuery(itemText), userFoods);
+      findFoodMatch(name, userFoods) ??
+      findFoodMatch(normalizeQuery(itemText), userFoods);
 
     if (userMatch) {
       const { food: uf, matchType, score } = userMatch;
@@ -871,7 +875,51 @@ export async function parseMeal(
       continue;
     }
 
-    // ── 2. Supplements ────────────────────────────────────────────────────────
+    // ── 2. Shared global food database ──────────────────────────────────────
+    // Admin-curated (e.g. accurate Indian nutrition data) and shared by every
+    // user — checked before the hardcoded supplement/generic tables since
+    // it's more specific and can be corrected without a code change.
+    const globalMatch =
+      findFoodMatch(name, globalFoods) ??
+      findFoodMatch(normalizeQuery(itemText), globalFoods);
+
+    if (globalMatch) {
+      const { food: gf, matchType, score } = globalMatch;
+      const grams = explicitGrams ?? gf.serving_grams;
+      const effectiveDesc = explicitGrams === null
+        ? `${gf.serving_desc} (${gf.serving_grams}g)`
+        : portionDesc;
+      const factor = grams / 100;
+
+      console.log(
+        `[FoodLookup] query="${name}" matchType="${matchType}" score=${score.toFixed(2)}` +
+        ` → "${gf.name}" serving=${grams}g source="global" confidence="${gf.confidence}"`,
+      );
+
+      // Popularity counter — fire and forget, non-blocking.
+      ;(supabase as any)
+        .from("global_foods")
+        .update({ times_used: gf.times_used + 1 })
+        .eq("id", gf.id)
+        .then(() => {});
+
+      items.push({
+        name: gf.name,
+        portion_desc: effectiveDesc,
+        grams,
+        confidence: gf.confidence as FoodConfidence,
+        source: "global",
+        times_used: gf.times_used,
+        calories: Math.round(gf.calories_per_100g * factor),
+        protein: Math.round(gf.protein_per_100g * factor * 10) / 10,
+        carbs: Math.round(gf.carbs_per_100g * factor * 10) / 10,
+        fat: Math.round(gf.fat_per_100g * factor * 10) / 10,
+        fiber: Math.round(gf.fiber_per_100g * factor * 10) / 10,
+      });
+      continue;
+    }
+
+    // ── 3. Supplements ────────────────────────────────────────────────────────
     const supplement = matchSupplement(name) ?? matchSupplement(itemText);
     if (supplement) {
       console.log(`[FoodLookup] query="${name}" matchType="supplement" score=1.00 → "${supplement.label}"`);
@@ -890,7 +938,7 @@ export async function parseMeal(
       continue;
     }
 
-    // ── 3. Hardcoded generics ─────────────────────────────────────────────────
+    // ── 4. Hardcoded generics ─────────────────────────────────────────────────
     const generic = matchGenericFood(name) ?? matchGenericFood(itemText);
     if (generic) {
       const grams = explicitGrams ?? 150;
@@ -911,7 +959,7 @@ export async function parseMeal(
       continue;
     }
 
-    // ── 4. Cache → OFF → AI ───────────────────────────────────────────────────
+    // ── 5. Cache → OFF → AI ───────────────────────────────────────────────────
     const { source, confidence, per100g } = await getPer100g(
       name,
       supabase,

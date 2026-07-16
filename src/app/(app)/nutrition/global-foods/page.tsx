@@ -1,7 +1,7 @@
-// src/app/(app)/nutrition/my-foods/page.tsx
+// src/app/(app)/nutrition/global-foods/page.tsx
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { PageHeader, Card, SectionLabel, EmptyState } from "@/components/ui";
@@ -14,11 +14,15 @@ import {
   Plus,
   Search,
   ChevronLeft,
+  Upload,
+  AlertCircle,
+  CheckCircle2,
+  ShieldAlert,
 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
-type UserFoodRow = {
+type GlobalFoodRow = {
   id: number;
   name: string;
   aliases: string[];
@@ -32,12 +36,138 @@ type UserFoodRow = {
   times_used: number;
   confidence: string;
   created_at: string;
-  last_used_at: string;
 };
 
+type CSVRow = {
+  food_name: string;
+  aliases: string[];
+  serving_description: string;
+  serving_grams: number;
+  kcal_per_100g: number;
+  protein_per_100g: number;
+  carbs_per_100g: number;
+  fat_per_100g: number;
+  fiber_per_100g: number;
+};
+
+type ParsedCSV = { valid: CSVRow[]; errors: string[] };
+type ImportResult = { imported: number; updated: number; skipped: number };
+
+const REQUIRED_HEADERS = [
+  "food_name",
+  "aliases",
+  "serving_description",
+  "serving_grams",
+  "kcal_per_100g",
+  "protein_per_100g",
+  "carbs_per_100g",
+  "fat_per_100g",
+  "fiber_per_100g",
+] as const;
+
+function parseCSVText(text: string): ParsedCSV {
+  const valid: CSVRow[] = [];
+  const errors: string[] = [];
+
+  // RFC 4180 parser — handles quoted fields with commas inside
+  const rows: string[][] = [];
+  let current: string[] = [];
+  let field = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"' && text[i + 1] === '"') {
+        field += '"';
+        i++;
+      } else if (c === '"') {
+        inQuotes = false;
+      } else {
+        field += c;
+      }
+    } else {
+      if (c === '"') {
+        inQuotes = true;
+      } else if (c === ',') {
+        current.push(field);
+        field = "";
+      } else if (c === '\n' || c === '\r') {
+        if (c === '\r' && text[i + 1] === '\n') i++;
+        current.push(field);
+        field = "";
+        if (current.some((f) => f.trim())) rows.push(current);
+        current = [];
+      } else {
+        field += c;
+      }
+    }
+  }
+  current.push(field);
+  if (current.some((f) => f.trim())) rows.push(current);
+
+  if (rows.length < 2) {
+    errors.push("CSV must have a header row and at least one data row.");
+    return { valid, errors };
+  }
+
+  const headers = rows[0].map((h) => h.trim().toLowerCase());
+  const idx: Record<string, number> = {};
+  const missing: string[] = [];
+  for (const h of REQUIRED_HEADERS) {
+    const i = headers.indexOf(h);
+    if (i === -1) missing.push(h);
+    else idx[h] = i;
+  }
+  if (missing.length) {
+    errors.push(`Missing columns: ${missing.join(", ")}`);
+    return { valid, errors };
+  }
+
+  for (let r = 1; r < rows.length; r++) {
+    const row = rows[r];
+    const line = r + 1;
+    const name = row[idx.food_name]?.trim();
+    if (!name) {
+      errors.push(`Row ${line}: food_name is empty`);
+      continue;
+    }
+    const aliasRaw = row[idx.aliases]?.trim() ?? "";
+    const aliases = aliasRaw
+      ? aliasRaw.split(",").map((a) => a.trim().toLowerCase()).filter(Boolean)
+      : [];
+    const servingGrams = parseFloat(row[idx.serving_grams]);
+    if (isNaN(servingGrams) || servingGrams <= 0) {
+      errors.push(`Row ${line} (${name}): serving_grams must be > 0`);
+      continue;
+    }
+    const kcal = parseFloat(row[idx.kcal_per_100g]);
+    if (isNaN(kcal) || kcal < 0) {
+      errors.push(`Row ${line} (${name}): kcal_per_100g must be ≥ 0`);
+      continue;
+    }
+    const n = (key: string) => {
+      const v = parseFloat(row[idx[key]]);
+      return isNaN(v) ? 0 : Math.max(0, v);
+    };
+    valid.push({
+      food_name: name,
+      aliases,
+      serving_description: row[idx.serving_description]?.trim() || "1 serving",
+      serving_grams: servingGrams,
+      kcal_per_100g: kcal,
+      protein_per_100g: n("protein_per_100g"),
+      carbs_per_100g: n("carbs_per_100g"),
+      fat_per_100g: n("fat_per_100g"),
+      fiber_per_100g: n("fiber_per_100g"),
+    });
+  }
+  return { valid, errors };
+}
+
 const BLANK: Omit<
-  UserFoodRow,
-  "id" | "created_at" | "last_used_at" | "times_used" | "confidence"
+  GlobalFoodRow,
+  "id" | "created_at" | "times_used" | "confidence"
 > = {
   name: "",
   aliases: [],
@@ -73,19 +203,9 @@ const LABEL_STYLE: React.CSSProperties = {
   marginBottom: 4,
 };
 
-function relativeTime(iso: string): string {
-  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
-  if (days === 0) return "today";
-  if (days === 1) return "yesterday";
-  if (days < 30) return `${days}d ago`;
-  if (days < 365) return `${Math.floor(days / 30)}mo ago`;
-  return `${Math.floor(days / 365)}y ago`;
-}
-
 function confidenceBadge(confidence: string): { label: string; color: string } {
   if (confidence === "imported") return { label: "Imported", color: "var(--accent)" };
-  if (confidence === "verified") return { label: "Verified", color: "var(--purple)" };
-  return { label: "Learned", color: "var(--yellow)" };
+  return { label: "Verified", color: "var(--purple)" };
 }
 
 function NutritionFields({
@@ -126,31 +246,52 @@ function NutritionFields({
   );
 }
 
-export default function MyFoodsPage() {
+export default function GlobalFoodsPage() {
   const sb = createClient();
-  const [foods, setFoods] = useState<UserFoodRow[]>([]);
+  const [checkingAccess, setCheckingAccess] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [foods, setFoods] = useState<GlobalFoodRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [editDraft, setEditDraft] = useState<UserFoodRow | null>(null);
+  const [editDraft, setEditDraft] = useState<GlobalFoodRow | null>(null);
   const [editAliases, setEditAliases] = useState("");
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [addDraft, setAddDraft] = useState({ ...BLANK });
   const [addAliases, setAddAliases] = useState("");
   const [saving, setSaving] = useState(false);
+  // CSV import state
+  const [showImport, setShowImport] = useState(false);
+  const [csvPreview, setCsvPreview] = useState<ParsedCSV | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<ImportResult | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
     const {
       data: { user },
     } = await sb.auth.getUser();
     if (!user) return;
-    const { data } = await (sb as any)
-      .from("user_foods")
-      .select("*")
+
+    const { data: adminRow } = await (sb as any)
+      .from("app_admins")
+      .select("user_id")
       .eq("user_id", user.id)
+      .maybeSingle();
+    const admin = !!adminRow;
+    setIsAdmin(admin);
+    setCheckingAccess(false);
+    if (!admin) {
+      setLoading(false);
+      return;
+    }
+
+    const { data } = await (sb as any)
+      .from("global_foods")
+      .select("*")
       .order("times_used", { ascending: false });
-    setFoods((data ?? []) as UserFoodRow[]);
+    setFoods((data ?? []) as GlobalFoodRow[]);
     setLoading(false);
   }, [sb]);
 
@@ -166,16 +307,14 @@ export default function MyFoodsPage() {
     : foods;
 
   const totalUses = foods.reduce((s, f) => s + f.times_used, 0);
-  const trustedCount = foods.filter(
-    (f) => f.confidence === "verified" || f.confidence === "imported",
-  ).length;
 
-  function startEdit(food: UserFoodRow) {
+  function startEdit(food: GlobalFoodRow) {
     setEditingId(food.id);
     setEditDraft({ ...food });
     setEditAliases(food.aliases.join(", "));
     setDeletingId(null);
     setShowAdd(false);
+    setShowImport(false);
   }
 
   function cancelEdit() {
@@ -187,16 +326,12 @@ export default function MyFoodsPage() {
   async function saveEdit() {
     if (!editDraft) return;
     setSaving(true);
-    const {
-      data: { user },
-    } = await sb.auth.getUser();
-    if (!user) return;
     const aliases = editAliases
       .split(",")
       .map((a) => a.trim().toLowerCase())
       .filter(Boolean);
     await (sb as any)
-      .from("user_foods")
+      .from("global_foods")
       .update({
         name: editDraft.name.toLowerCase().trim(),
         aliases,
@@ -207,24 +342,16 @@ export default function MyFoodsPage() {
         carbs_per_100g: editDraft.carbs_per_100g,
         fat_per_100g: editDraft.fat_per_100g,
         fiber_per_100g: editDraft.fiber_per_100g,
+        updated_at: new Date().toISOString(),
       })
-      .eq("id", editDraft.id)
-      .eq("user_id", user.id);
+      .eq("id", editDraft.id);
     cancelEdit();
     await load();
     setSaving(false);
   }
 
   async function deleteFood(id: number) {
-    const {
-      data: { user },
-    } = await sb.auth.getUser();
-    if (!user) return;
-    await (sb as any)
-      .from("user_foods")
-      .delete()
-      .eq("id", id)
-      .eq("user_id", user.id);
+    await (sb as any).from("global_foods").delete().eq("id", id);
     setDeletingId(null);
     load();
   }
@@ -240,8 +367,7 @@ export default function MyFoodsPage() {
       .split(",")
       .map((a) => a.trim().toLowerCase())
       .filter(Boolean);
-    await (sb as any).from("user_foods").insert({
-      user_id: user.id,
+    await (sb as any).from("global_foods").insert({
       name: addDraft.name.toLowerCase().trim(),
       aliases,
       serving_desc: addDraft.serving_desc,
@@ -253,6 +379,7 @@ export default function MyFoodsPage() {
       fiber_per_100g: addDraft.fiber_per_100g,
       confidence: "verified",
       times_used: 0,
+      created_by: user.id,
     });
     setShowAdd(false);
     setAddDraft({ ...BLANK });
@@ -261,12 +388,77 @@ export default function MyFoodsPage() {
     setSaving(false);
   }
 
-  if (loading)
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string;
+      setCsvPreview(parseCSVText(text));
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  }
+
+  async function runImport() {
+    if (!csvPreview || csvPreview.valid.length === 0) return;
+    setImporting(true);
+    const {
+      data: { user },
+    } = await sb.auth.getUser();
+    if (!user) {
+      setImporting(false);
+      return;
+    }
+
+    // Fetch existing to preserve times_used and detect new vs updated
+    const { data: existing } = await (sb as any)
+      .from("global_foods")
+      .select("name, times_used");
+    const existingMap = new Map<string, number>(
+      (existing ?? []).map((f: any) => [f.name, f.times_used]),
+    );
+
+    let imported = 0;
+    let updated = 0;
+    const upsertRows = csvPreview.valid.map((row) => {
+      const normalizedName = row.food_name.toLowerCase().trim();
+      if (existingMap.has(normalizedName)) updated++;
+      else imported++;
+      return {
+        name: normalizedName,
+        aliases: row.aliases,
+        serving_desc: row.serving_description,
+        serving_grams: row.serving_grams,
+        calories_per_100g: row.kcal_per_100g,
+        protein_per_100g: row.protein_per_100g,
+        carbs_per_100g: row.carbs_per_100g,
+        fat_per_100g: row.fat_per_100g,
+        fiber_per_100g: row.fiber_per_100g,
+        confidence: "imported" as const,
+        times_used: existingMap.get(normalizedName) ?? 0,
+        created_by: user.id,
+        updated_at: new Date().toISOString(),
+      };
+    });
+
+    await (sb as any)
+      .from("global_foods")
+      .upsert(upsertRows, { onConflict: "name" });
+
+    setImportResult({ imported, updated, skipped: csvPreview.errors.length });
+    setCsvPreview(null);
+    setShowImport(false);
+    await load();
+    setImporting(false);
+  }
+
+  if (checkingAccess || loading)
     return (
       <div>
         <PageHeader
-          title="MY FOODS"
-          subtitle="Observer's memory of your food environment"
+          title="GLOBAL FOODS"
+          subtitle="Shared nutrition database — admin only"
         />
         <div
           style={{
@@ -277,6 +469,42 @@ export default function MyFoodsPage() {
         >
           Loading…
         </div>
+      </div>
+    );
+
+  if (!isAdmin)
+    return (
+      <div>
+        <Link
+          href="/nutrition"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 4,
+            fontSize: 11,
+            color: "var(--text-dim)",
+            fontFamily: "var(--mono)",
+            textDecoration: "none",
+            marginBottom: 8,
+          }}
+        >
+          <ChevronLeft size={12} /> Nutrition
+        </Link>
+        <PageHeader title="GLOBAL FOODS" subtitle="Shared nutrition database" />
+        <Card>
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+            <ShieldAlert
+              size={16}
+              color="var(--yellow)"
+              strokeWidth={1.75}
+              style={{ marginTop: 1, flexShrink: 0 }}
+            />
+            <div style={{ fontSize: 13, color: "var(--text)" }}>
+              This page manages the shared food database used by every
+              account and is restricted to admins.
+            </div>
+          </div>
+        </Card>
       </div>
     );
 
@@ -299,23 +527,22 @@ export default function MyFoodsPage() {
       </Link>
 
       <PageHeader
-        title="MY FOODS"
-        subtitle="Observer's memory of your food environment"
+        title="GLOBAL FOODS"
+        subtitle="Shared nutrition database — visible to every user"
       />
 
       {/* Analytics bar */}
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(3, 1fr)",
+          gridTemplateColumns: "repeat(2, 1fr)",
           gap: 8,
           marginBottom: 16,
         }}
       >
         {[
-          { value: foods.length, label: "Foods saved" },
-          { value: trustedCount, label: "Trusted" },
-          { value: totalUses, label: "Total uses" },
+          { value: foods.length, label: "Foods in database" },
+          { value: totalUses, label: "Total uses (all users)" },
         ].map(({ value, label }) => (
           <div
             key={label}
@@ -352,6 +579,71 @@ export default function MyFoodsPage() {
         ))}
       </div>
 
+      {/* Import result banner */}
+      {importResult && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 10,
+            padding: "10px 14px",
+            background: "color-mix(in srgb, var(--accent) 10%, transparent)",
+            border: "1px solid var(--accent)50",
+            borderRadius: 10,
+            marginBottom: 14,
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              fontFamily: "var(--mono)",
+              fontSize: 12,
+              color: "var(--text)",
+            }}
+          >
+            <CheckCircle2 size={14} color="var(--accent)" />
+            Import complete &middot;{" "}
+            <span style={{ color: "var(--accent)", fontWeight: 700 }}>
+              {importResult.imported} new
+            </span>
+            {importResult.updated > 0 && (
+              <>
+                {" "}
+                &middot;{" "}
+                <span style={{ color: "var(--yellow)", fontWeight: 700 }}>
+                  {importResult.updated} updated
+                </span>
+              </>
+            )}
+            {importResult.skipped > 0 && (
+              <>
+                {" "}
+                &middot;{" "}
+                <span style={{ color: "var(--text-muted)" }}>
+                  {importResult.skipped} skipped
+                </span>
+              </>
+            )}
+          </div>
+          <button
+            onClick={() => setImportResult(null)}
+            style={{
+              background: "transparent",
+              border: "none",
+              cursor: "pointer",
+              color: "var(--text-dim)",
+              padding: 0,
+              lineHeight: 1,
+            }}
+          >
+            <X size={13} />
+          </button>
+        </div>
+      )}
+
       {/* Toolbar */}
       <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
         <div style={{ position: "relative", flex: 1 }}>
@@ -378,9 +670,45 @@ export default function MyFoodsPage() {
             }}
           />
         </div>
+        {/* Hidden file input */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".csv,text/csv"
+          onChange={handleFileSelect}
+          style={{ display: "none" }}
+        />
+        <button
+          onClick={() => {
+            setShowImport((v) => !v);
+            setShowAdd(false);
+            setCsvPreview(null);
+          }}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 5,
+            padding: "8px 14px",
+            background: showImport ? "var(--surface2)" : "transparent",
+            border: showImport
+              ? "1px solid var(--border)"
+              : "1px solid var(--accent)80",
+            borderRadius: 8,
+            color: showImport ? "var(--text-muted)" : "var(--accent)",
+            fontFamily: "var(--mono)",
+            fontSize: 11,
+            fontWeight: 700,
+            cursor: "pointer",
+            flexShrink: 0,
+          }}
+        >
+          {showImport ? <X size={12} /> : <Upload size={12} />}
+          {showImport ? "Cancel" : "Import CSV"}
+        </button>
         <button
           onClick={() => {
             setShowAdd((v) => !v);
+            setShowImport(false);
             setEditingId(null);
           }}
           style={{
@@ -403,6 +731,187 @@ export default function MyFoodsPage() {
           {showAdd ? "Cancel" : "Add Food"}
         </button>
       </div>
+
+      {/* CSV Import panel */}
+      {showImport && (
+        <Card style={{ borderColor: "var(--accent)60", marginBottom: 14 }}>
+          <SectionLabel>Import CSV</SectionLabel>
+          <div
+            style={{
+              fontSize: 11,
+              fontFamily: "var(--mono)",
+              color: "var(--text-dim)",
+              marginBottom: 12,
+              lineHeight: 1.6,
+            }}
+          >
+            Required columns:{" "}
+            <code
+              style={{
+                background: "var(--surface2)",
+                padding: "1px 5px",
+                borderRadius: 3,
+                fontSize: 10,
+              }}
+            >
+              food_name, aliases, serving_description, serving_grams,
+              kcal_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g,
+              fiber_per_100g
+            </code>
+            <br />
+            Aliases: comma-separated inside quotes.{" "}
+            <em>
+              This writes to the shared database — every user's lookups use
+              it immediately. Existing foods will be updated, usage counts
+              preserved.
+            </em>
+          </div>
+
+          {!csvPreview ? (
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "14px 20px",
+                background: "var(--surface2)",
+                border: "1.5px dashed var(--border2)",
+                borderRadius: 10,
+                color: "var(--text-dim)",
+                fontFamily: "var(--mono)",
+                fontSize: 12,
+                cursor: "pointer",
+                width: "100%",
+                justifyContent: "center",
+                transition: "border-color 0.15s",
+              }}
+            >
+              <Upload size={14} />
+              Click to select a CSV file
+            </button>
+          ) : (
+            <div>
+              {/* Preview summary */}
+              <div
+                style={{
+                  display: "flex",
+                  gap: 12,
+                  marginBottom: csvPreview.errors.length ? 12 : 0,
+                }}
+              >
+                {csvPreview.valid.length > 0 && (
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                      fontSize: 12,
+                      fontFamily: "var(--mono)",
+                      color: "var(--accent)",
+                    }}
+                  >
+                    <CheckCircle2 size={13} />
+                    {csvPreview.valid.length} food
+                    {csvPreview.valid.length !== 1 ? "s" : ""} ready
+                  </div>
+                )}
+                {csvPreview.errors.length > 0 && (
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                      fontSize: 12,
+                      fontFamily: "var(--mono)",
+                      color: "var(--yellow)",
+                    }}
+                  >
+                    <AlertCircle size={13} />
+                    {csvPreview.errors.length} row
+                    {csvPreview.errors.length !== 1 ? "s" : ""} skipped
+                  </div>
+                )}
+              </div>
+
+              {/* Error list */}
+              {csvPreview.errors.length > 0 && (
+                <div
+                  style={{
+                    padding: "8px 10px",
+                    background:
+                      "color-mix(in srgb, var(--yellow) 8%, transparent)",
+                    border: "1px solid var(--yellow)40",
+                    borderRadius: 7,
+                    marginBottom: 12,
+                  }}
+                >
+                  {csvPreview.errors.map((e, i) => (
+                    <div
+                      key={i}
+                      style={{
+                        fontSize: 10,
+                        fontFamily: "var(--mono)",
+                        color: "var(--text-dim)",
+                        lineHeight: 1.7,
+                      }}
+                    >
+                      {e}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Action buttons */}
+              <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                {csvPreview.valid.length > 0 && (
+                  <button
+                    onClick={runImport}
+                    disabled={importing}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                      padding: "7px 16px",
+                      background: importing ? "var(--surface2)" : "var(--accent)",
+                      border: "none",
+                      borderRadius: 7,
+                      color: importing ? "var(--text-dim)" : "var(--bg)",
+                      fontFamily: "var(--mono)",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      cursor: importing ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    <Check size={11} strokeWidth={2.5} />
+                    {importing
+                      ? "Importing…"
+                      : `Import ${csvPreview.valid.length} Food${csvPreview.valid.length !== 1 ? "s" : ""}`}
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    setCsvPreview(null);
+                    fileInputRef.current?.click();
+                  }}
+                  style={{
+                    padding: "7px 12px",
+                    background: "var(--surface)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 7,
+                    color: "var(--text-muted)",
+                    fontFamily: "var(--mono)",
+                    fontSize: 11,
+                    cursor: "pointer",
+                  }}
+                >
+                  Choose different file
+                </button>
+              </div>
+            </div>
+          )}
+        </Card>
+      )}
 
       {/* Add food form */}
       {showAdd && (
@@ -510,7 +1019,7 @@ export default function MyFoodsPage() {
             message={
               search
                 ? `No foods matching "${search}"`
-                : "No foods saved yet — pin foods while logging to build your library"
+                : "No global foods yet — add one or import a CSV"
             }
           />
         </Card>
@@ -731,8 +1240,7 @@ export default function MyFoodsPage() {
                           marginTop: 2,
                         }}
                       >
-                        Used {food.times_used}&times; &middot; last{" "}
-                        {relativeTime(food.last_used_at)}
+                        Used {food.times_used}&times; across all users
                       </div>
                     </div>
 

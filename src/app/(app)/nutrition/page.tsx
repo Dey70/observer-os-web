@@ -46,7 +46,7 @@ function getSourceBadge(
     return { label: "MY FOOD", color: "var(--purple)", icon: true };
   if (confidence === "low")
     return { label: "LOW", color: "var(--red)", icon: false };
-  if (source === "manual")
+  if (source === "manual" || source === "global")
     return { label: "VERIFIED", color: "var(--green)", icon: false };
   if (source === "off")
     return { label: "DATABASE", color: "var(--yellow)", icon: false };
@@ -462,6 +462,7 @@ export default function NutritionPage() {
   } | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const todayStr = new Date().toISOString().split("T")[0];
@@ -535,6 +536,22 @@ export default function NutritionPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    (async () => {
+      const {
+        data: { user },
+      } = await sb.auth.getUser();
+      if (!user) return;
+      const { data } = await (sb as any)
+        .from("app_admins")
+        .select("user_id")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      setIsAdmin(!!data);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const consumed = logs.reduce(
     (acc, l) => ({
@@ -1257,6 +1274,19 @@ export default function NutritionPage() {
               )}
             </div>
             <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+              {isAdmin && (
+                <Link
+                  href="/nutrition/global-foods"
+                  style={{
+                    fontSize: 11,
+                    color: "var(--green)",
+                    fontFamily: "var(--mono)",
+                    textDecoration: "none",
+                  }}
+                >
+                  Global Foods →
+                </Link>
+              )}
               <Link
                 href="/nutrition/my-foods"
                 style={{
