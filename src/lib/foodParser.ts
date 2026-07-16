@@ -645,7 +645,26 @@ const SIZE_WORDS = [
   "glass",
   "scoops",
   "scoop",
+  "tablespoons",
+  "tablespoon",
+  "tbsps",
+  "tbsp",
+  "teaspoons",
+  "teaspoon",
+  "tsps",
+  "tsp",
 ];
+
+const SPOON_WORDS = new Set([
+  "tablespoons",
+  "tablespoon",
+  "tbsps",
+  "tbsp",
+  "teaspoons",
+  "teaspoon",
+  "tsps",
+  "tsp",
+]);
 
 function extractPortion(itemText: string): {
   name: string;
@@ -690,6 +709,10 @@ function extractPortion(itemText: string): {
       slices: 35,
       piece: 100,
       pieces: 100,
+      bread: 30,
+      breads: 30,
+      toast: 30,
+      toasts: 30,
     };
     const matchedUnit = Object.keys(unitWeights).find((u) => name.includes(u));
 
@@ -699,9 +722,13 @@ function extractPortion(itemText: string): {
       const containerName = cleanFoodName(
         restText.replace(new RegExp(matchedContainerSize, "i"), ""),
       );
+      // Spoon measures read as "2 tbsp (30g)", not "2x tbsp (30g)".
+      const isSpoonUnit = SPOON_WORDS.has(matchedContainerSize);
       return {
         name: containerName,
-        portionDesc: `${count}x ${matchedContainerSize} (${grams}g)`,
+        portionDesc: isSpoonUnit
+          ? `${count} ${matchedContainerSize} (${grams}g)`
+          : `${count}x ${matchedContainerSize} (${grams}g)`,
         explicitGrams: grams,
         isApproximate: false,
       };

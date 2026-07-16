@@ -304,6 +304,14 @@ export const PORTION_SIZE_GRAMS: Record<string, number> = {
   piece: 50,
   scoop: 30,
   scoops: 30,
+  tablespoon: 15,
+  tablespoons: 15,
+  tbsp: 15,
+  tbsps: 15,
+  teaspoon: 5,
+  teaspoons: 5,
+  tsp: 5,
+  tsps: 5,
 };
 
 export function estimatePortionGrams(description: string): number {
